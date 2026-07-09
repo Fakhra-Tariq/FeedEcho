@@ -1,0 +1,182 @@
+{
+  "rules": {
+    ".read": false,
+    ".write": false,
+
+    "users": {
+      "$uid": {
+        ".read": "auth != null && auth.uid === $uid",
+        ".write": "auth != null && auth.uid === $uid"
+      }
+    },
+
+    "quizzes": {
+      ".read": "auth != null",
+      ".indexOn": ["createdBy", "status", "launched"],
+      "$quizId": {
+        ".read": "auth != null",
+        ".write": "auth != null"
+      }
+    },
+    "quiz_codes": {
+      ".read": true,
+      ".write": "auth != null"
+    },
+    "quiz_participants": {
+      "$quizId": {
+        ".read": true,
+        ".write": true
+      }
+    },
+    "quiz_submissions": {
+      "$quizId": {
+        ".read": true,
+        ".write": true
+      }
+    },
+
+    "exit_tickets": {
+      ".read": "auth != null",
+      ".indexOn": ["createdBy", "status", "joinCode"],
+      "$ticketId": {
+        ".read": true,
+        ".write": true
+      }
+    },
+    "exit_ticket_codes": {
+      ".read": true,
+      ".write": true
+    },
+    "exit_questions": {
+      ".read": "auth != null",
+      "$ticketId": {
+        ".read": true,
+        ".write": true
+      }
+    },
+    "exit_responses": {
+      "$ticketId": {
+        ".read": true,
+        ".write": true
+      }
+    },
+
+    "chat_sessions": {
+      ".read": "auth != null",
+      "$chatId": {
+        ".read": true,
+        ".write": true
+      }
+    },
+    "chat_join_codes": {
+      ".read": true,
+      ".write": true
+    },
+    "chat_messages": {
+      "$chatId": {
+        ".read": true,
+        ".write": true
+      }
+    },
+    "chat_participants": {
+      "$chatId": {
+        ".read": true,
+        ".write": true
+      }
+    },
+
+    "spaceRaces": {
+      ".read": true,
+      ".indexOn": ["createdBy", "status", "accessCode", "joinCode"],
+      "$raceId": {
+        ".read": true,
+        ".write": true
+      }
+    },
+    "space_race_codes": {
+      ".read": true,
+      ".write": true,
+      "$code": {
+        ".read": true,
+        ".write": true
+      }
+    },
+    "space_race_participants": {
+      "$raceId": {
+        ".read": true,
+        ".write": true
+      }
+    },
+    "space_race_responses": {
+      "$raceId": {
+        ".read": true,
+        ".write": true
+      }
+    },
+    "space_race_team_messages": {
+      "$raceId": {
+        "$teamKey": {
+          ".read": true,
+          ".write": true
+        }
+      }
+    },
+    "space_race_team_selection": {
+      "$raceId": {
+        ".read": true,
+        ".write": true
+      }
+    },
+    "space_race_team_scores": {
+      "$raceId": {
+        ".read": true,
+        ".write": true
+      }
+    },
+
+    "sessions": {
+      ".read": "auth != null",
+      ".indexOn": ["teacherId", "status", "sessionCode"],
+      "$sessionId": {
+        ".read": "auth != null",
+        ".write": "auth != null"
+      }
+    },
+    "session_codes": {
+      ".read": true,
+      ".write": "auth != null"
+    },
+
+    "courses": {
+      ".indexOn": ["createdBy", "isPublic", "category", "level"],
+      "$courseId": {
+        ".read": true,
+        ".write": "auth != null"
+      }
+    },
+    "enrollments": {
+      ".indexOn": ["courseId", "studentId"],
+      "$enrollmentId": {
+        ".read": "auth != null",
+        ".write": "auth != null"
+      }
+    },
+
+    "studyAssistantConversations": {
+      ".read": "auth != null",
+      ".indexOn": ["studentId"],
+      "$conversationId": {
+        ".read": "auth != null && data.child('studentId').val() === auth.uid",
+        ".write": "auth != null && (!data.exists() ? newData.child('studentId').val() === auth.uid : data.child('studentId').val() === auth.uid)"
+      }
+    },
+
+    "activeSession": {
+      "$doc": {
+        ".read": true,
+        ".write": true
+      }
+    }
+  }
+}
+

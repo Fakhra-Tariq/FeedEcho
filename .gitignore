@@ -1,0 +1,69 @@
+# Dependencies
+node_modules/
+client/node_modules/
+server/node_modules/
+
+# Environment files (never commit secrets)
+.env
+.env.*
+!.env.example
+client/.env
+client/.env.*
+!client/.env.example
+server/.env
+server/.env.*
+
+# Firebase Admin service account (server-only; use FIREBASE_* env vars on Render)
+server/serviceAccountKey.json
+server/serviceAccountKey.json.json
+**/serviceAccountKey*.json
+
+# Build output (may contain env-specific baked-in config)
+client/build/
+build/
+dist/
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Test / coverage
+coverage/
+.nyc_output/
+
+# Caches
+.cache/
+.eslintcache
+.parcel-cache/
+.turbo/
+
+# OS files
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# IDE / editor
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Cursor / Codex local tooling
+.codex/
+
+# Keys and certificates
+*.pem
+*.key
+*.p12
+*.pfx
+
+# Local env overrides
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local

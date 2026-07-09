@@ -1,0 +1,42 @@
+{
+  "name": "feedecho",
+  "version": "1.0.0",
+  "description": "FeedEcho — real-time classroom engagement for teachers and students",
+  "main": "server/index.js",
+  "scripts": {
+    "start": "node server/index.js",
+    "dev": "concurrently \"npm run server\" \"npm run client\"",
+    "server": "nodemon server/index.js",
+    "client": "npm --prefix client start",
+    "build": "npm --prefix client run build",
+    "install-all": "npm install && npm --prefix client install"
+  },
+  "keywords": [
+    "education",
+    "learning",
+    "firebase",
+    "react",
+    "node"
+  ],
+  "author": "FeedEcho",
+  "license": "MIT",
+  "dependencies": {
+    "@google/generative-ai": "^0.24.1",
+    "axios": "^1.13.6",
+    "bcryptjs": "^2.4.3",
+    "cors": "^2.8.5",
+    "dotenv": "^16.3.1",
+    "express": "^4.18.2",
+    "express-session": "^1.19.0",
+    "firebase": "^10.7.1",
+    "firebase-admin": "^12.0.0",
+    "helmet": "^7.1.0",
+    "jsonwebtoken": "^9.0.2",
+    "morgan": "^1.10.0",
+    "react-spinners": "^0.17.0"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2",
+    "nodemon": "^3.0.2"
+  }
+}
