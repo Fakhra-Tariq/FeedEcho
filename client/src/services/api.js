@@ -97,7 +97,9 @@ export const authAPI = {
   login: (idToken) => api.post('/auth/login', { idToken }),
   ensureProfile: (payload) => api.post('/auth/ensure-profile', payload),
   getProfile: (token) => {
-    const config = token ? { headers: { Authorization: `Bearer ${token}` } } : {};
+    const config = token
+      ? { headers: { Authorization: `Bearer ${token}` }, timeout: 25000 }
+      : { timeout: 25000 };
     return api.get('/auth/profile', config);
   },
   updateProfile: (userData, token) => {

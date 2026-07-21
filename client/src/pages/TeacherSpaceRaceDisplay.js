@@ -1,6 +1,6 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { spaceRacesAPI } from '../services/api';
+import { useRtdbList, useRtdbValue } from '../hooks/useRtdb';
 import { Rocket, ArrowLeft, ExternalLink, Users, ChevronDown, ChevronUp, Clock, Flame, Zap, Star, Trophy, Flag } from 'lucide-react';
 
 const TEAM_COLORS = [
@@ -171,83 +171,33 @@ const QuizDurationTimer = ({ raceData, className = '' }) => {
 
 export default function TeacherSpaceRaceDisplay() {
   const { raceId } = useParams();
-  const [raceData, setRaceData] = useState(null);
-  const [teamScores, setTeamScores] = useState({});
-  const [participants, setParticipants] = useState([]);
-  const [isLoading, setIsLoading] = useState(true);
   const [expandedTeams, setExpandedTeams] = useState(new Set());
 
-  const loadRaceData = useCallback(async () => {
-    if (!raceId) return;
-    try {
-      const response = await spaceRacesAPI.getById(raceId);
-      if (response.data.success) {
-        const raceData = response.data.data;
-        setRaceData(raceData);
-        console.log('📊 Updated race data with stats:', {
-          questionsCount: raceData.questionsCount,
-          participantsCount: raceData.participantsCount,
-          teamsCount: raceData.teamsCount,
-          timeLeft: raceData.timeLeft
-        });
-      }
-    } catch (error) {
-      console.error('Error loading race data:', error);
-    } finally {
-      setIsLoading(false);
-    }
-  }, [raceId]);
+  const { value: raceRtdb, loading: raceLoading } = useRtdbValue(
+    raceId ? `spaceRaces/${raceId}` : null,
+    { enabled: Boolean(raceId) }
+  );
 
-  const loadTeamScores = useCallback(async () => {
-    if (!raceId) return;
-    try {
-      console.log('Loading team scores for race:', raceId);
-      const res = await spaceRacesAPI.getParticipants(raceId, { recalculate: true });
-      console.log('Team scores response:', res.data);
-      
-      if (res.data?.success && res.data?.data) {
-        const { teamScores, participants } = res.data.data;
-        console.log('Setting team scores:', teamScores);
-        console.log('Setting participants:', participants);
-        setTeamScores(normalizeTeamScores(teamScores));
-        setParticipants(participants || []);
-      } else {
-        console.error('Failed to load team scores:', res.data);
-      }
-    } catch (e) {
-      console.error('Error loading team scores:', e);
-      // Try debug endpoint as fallback
-      try {
-        console.log('Trying debug endpoint...');
-        const debugRes = await spaceRacesAPI.getDebugInfo(raceId);
-        console.log('Debug response:', debugRes.data);
-        
-        if (debugRes.data?.success && debugRes.data?.data) {
-          const { teamScores, participants } = debugRes.data.data;
-          console.log('Debug - Setting team scores:', teamScores);
-          console.log('Debug - Setting participants:', participants);
-          setTeamScores(normalizeTeamScores(teamScores));
-          setParticipants(participants || []);
-        }
-      } catch (debugError) {
-        console.error('Debug endpoint also failed:', debugError);
-      }
-    }
-  }, [raceId]);
+  const { value: teamScoresRaw } = useRtdbValue(
+    raceId ? `space_race_team_scores/${raceId}` : null,
+    { enabled: Boolean(raceId) }
+  );
 
-  useEffect(() => {
-    loadRaceData();
-    loadTeamScores();
-    
-    // Set up real-time updates for both race data and team scores
-    const raceDataInterval = setInterval(loadRaceData, 2000); // Update race stats every 2 seconds
-    const teamScoresInterval = setInterval(loadTeamScores, 3000); // Update team scores every 3 seconds
-    
-    return () => {
-      clearInterval(raceDataInterval);
-      clearInterval(teamScoresInterval);
-    };
-  }, [raceId, loadRaceData, loadTeamScores]);
+  const { list: participantList } = useRtdbList(
+    raceId ? `space_race_participants/${raceId}` : null,
+    { enabled: Boolean(raceId) }
+  );
+
+  const raceData = useMemo(() => {
+    if (!raceRtdb || !raceId) return null;
+    return { id: raceId, ...raceRtdb };
+  }, [raceRtdb, raceId]);
+
+  const teamScores = useMemo(() => normalizeTeamScores(teamScoresRaw), [teamScoresRaw]);
+
+  const participants = useMemo(() => participantList || [], [participantList]);
+
+  const isLoading = raceLoading && !raceData;
 
   if (isLoading) {
     return (

@@ -136,6 +136,22 @@ function normalizeQuizRecord(quiz) {
   };
 }
 
+/** List endpoints: metadata only — omit heavy question payloads. */
+function normalizeQuizListRecord(quiz) {
+  if (!quiz || typeof quiz !== 'object') return quiz;
+
+  const type = normalizeQuizTypeLabel(quiz.type);
+  const questions = normalizeQuestions(quiz.questions, type);
+  const { questions: _questions, ...rest } = quiz;
+
+  return {
+    ...rest,
+    type,
+    questionCount:
+      quiz.questionCount != null ? Number(quiz.questionCount) : questions.length,
+  };
+}
+
 module.exports = {
   normalizeToArray,
   normalizeQuizTypeLabel,
@@ -143,4 +159,5 @@ module.exports = {
   normalizeQuestion,
   normalizeQuestions,
   normalizeQuizRecord,
+  normalizeQuizListRecord,
 };

@@ -12,7 +12,7 @@ const {
 } = require('../utils/teacherSessionGuard');
 const { normalizeQuestionsForScoring } = require('../utils/scoringUtils');
 const { validateGenerateAiQuizBody, generateQuizWithAi } = require('../utils/generateAiQuiz');
-const { normalizeQuizRecord } = require('../utils/quizNormalization');
+const { normalizeQuizRecord, normalizeQuizListRecord } = require('../utils/quizNormalization');
 const router = express.Router();
 
 const generateId = (prefix = 'quiz') =>
@@ -104,32 +104,45 @@ const generateAiQuizHandler = async (req, res) => {
 
 router.post('/generate-ai', generateAiQuizHandler);
 
+const normalizeListStatus = (status) => {
+  let normalizedStatus = status;
+  if (normalizedStatus === null || normalizedStatus === undefined) {
+    normalizedStatus = 'draft';
+  }
+  if (typeof normalizedStatus === 'string') {
+    normalizedStatus = normalizedStatus.toLowerCase();
+  }
+  return normalizedStatus;
+};
+
+const mapTeacherQuizzes = (raw, targetUid) =>
+  Object.entries(raw || {})
+    .map(([id, q]) => ({ id, ...(q || {}) }))
+    .filter((q) => q.createdBy === targetUid);
+
 // List quizzes for current teacher
 router.get('/', async (req, res) => {
   try {
     const uid = req.user.uid;
     const { status, limit = 50, teacherUid } = req.query;
-    
-    console.log('🔍 Fetching quizzes for teacher:', uid);
-    console.log('📋 Status filter:', status);
-    console.log('👨‍🏫 Teacher UID filter:', teacherUid);
-    
-    // Use teacherUid if provided (for admin access), otherwise use current user
     const targetUid = teacherUid || uid;
-    
-    const allSnap = await quizzesRef().get();
-    const allRaw = allSnap.exists() ? (allSnap.val() || {}) : {};
 
-    let quizzes = Object.entries(allRaw)
-      .map(([id, q]) => ({ id, ...(q || {}) }))
-      .filter((q) => q.createdBy === targetUid);
+    let quizzes = [];
+    try {
+      const indexedSnap = await quizzesRef().orderByChild('createdBy').equalTo(targetUid).get();
+      if (indexedSnap.exists()) {
+        quizzes = mapTeacherQuizzes(indexedSnap.val());
+      }
+    } catch (indexError) {
+      console.warn('Indexed quiz list failed, falling back to full scan:', indexError.message);
+      const allSnap = await quizzesRef().get();
+      quizzes = mapTeacherQuizzes(allSnap.exists() ? allSnap.val() : {});
+    }
 
-    // Status filtering (RTDB can't easily compound-query; filter in-memory)
     if (status && status !== 'all') {
       quizzes = quizzes.filter((q) => q.status === status);
     }
 
-    // Sort newest first
     quizzes.sort((a, b) => String(b.updatedAt || '').localeCompare(String(a.updatedAt || '')));
 
     const lim = Math.max(0, parseInt(limit, 10) || 0);
@@ -137,55 +150,19 @@ router.get('/', async (req, res) => {
 
     const filtered = [];
     quizzes.forEach((quizData) => {
-      
-      console.log('📝 Processing quiz:', {
-        id: quizData.id,
-        title: quizData.title,
-        createdBy: quizData.createdBy,
-        status: quizData.status,
-        deletedAt: quizData.deletedAt
-      });
-      
-      // Exclude soft-deleted quizzes (only return current library)
-      if (quizData.deletedAt) {
-        console.log('🗑️ Skipping deleted quiz:', quizData.title);
-        return;
-      }
-      
-      console.log('✅ Including quiz:', quizData.title);
-      
-      // Keep original status values - no automatic normalization
-      let normalizedStatus = quizData.status;
-      
-      // Only normalize null/undefined values to draft
-      if (normalizedStatus === null || normalizedStatus === undefined) {
-        normalizedStatus = 'draft';
-      }
-      
-      // Ensure status is lowercase for consistency
-      if (typeof normalizedStatus === 'string') {
-        normalizedStatus = normalizedStatus.toLowerCase();
-      }
-      
-      // Exclude quizzes marked as ended (deleted flow sets status to Ended)
+      if (quizData.deletedAt) return;
+
+      const normalizedStatus = normalizeListStatus(quizData.status);
       if (normalizedStatus === 'ended') return;
-      
-      console.log('Quiz found:', {
-        id: quizData.id,
-        title: quizData.title,
-        originalStatus: quizData.status,
-        normalizedStatus: normalizedStatus,
-        createdBy: quizData.createdBy,
-        teacherUid: uid
-      });
-      
-      filtered.push(normalizeQuizRecord({
-        ...quizData,
-        status: normalizedStatus // ✅ Use normalized status
-      }));
+
+      filtered.push(
+        normalizeQuizListRecord({
+          ...quizData,
+          status: normalizedStatus,
+        })
+      );
     });
-    
-    console.log('Returning', filtered.length, 'quizzes with statuses:', filtered.map(q => ({ id: q.id, title: q.title, status: q.status, deletedAt: q.deletedAt })));
+
     return res.json({ success: true, data: filtered });
   } catch (error) {
     console.error('List quizzes error:', error);

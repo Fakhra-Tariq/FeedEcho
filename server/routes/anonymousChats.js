@@ -197,13 +197,27 @@ router.get('/', optionalAuth, async (req, res) => {
     const headerUserId = req.headers['x-user-id'];
     const fallbackUserId =
       typeof headerUserId === 'string' && headerUserId.trim() ? headerUserId.trim() : null;
-    const snap = await db.ref('chat_sessions').get();
-    const all = snap.exists() ? snap.val() : {};
-    let chats = Object.entries(all || {}).map(([id, d]) => ({ id, ...(d || {}) }));
-
+    let chats = [];
     const ownerId = req.user?.uid || fallbackUserId;
     if (ownerId) {
-      chats = chats.filter((c) => c.createdBy === ownerId || c.createdBy == null);
+      try {
+        const indexedSnap = await db.ref('chat_sessions').orderByChild('createdBy').equalTo(ownerId).get();
+        if (indexedSnap.exists()) {
+          const raw = indexedSnap.val() || {};
+          chats = Object.entries(raw).map(([id, d]) => ({ id, ...(d || {}) }));
+        }
+      } catch (indexError) {
+        console.warn('Indexed chat list failed, falling back to full scan:', indexError.message);
+        const snap = await db.ref('chat_sessions').get();
+        const all = snap.exists() ? snap.val() : {};
+        chats = Object.entries(all || {})
+          .map(([id, d]) => ({ id, ...(d || {}) }))
+          .filter((c) => c.createdBy === ownerId || c.createdBy == null);
+      }
+    } else {
+      const snap = await db.ref('chat_sessions').get();
+      const all = snap.exists() ? snap.val() : {};
+      chats = Object.entries(all || {}).map(([id, d]) => ({ id, ...(d || {}) }));
     }
     if (status) {
       chats = chats.filter((c) => c.status === status);

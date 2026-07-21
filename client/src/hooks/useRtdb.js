@@ -5,6 +5,19 @@ import { db } from '../firebase';
 /** Stable empty list — avoids new array references on every render when using useRtdbList */
 export const RTDB_EMPTY_LIST = Object.freeze([]);
 
+const isDev = process.env.NODE_ENV === 'development';
+
+const snapshotsEqual = (prev, next) => {
+  if (prev === next) return true;
+  if (prev == null || next == null) return false;
+  if (typeof prev !== 'object' || typeof next !== 'object') return false;
+  try {
+    return JSON.stringify(prev) === JSON.stringify(next);
+  } catch {
+    return false;
+  }
+};
+
 export function useRtdbValue(path, { enabled = true } = {}) {
   const [value, setValue] = useState(null);
   const [loading, setLoading] = useState(Boolean(enabled && path));
@@ -27,43 +40,24 @@ export function useRtdbValue(path, { enabled = true } = {}) {
     setLoading(true);
     setError(null);
 
-    console.log('🔗 Setting up Firebase listener for path:', path);
-
     const r = dbRef(db, path);
     const unsub = onValue(
       r,
       (snap) => {
         if (!alive.current) return;
         const next = snap.exists() ? snap.val() : null;
-        console.log('📥 Firebase value received:', { path, exists: snap.exists(), value: next });
-        setValue((prev) => {
-          if (prev === next) return prev;
-          if (
-            prev != null &&
-            next != null &&
-            typeof prev === 'object' &&
-            typeof next === 'object'
-          ) {
-            try {
-              if (JSON.stringify(prev) === JSON.stringify(next)) return prev;
-            } catch {
-              // non-serializable snapshot; accept update
-            }
-          }
-          return next;
-        });
+        setValue((prev) => (snapshotsEqual(prev, next) ? prev : next));
         setLoading(false);
       },
       (err) => {
         if (!alive.current) return;
-        console.error('❌ Firebase listener error:', { path, error: err });
+        if (isDev) console.error('Firebase listener error:', { path, error: err });
         setError(err);
         setLoading(false);
       }
     );
 
     return () => {
-      console.log('🔌 Cleaning up Firebase listener for path:', path);
       try {
         unsub();
       } catch {

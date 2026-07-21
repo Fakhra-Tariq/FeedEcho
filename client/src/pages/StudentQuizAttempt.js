@@ -793,8 +793,6 @@ const StudentQuizAttempt = ({
   useEffect(() => {
     setLocalTeamSelection(null);
     syncTeamSelectionFromServer();
-    const interval = setInterval(syncTeamSelectionFromServer, 1000); // Reduced from 2000 to 1000 for faster updates
-    return () => clearInterval(interval);
   }, [syncTeamSelectionFromServer]);
 
   useEffect(() => {

@@ -26,6 +26,16 @@ import {
 } from '../utils/userRoles';
 
 const isFirebaseOnly = process.env.REACT_APP_FIREBASE_ONLY === 'true';
+const AUTH_INIT_TIMEOUT_MS = 25000;
+const PROFILE_FETCH_TIMEOUT_MS = 25000;
+
+const withTimeout = (promise, ms, label = 'Request') =>
+  Promise.race([
+    promise,
+    new Promise((_, reject) => {
+      setTimeout(() => reject(new Error(`${label} timed out after ${ms}ms`)), ms);
+    }),
+  ]);
 
 const ROLE_STORAGE_KEY = 'feedEcho_role';
 const LEGACY_ROLE_STORAGE_KEY = 'learneXa_role';
@@ -68,48 +78,101 @@ export const AuthProvider = ({ children }) => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    let cancelled = false;
+    let authSettled = false;
+
+    const finishAuthInit = () => {
+      if (cancelled || authSettled) return;
+      authSettled = true;
+      setLoading(false);
+    };
+
+    // Never block the whole app if Firebase auth or profile fetch hangs
+    const safetyTimer = setTimeout(() => {
+      if (!authSettled) {
+        console.warn('Auth initialization timed out; rendering app without blocking');
+        finishAuthInit();
+      }
+    }, AUTH_INIT_TIMEOUT_MS);
+
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       setUser(firebaseUser);
-      
+
       if (firebaseUser) {
         try {
-          const token = await firebaseUser.getIdToken();
+          const token = await withTimeout(
+            firebaseUser.getIdToken(),
+            PROFILE_FETCH_TIMEOUT_MS,
+            'Firebase token'
+          );
           localStorage.setItem('token', token);
+
+          // Provide uid to API interceptor before profile fetch completes
+          localStorage.setItem(
+            'authUser',
+            JSON.stringify({
+              uid: firebaseUser.uid,
+              email: firebaseUser.email,
+            })
+          );
+          sessionStorage.setItem('feedecho-user-id', firebaseUser.uid);
+
           if (isFirebaseOnly) {
-            // In Firebase-only mode, synthesize profile directly
             const role = readStoredRole();
             setUserProfile(buildProfileFromFirebase(firebaseUser, role));
           } else {
-            // Get user profile from backend
-            const profileResponse = await authAPI.getProfile(token);
-            const profile = profileResponse.data.user;
-            setUserProfile({
-              ...profile,
-              uid: profile?.uid || firebaseUser.uid,
-            });
-            
-            // Store user profile in localStorage for API access
-            localStorage.setItem('authUser', JSON.stringify({
-              uid: profile.uid || firebaseUser.uid,
-              email: profile.email || firebaseUser.email
-            }));
+            try {
+              const profileResponse = await withTimeout(
+                authAPI.getProfile(token),
+                PROFILE_FETCH_TIMEOUT_MS,
+                'Profile fetch'
+              );
+              const profile = profileResponse.data.user;
+              setUserProfile({
+                ...profile,
+                uid: profile?.uid || firebaseUser.uid,
+              });
 
-            if (canAccessStudentPortal(profile) && (getActivePortal() === 'student' || getStoredStudentSession())) {
-              persistStudentSession(profile);
-              schedulePendingQuizSubmissionSync();
+              localStorage.setItem(
+                'authUser',
+                JSON.stringify({
+                  uid: profile.uid || firebaseUser.uid,
+                  email: profile.email || firebaseUser.email,
+                })
+              );
+
+              if (
+                canAccessStudentPortal(profile) &&
+                (getActivePortal() === 'student' || getStoredStudentSession())
+              ) {
+                persistStudentSession(profile);
+                schedulePendingQuizSubmissionSync();
+              }
+            } catch (profileError) {
+              console.error('Error fetching user profile:', profileError);
+              const role = readStoredRole();
+              setUserProfile(buildProfileFromFirebase(firebaseUser, role));
             }
           }
         } catch (error) {
-          console.error('Error fetching user profile:', error);
+          console.error('Error during auth state handling:', error);
+          setUserProfile(null);
         }
       } else {
         setUserProfile(null);
+        localStorage.removeItem('token');
+        localStorage.removeItem('authUser');
+        sessionStorage.removeItem('feedecho-user-id');
       }
-      
-      setLoading(false);
+
+      finishAuthInit();
     });
 
-    return unsubscribe;
+    return () => {
+      cancelled = true;
+      clearTimeout(safetyTimer);
+      unsubscribe();
+    };
   }, []);
 
   const login = async (email, password) => {

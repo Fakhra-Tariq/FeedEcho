@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, Rocket, Edit, Trash2, Calendar, AlertTriangle, Library, Copy, Flag, Clock, Lock, Search } from 'lucide-react';
 import { useHybridAlert } from '../contexts/HybridAlertContext';
 import LaunchQuizModal from '../components/LaunchQuizModal';
-import { quizzesAPI, handleAPIError, exitTicketsAPI, spaceRacesAPI } from '../services/api';
+import { quizzesAPI, handleAPIError } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
 import { useTeacherData } from '../contexts/TeacherDataContext';
 import {
@@ -60,6 +60,11 @@ const QuizLibrary = () => {
       return undefined;
     }
 
+    if ((teacherData.quizzes || []).length > 0) {
+      setLoading(false);
+      return undefined;
+    }
+
     let cancelled = false;
     setLoading(true);
     syncQuizzes().finally(() => {
@@ -69,7 +74,7 @@ const QuizLibrary = () => {
     return () => {
       cancelled = true;
     };
-  }, [teacherUid, syncQuizzes]);
+  }, [teacherUid, syncQuizzes, teacherData.quizzes]);
 
   // Finish quiz and mark as completed
   const finishQuiz = async (quizId) => {
@@ -164,33 +169,24 @@ const QuizLibrary = () => {
       return;
     }
 
-    try {
-      const exitTicketsResponse = await exitTicketsAPI.getAll({ status: 'active' });
-      const activeExitTickets = exitTicketsResponse.data?.data || [];
-      if (activeExitTickets.length > 0) {
-        alert.toast.error(
-          'An Exit Ticket is already active. Please end it first before launching a Library Quiz.'
-        );
-        return;
-      }
-    } catch (error) {
-      console.error('Could not check exit tickets:', error);
-      alert.toast.error('Unable to verify exit tickets. Please try again in a moment.');
+    const activeExitTickets = (teacherData.exitTickets || []).filter(
+      (ticket) => String(ticket.status || '').toLowerCase() === 'active'
+    );
+    if (activeExitTickets.length > 0) {
+      alert.toast.error(
+        'An Exit Ticket is already active. Please end it first before launching a Library Quiz.'
+      );
       return;
     }
 
-    try {
-      const spaceRacesResponse = await spaceRacesAPI.getAll({ status: 'active' });
-      const activeSpaceRaces = spaceRacesResponse.data?.data || [];
-      if (activeSpaceRaces.length > 0) {
-        alert.toast.error(
-          'A Space Race is already active. Please end it first before launching a Library Quiz.'
-        );
-        return;
-      }
-    } catch (error) {
-      console.error('Could not check space races:', error);
-      alert.toast.error('Unable to verify Space Races. Please try again in a moment.');
+    const activeSpaceRaces = (teacherData.spaceRaces || []).filter((race) => {
+      const status = String(race.status || '').toLowerCase();
+      return status === 'active' || status === 'running' || status === 'started';
+    });
+    if (activeSpaceRaces.length > 0) {
+      alert.toast.error(
+        'A Space Race is already active. Please end it first before launching a Library Quiz.'
+      );
       return;
     }
 
@@ -214,18 +210,27 @@ const QuizLibrary = () => {
     }
   };
 
-  const editQuiz = (quizId) => {
-    const quiz = savedQuizzes.find(q => q.id === quizId);
+  const editQuiz = async (quizId) => {
+    try {
+      const response = await quizzesAPI.getById(quizId);
+      const quiz = response.data?.data || response.data?.quiz;
+      if (!quiz) {
+        alert.toast.error('Could not load quiz for editing.');
+        return;
+      }
 
-    if (quiz) {
       const quizType = normalizeQuizTypeLabel(quiz.type);
       const normalizedQuiz = {
         ...quiz,
+        id: quiz.id || quizId,
         type: quizType,
         questions: normalizeQuestionsForEditor(quiz.questions, quizType),
       };
       localStorage.setItem('editingQuiz', JSON.stringify(normalizedQuiz));
       navigate(getEditorRouteForQuizType(quizType));
+    } catch (err) {
+      const apiErr = handleAPIError(err);
+      alert.toast.error(apiErr.message || 'Failed to load quiz for editing');
     }
   };
 

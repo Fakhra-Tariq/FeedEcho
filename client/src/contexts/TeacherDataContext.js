@@ -1036,12 +1036,18 @@ export const TeacherDataProvider = ({ children }) => {
 
   // RTDB revision bumps → debounced refresh of API-backed lists (avoids storm of parallel getAll calls)
   const syncDebounceRef = useRef(null);
+  const lastBulkSyncRef = useRef(0);
   useEffect(() => {
     if (!isTeacherPortal) return undefined;
     if (syncDebounceRef.current) clearTimeout(syncDebounceRef.current);
     const delay = dataRevision === 0 ? 0 : 450;
     syncDebounceRef.current = setTimeout(() => {
       syncDebounceRef.current = null;
+      const now = Date.now();
+      if (dataRevision > 0 && now - lastBulkSyncRef.current < 3000) {
+        return;
+      }
+      lastBulkSyncRef.current = now;
       void Promise.all([
         syncQuizzes(),
         syncExitTickets(),

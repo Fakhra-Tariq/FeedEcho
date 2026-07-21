@@ -439,25 +439,32 @@ router.get('/', async (req, res) => {
       return res.json({ success: true, data: [] });
     }
 
-    const snap = await racesRef().get();
     let races = [];
-    if (snap.exists()) {
-      const raw = snap.val() || {};
-      races = Object.entries(raw)
-        .map(([id, raceData]) => ({ id, ...(raceData || {}) }))
-        .filter((r) => r.createdBy === uid);
+    try {
+      const indexedSnap = await racesRef().orderByChild('createdBy').equalTo(uid).get();
+      if (indexedSnap.exists()) {
+        const raw = indexedSnap.val() || {};
+        races = Object.entries(raw).map(([id, raceData]) => ({ id, ...(raceData || {}) }));
+      }
+    } catch (indexError) {
+      console.warn('Indexed space race list failed, falling back to full scan:', indexError.message);
+      const snap = await racesRef().get();
+      if (snap.exists()) {
+        const raw = snap.val() || {};
+        races = Object.entries(raw)
+          .map(([id, raceData]) => ({ id, ...(raceData || {}) }))
+          .filter((r) => r.createdBy === uid);
+      }
     }
     
     // Handle status filtering with proper normalization (in-memory)
     if (status && status !== 'all') {
-      console.log('Applying status filter:', status);
       let normalizedStatus = status;
       if (status === 'active' || status === 'Active') normalizedStatus = 'active';
       else if (status === 'completed' || status === 'ended' || status === 'finished') normalizedStatus = 'completed';
       else if (status === 'draft') normalizedStatus = 'draft';
       else if (status === 'paused') normalizedStatus = 'paused';
       races = races.filter((r) => (typeof r.status === 'string' ? r.status.toLowerCase() : r.status) === normalizedStatus);
-      console.log('Using normalized status filter:', normalizedStatus);
     }
     
     // Sort newest first
@@ -465,54 +472,41 @@ router.get('/', async (req, res) => {
     const lim = Math.max(0, parseInt(limit, 10) || 0);
     if (lim) races = races.slice(0, lim);
     
-    // Process each race record
-    const racePromises = races.map(async (raceData) => {
-        
-        // Get participants count for this race
-        const pSnap = await raceParticipantsRef(raceData.id).get();
-        const participantsCount = pSnap.exists() ? Object.keys(pSnap.val() || {}).length : 0;
-        
-        // Get quiz data for questions count
+    const processedRaces = races.map((raceData) => {
+        const participantsCount =
+          typeof raceData.participantsCount === 'number'
+            ? raceData.participantsCount
+            : 0;
+
         let questionsCount = 0;
-        if (raceData.quizId) {
-          try {
-            const quizSnap = await quizRef(raceData.quizId).get();
-            if (quizSnap.exists()) {
-              const quiz = quizSnap.val();
-              questionsCount = quiz.questions ? quiz.questions.length : 0;
-            }
-          } catch (error) {
-            console.log('Could not fetch quiz for race:', raceData.quizId);
-          }
+        if (Array.isArray(raceData.quiz?.questions)) {
+          questionsCount = raceData.quiz.questions.length;
+        } else if (raceData.quiz?.questionCount != null) {
+          questionsCount = Number(raceData.quiz.questionCount) || 0;
+        } else if (raceData.questionCount != null) {
+          questionsCount = Number(raceData.questionCount) || 0;
         }
         
-        // Calculate teams count from settings
         const teamsCount = raceData.settings?.numberOfTeams || raceData.teams || 0;
         
-        // Keep original status values - no automatic normalization
         let normalizedStatus = raceData.status;
-        
-        // Only normalize null/undefined values to draft
         if (normalizedStatus === null || normalizedStatus === undefined) {
           normalizedStatus = 'draft';
       }
       
-      // Ensure status is lowercase for consistency
       if (typeof normalizedStatus === 'string') {
         normalizedStatus = normalizedStatus.toLowerCase();
       }
       
-      // Validate status against allowed enum
       const allowedStatuses = ["draft", "active", "paused", "inactive", "completed", "ended", "hidden"];
       if (!allowedStatuses.includes(normalizedStatus)) {
-        normalizedStatus = 'draft'; // Default to draft for invalid status
+        normalizedStatus = 'draft';
       }
       
-      // Calculate time left if race is active
       let timeLeft = '--:--';
       if (normalizedStatus === 'active' && raceData.startedAt) {
         const startTime = new Date(raceData.startedAt);
-        const duration = (raceData.timerMinutes || 10) * 60 * 1000; // Convert minutes to milliseconds
+        const duration = (raceData.timerMinutes || 10) * 60 * 1000;
         const elapsed = Date.now() - startTime.getTime();
         const remaining = Math.max(0, duration - elapsed);
         
@@ -525,31 +519,18 @@ router.get('/', async (req, res) => {
         }
       }
       
-      console.log('Race found:', {
-        id: raceData.id,
-        title: raceData.title,
-        originalStatus: raceData.status,
-        normalizedStatus: normalizedStatus,
-        participantsCount,
-        teamsCount,
-        questionsCount,
-        timeLeft
-      });
-      
+      const { quiz: _embeddedQuiz, ...raceSummary } = raceData;
+
       return {
-        ...raceData,
-        status: normalizedStatus, // Use normalized status
+        ...raceSummary,
+        status: normalizedStatus,
         participantsCount,
         teamsCount,
         questionsCount,
-        timeLeft
+        timeLeft,
       };
     });
     
-    // Wait for all race data to be processed
-    const processedRaces = await Promise.all(racePromises);
-    
-    console.log('Returning', processedRaces.length, 'Space Races with normalized statuses:', processedRaces.map(r => ({ id: r.id, title: r.title, status: r.status })));
     return res.json({ success: true, data: processedRaces });
   } catch (error) {
     console.error('List space races error:', error);
@@ -1245,16 +1226,13 @@ router.post('/:id/submit-answer', async (req, res) => {
     }
     
     let quizData = null;
-    if (race.quizId) {
+    if (race.quiz && race.quiz.questions) {
+      quizData = race.quiz;
+    } else if (race.quizId) {
       try {
         const quizSnap = await quizRef(race.quizId).get();
         if (quizSnap.exists()) {
           quizData = quizSnap.val();
-          console.log('📚 Loaded quiz for scoring:', {
-            quizId: race.quizId,
-            quizType: quizData.type,
-            questionsCount: quizData.questions?.length
-          });
         }
       } catch (error) {
         console.error('Error loading quiz for scoring:', error);

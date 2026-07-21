@@ -150,17 +150,15 @@ async function getStudentActivity(query = {}, limit = 20) {
   const studentUid = query.uid ? String(query.uid).trim() : '';
   if (!identifiers.length && !studentUid) return [];
 
-  const [submissionsSnap, participantsSnap, exitSnap, quizzesSnap, racesSnap] = await Promise.all([
+  const [submissionsSnap, participantsSnap, exitSnap] = await Promise.all([
     quizSubmissionsRef().get(),
     spaceParticipantsRef().get(),
     exitResponsesRef().get(),
-    quizzesRef().get(),
-    spaceRacesRef().get(),
   ]);
 
-  const quizzes = quizzesSnap.exists() ? quizzesSnap.val() || {} : {};
-  const races = racesSnap.exists() ? racesSnap.val() || {} : {};
   const activities = [];
+  const quizIdsNeedingMeta = new Set();
+  const raceIdsNeedingMeta = new Set();
 
   if (submissionsSnap.exists()) {
     Object.entries(submissionsSnap.val() || {}).forEach(([quizId, participants]) => {
@@ -178,13 +176,19 @@ async function getStudentActivity(query = {}, limit = 20) {
             : totalQuestions > 0
             ? Math.round((percentage / 100) * totalQuestions)
             : 0;
+
+        const hasSubmissionQuestions = normalizeQuestionsArray(sub.questions).length > 0;
+        if (!sub.quizTitle || !hasSubmissionQuestions) {
+          quizIdsNeedingMeta.add(quizId);
+        }
+
         activities.push({
           id: `quiz-${quizId}-${participantId}`,
           type: 'quiz',
           quizId,
           participantId,
           submittedAt: sub.submittedAt || null,
-          title: sub.quizTitle || quizzes[quizId]?.title || 'Quiz',
+          title: sub.quizTitle || 'Quiz',
           subtitle: `${percentage}% score`,
           score: `${percentage}%`,
           correctAnswers,
@@ -192,12 +196,13 @@ async function getStudentActivity(query = {}, limit = 20) {
           percentage,
           timeTaken: sub.timeTaken ?? null,
           answers: sub.answers || {},
-          quizType: sub.quizType || quizzes[quizId]?.type || '',
-          questions: normalizeQuestionsArray(sub.questions || quizzes[quizId]?.questions),
+          quizType: sub.quizType || '',
+          questions: normalizeQuestionsArray(sub.questions),
           date: when.date,
           time: when.time,
           shortDate: when.shortDate,
           sortKey: when.sortKey,
+          _quizIdForMeta: quizId,
         });
       });
     });
@@ -217,22 +222,57 @@ async function getStudentActivity(query = {}, limit = 20) {
       });
 
       if (!matched) return;
+      raceIdsNeedingMeta.add(raceId);
 
-      const race = races[raceId] || {};
-      const when = formatActivityDate(matched.joinedAt || race.startedAt || race.createdAt);
+      const when = formatActivityDate(matched.joinedAt);
       activities.push({
         id: `race-${raceId}-${matched.participantId}`,
         type: 'spaceRace',
-        title: race.title || race.quiz?.title || 'Space Race',
+        title: matched.raceTitle || 'Space Race',
         subtitle: `Team ${matched.teamId ?? '—'}`,
         rank: matched.teamId ? `Team ${matched.teamId}` : 'Joined',
         date: when.date,
         time: when.time,
         shortDate: when.shortDate,
         sortKey: when.sortKey,
+        _raceIdForMeta: raceId,
       });
     });
   }
+
+  const quizMeta = {};
+  const raceMeta = {};
+  await Promise.all([
+    ...Array.from(quizIdsNeedingMeta).map(async (quizId) => {
+      const snap = await quizzesRef().child(quizId).get();
+      if (snap.exists()) quizMeta[quizId] = snap.val() || {};
+    }),
+    ...Array.from(raceIdsNeedingMeta).map(async (raceId) => {
+      const snap = await spaceRacesRef().child(raceId).get();
+      if (snap.exists()) raceMeta[raceId] = snap.val() || {};
+    }),
+  ]);
+
+  activities.forEach((item) => {
+    if (item.type === 'quiz' && item._quizIdForMeta) {
+      const quiz = quizMeta[item._quizIdForMeta] || {};
+      if (!item.title || item.title === 'Quiz') {
+        item.title = quiz.title || item.title;
+      }
+      if (!item.quizType) item.quizType = quiz.type || '';
+      if (!item.questions?.length) {
+        item.questions = normalizeQuestionsArray(quiz.questions);
+      }
+      delete item._quizIdForMeta;
+    }
+    if (item.type === 'spaceRace' && item._raceIdForMeta) {
+      const race = raceMeta[item._raceIdForMeta] || {};
+      if (!item.title || item.title === 'Space Race') {
+        item.title = race.title || race.quiz?.title || item.title;
+      }
+      delete item._raceIdForMeta;
+    }
+  });
 
   if (exitSnap.exists()) {
     Object.entries(exitSnap.val() || {}).forEach(([ticketId, responses]) => {
@@ -272,13 +312,9 @@ async function getStudentQuizHistory(query = {}, limit = 100) {
   const studentUid = query.uid ? String(query.uid).trim() : '';
   if (!identifiers.length && !studentUid) return [];
 
-  const [submissionsSnap, quizzesSnap] = await Promise.all([
-    quizSubmissionsRef().get(),
-    quizzesRef().get(),
-  ]);
-
-  const quizzes = quizzesSnap.exists() ? quizzesSnap.val() || {} : {};
+  const submissionsSnap = await quizSubmissionsRef().get();
   const rows = [];
+  const quizIdsNeedingMeta = new Set();
 
   if (submissionsSnap.exists()) {
     Object.entries(submissionsSnap.val() || {}).forEach(([quizId, participants]) => {
@@ -287,8 +323,12 @@ async function getStudentQuizHistory(query = {}, limit = 100) {
         if (!sub || typeof sub !== 'object') return;
         if (!matchesQuizSubmissionRecord(sub, query)) return;
 
-        const quiz = quizzes[quizId] || {};
-        const totalQuestions = Number(sub.totalQuestions ?? quiz.questions?.length ?? 0);
+        const hasSubmissionQuestions = normalizeQuestionsArray(sub.questions).length > 0;
+        if (!sub.quizTitle || !hasSubmissionQuestions) {
+          quizIdsNeedingMeta.add(quizId);
+        }
+
+        const totalQuestions = Number(sub.totalQuestions ?? 0);
         const percentage = Number(sub.percentage ?? 0);
         const correctAnswers =
           sub.correctAnswers != null
@@ -301,9 +341,9 @@ async function getStudentQuizHistory(query = {}, limit = 100) {
           id: `${quizId}-${participantId}-${sub.submittedAt || ''}`,
           quizId,
           participantId,
-          name: sub.quizTitle || quiz.title || 'Quiz',
-          quizTitle: sub.quizTitle || quiz.title || 'Quiz',
-          quizType: sub.quizType || quiz.type || '',
+          name: sub.quizTitle || 'Quiz',
+          quizTitle: sub.quizTitle || 'Quiz',
+          quizType: sub.quizType || '',
           studentName: sub.studentName || '',
           sessionCode: sub.sessionCode || '',
           status: percentage >= 60 ? 'Passed' : 'Failed',
@@ -315,12 +355,35 @@ async function getStudentQuizHistory(query = {}, limit = 100) {
           percentage,
           points: Number(sub.score ?? 0),
           answers: sub.answers || {},
-          questions: normalizeQuestionsArray(sub.questions || quiz.questions),
+          questions: normalizeQuestionsArray(sub.questions),
           source: 'server',
+          _quizIdForMeta: quizId,
         });
       });
     });
   }
+
+  const quizMeta = {};
+  await Promise.all(
+    Array.from(quizIdsNeedingMeta).map(async (quizId) => {
+      const snap = await quizzesRef().child(quizId).get();
+      if (snap.exists()) quizMeta[quizId] = snap.val() || {};
+    })
+  );
+
+  rows.forEach((row) => {
+    const quiz = quizMeta[row._quizIdForMeta] || {};
+    if (!row.quizTitle || row.quizTitle === 'Quiz') {
+      row.name = quiz.title || row.name;
+      row.quizTitle = quiz.title || row.quizTitle;
+    }
+    if (!row.quizType) row.quizType = quiz.type || '';
+    if (!row.totalQuestions) row.totalQuestions = Number(quiz.questions?.length ?? 0);
+    if (!row.questions?.length) {
+      row.questions = normalizeQuestionsArray(quiz.questions);
+    }
+    delete row._quizIdForMeta;
+  });
 
   return collapseQuizRows(rows, (row) => row.submittedAt)
     .sort((a, b) => String(b.submittedAt || '').localeCompare(String(a.submittedAt || '')))

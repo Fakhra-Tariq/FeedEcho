@@ -75,11 +75,21 @@ router.get('/', async (req, res) => {
     const { status, limit = 50 } = req.query;
     console.log('Fetching exit tickets with status:', status);
     
-    const snap = await db.ref('exit_tickets').get();
-    const raw = snap.exists() ? (snap.val() || {}) : {};
-    let tickets = Object.entries(raw)
-      .map(([id, t]) => ({ id, ...(t || {}) }))
-      .filter((t) => t.createdBy === uid);
+    let tickets = [];
+    try {
+      const indexedSnap = await db.ref('exit_tickets').orderByChild('createdBy').equalTo(uid).get();
+      if (indexedSnap.exists()) {
+        const raw = indexedSnap.val() || {};
+        tickets = Object.entries(raw).map(([id, t]) => ({ id, ...(t || {}) }));
+      }
+    } catch (indexError) {
+      console.warn('Indexed exit ticket list failed, falling back to full scan:', indexError.message);
+      const snap = await db.ref('exit_tickets').get();
+      const raw = snap.exists() ? (snap.val() || {}) : {};
+      tickets = Object.entries(raw)
+        .map(([id, t]) => ({ id, ...(t || {}) }))
+        .filter((t) => t.createdBy === uid);
+    }
     
     if (status && status !== 'All') {
       tickets = tickets.filter((t) => t.status === status);

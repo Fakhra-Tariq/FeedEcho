@@ -163,53 +163,7 @@ export default function StudentSpaceRace() {
 
   useEffect(() => {
     loadRaceData();
-    
-    // Set up periodic score updates
-    const scoreUpdateInterval = setInterval(async () => {
-      if (raceData && raceData.status === 'active') {
-        try {
-          const participantResponse = await spaceRacesAPI.getRaceParticipants(raceId);
-          if (participantResponse.data && participantResponse.data.success) {
-            const participants = participantResponse.data.data.participants || [];
-            const participantId = participantData?.id || JSON.parse(sessionStorage.getItem('raceData') || '{}').participant?.id;
-            const updatedParticipant = participants.find(p => p.id === participantId);
-            
-            if (updatedParticipant && updatedParticipant.score !== participantData?.score) {
-              setParticipantData(updatedParticipant);
-              console.log('📊 Live score update:', updatedParticipant.score);
-              
-              // Update display
-              const mockParticipants = [
-                { id: updatedParticipant.id, name: updatedParticipant.name, score: updatedParticipant.score || 0, teamId: updatedParticipant.teamId || 1 },
-              ];
-              
-              setParticipants(mockParticipants);
-              
-              const teamScores = {};
-              mockParticipants.forEach(p => {
-                if (!teamScores[p.teamId]) {
-                  teamScores[p.teamId] = { score: 0, members: [] };
-                }
-                teamScores[p.teamId].score += p.score;
-                teamScores[p.teamId].members.push(p);
-              });
-              
-              setTeams(teamScores);
-              
-              // Update team score for current user's team
-              if (updatedParticipant.teamId) {
-                setTeamScore(teamScores[updatedParticipant.teamId]?.score || 0);
-              }
-            }
-          }
-        } catch (error) {
-          console.log('⚠️ Live score update failed');
-        }
-      }
-    }, 3000); // Update every 3 seconds
-    
-    return () => clearInterval(scoreUpdateInterval);
-  }, [raceId, navigate, raceData, participantData]);
+  }, [raceId, navigate]);
 
   // Listen to synchronized team scores from Firebase
   const teamScorePath = raceId && participantData?.teamId
