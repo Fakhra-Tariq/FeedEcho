@@ -60,11 +60,6 @@ const QuizLibrary = () => {
       return undefined;
     }
 
-    if ((teacherData.quizzes || []).length > 0) {
-      setLoading(false);
-      return undefined;
-    }
-
     let cancelled = false;
     setLoading(true);
     syncQuizzes().finally(() => {
@@ -74,7 +69,7 @@ const QuizLibrary = () => {
     return () => {
       cancelled = true;
     };
-  }, [teacherUid, syncQuizzes, teacherData.quizzes]);
+  }, [teacherUid, syncQuizzes]);
 
   // Finish quiz and mark as completed
   const finishQuiz = async (quizId) => {

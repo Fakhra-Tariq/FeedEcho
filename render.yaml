@@ -1,8 +1,21 @@
 # FeedEcho — Render Blueprint
 # Docs: https://render.com/docs/blueprint-spec
 #
-# After deploy, set CLIENT_URL on the API service to your Static Site URL.
-# Set REACT_APP_API_URL on the Static Site to https://<api-service>.onrender.com/api
+# REQUIRED env (set in Render dashboard after deploy):
+#   API service (feedecho-api):
+#     CLIENT_URL=https://feedecho-web.onrender.com
+#   Static site (feedecho-web):
+#     REACT_APP_API_URL=https://feedecho-api.onrender.com/api
+#
+# FREE-TIER COLD STARTS:
+#   Web services on plan: free spin down after ~15 minutes idle.
+#   The first request after idle can take 30–90 seconds to respond.
+#   This is expected Render behavior — not an app bug.
+#   Mitigations (pick one):
+#     1. Upgrade feedecho-api to a paid plan (no spin-down) — best UX
+#     2. External keep-alive ping every 10–14 min (e.g. UptimeRobot, cron-job.org)
+#        hitting https://feedecho-api.onrender.com/api/health
+#     3. Keep current free tier — frontend now retries/waits up to ~90s on cold start
 
 services:
   - type: web

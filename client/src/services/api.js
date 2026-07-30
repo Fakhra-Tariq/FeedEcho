@@ -4,21 +4,23 @@ import { getStoredStudentSession } from '../utils/studentSession';
 
 const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
 
-// Create axios instance
-const api = axios.create({
+/** Render free tier cold starts can take 30–90s; avoid infinite hangs in production. */
+const DEFAULT_API_TIMEOUT_MS =
+  process.env.NODE_ENV === 'production' ? 90000 : 30000;
+
+const axiosDefaults = {
   baseURL: API_BASE_URL,
   headers: {
     'Content-Type': 'application/json',
   },
-});
+  timeout: DEFAULT_API_TIMEOUT_MS,
+};
+
+// Create axios instance
+const api = axios.create(axiosDefaults);
 
 // Create axios instance for anonymous chat (NO AUTH)
-const anonymousApi = axios.create({
-  baseURL: API_BASE_URL,
-  headers: {
-    'Content-Type': 'application/json',
-  },
-});
+const anonymousApi = axios.create(axiosDefaults);
 
 // Request interceptor to add auth token and user ID
 api.interceptors.request.use(
@@ -67,10 +69,15 @@ api.interceptors.response.use(
   async (error) => {
     const originalRequest = error.config;
     
-    // Handle network errors
+    // Handle network errors and client-side timeouts (common during Render cold starts)
     if (!error.response && error.request) {
       console.error('Network error - no response received:', error);
-      error.code = 'NETWORK_ERROR';
+      error.code = error.code === 'ECONNABORTED' ? 'ECONNABORTED' : 'NETWORK_ERROR';
+      return Promise.reject(error);
+    }
+
+    if (error.code === 'ECONNABORTED') {
+      console.error('Request timed out:', error.config?.url);
       return Promise.reject(error);
     }
     
@@ -98,8 +105,8 @@ export const authAPI = {
   ensureProfile: (payload) => api.post('/auth/ensure-profile', payload),
   getProfile: (token) => {
     const config = token
-      ? { headers: { Authorization: `Bearer ${token}` }, timeout: 25000 }
-      : { timeout: 25000 };
+      ? { headers: { Authorization: `Bearer ${token}` } }
+      : {};
     return api.get('/auth/profile', config);
   },
   updateProfile: (userData, token) => {
@@ -290,6 +297,17 @@ export const studyAssistantAPI = {
 };
 
 export const handleAPIError = (error) => {
+  if (error.code === 'ECONNABORTED') {
+    return {
+      message:
+        'The server took too long to respond. It may be waking up after idle time — please wait a moment and try again.',
+      status: null,
+      data: null,
+      isNetworkError: true,
+      isTimeout: true,
+    };
+  }
+
   if (error.code === 'NETWORK_ERROR' || (!error.response && error.request)) {
     // Network error (no response received)
     return {
@@ -339,14 +357,42 @@ export const handleAPIError = (error) => {
   }
 };
 
-// Health check function
+const HEALTH_CHECK_TIMEOUT_MS =
+  process.env.NODE_ENV === 'production' ? 90000 : 30000;
+const HEALTH_CHECK_MAX_ATTEMPTS = process.env.NODE_ENV === 'production' ? 6 : 3;
+const HEALTH_CHECK_RETRY_DELAYS_MS = [2000, 3000, 5000, 8000, 12000, 15000];
+
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+/** Non-blocking ping to wake a sleeping Render free-tier backend. */
+export const wakeBackend = () => {
+  api.get('/health', { timeout: HEALTH_CHECK_TIMEOUT_MS }).catch(() => {});
+};
+
+// Health check with retries for cold-start backends
 export const checkServerHealth = async () => {
-  try {
-    const response = await api.get('/health');
-    return response.data;
-  } catch (error) {
-    throw handleAPIError(error);
+  let lastError = null;
+
+  for (let attempt = 0; attempt < HEALTH_CHECK_MAX_ATTEMPTS; attempt += 1) {
+    try {
+      const response = await api.get('/health', { timeout: HEALTH_CHECK_TIMEOUT_MS });
+      return response.data;
+    } catch (error) {
+      lastError = error;
+      const apiError = handleAPIError(error);
+      const shouldRetry =
+        attempt < HEALTH_CHECK_MAX_ATTEMPTS - 1 &&
+        (apiError.isNetworkError || apiError.isTimeout || error.response?.status >= 500);
+
+      if (!shouldRetry) {
+        throw apiError;
+      }
+
+      await sleep(HEALTH_CHECK_RETRY_DELAYS_MS[attempt] ?? 15000);
+    }
   }
+
+  throw handleAPIError(lastError);
 };
 
 export default api;

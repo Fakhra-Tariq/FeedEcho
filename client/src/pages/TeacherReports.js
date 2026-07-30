@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { equalTo, off, onValue, orderByChild, query, ref as dbRef } from 'firebase/database';
 import clsx from 'clsx';
 import {
   BarChart3,
@@ -20,6 +21,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { useTeacherData } from '../contexts/TeacherDataContext';
 import { useHybridAlert } from '../contexts/HybridAlertContext';
 import { useQuizSubmissionListeners } from '../hooks/useQuizSubmissionListeners';
+import { db } from '../firebase';
 import { quizzesAPI, quizSubmissionsAPI, handleAPIError } from '../services/api';
 import {
   getCorrectOptionIndex,
@@ -37,6 +39,69 @@ import {
 } from '../utils/teacherQuizReports';
 
 const PASS_THRESHOLD = 60;
+
+const normalizeListStatus = (status) => {
+  let normalizedStatus = status;
+  if (normalizedStatus === null || normalizedStatus === undefined) {
+    normalizedStatus = 'draft';
+  }
+  if (typeof normalizedStatus === 'string') {
+    normalizedStatus = normalizedStatus.toLowerCase();
+  }
+  return normalizedStatus;
+};
+
+/** Fallback when GET /api/quizzes returns nothing — load this teacher's quizzes from RTDB. */
+const loadTeacherQuizzesFromRtdb = (teacherUid) =>
+  new Promise((resolve) => {
+    if (!teacherUid) {
+      resolve([]);
+      return;
+    }
+
+    const quizzesQuery = query(
+      dbRef(db, 'quizzes'),
+      orderByChild('createdBy'),
+      equalTo(teacherUid)
+    );
+    let settled = false;
+
+    const finish = (list) => {
+      if (settled) return;
+      settled = true;
+      try {
+        off(quizzesQuery);
+      } catch {
+        /* listener may already be detached */
+      }
+      resolve(list);
+    };
+
+    onValue(
+      quizzesQuery,
+      (snap) => {
+        if (!snap.exists()) {
+          finish([]);
+          return;
+        }
+
+        const list = Object.entries(snap.val() || {})
+          .map(([id, quiz]) => ({ id, ...(quiz || {}) }))
+          .filter((quiz) => {
+            if (quiz.deletedAt) return false;
+            return normalizeListStatus(quiz.status) !== 'ended';
+          })
+          .sort((a, b) =>
+            String(b.updatedAt || b.createdAt || '').localeCompare(
+              String(a.updatedAt || a.createdAt || '')
+            )
+          );
+
+        finish(list);
+      },
+      () => finish([])
+    );
+  });
 
 const normalizeQuestionsList = (questions) => {
   if (Array.isArray(questions)) return questions;
@@ -215,12 +280,22 @@ export default function TeacherReports() {
 
     setLoadingQuizzes(true);
     try {
-      const response = await quizzesAPI.getAll();
-      const list = (response.data?.success ? response.data.data : [])
-        .slice()
-        .sort((a, b) =>
+      let list = [];
+      try {
+        const response = await quizzesAPI.getAll();
+        list = (response.data?.success ? response.data.data : []).slice();
+      } catch {
+        list = [];
+      }
+
+      if (!list.length) {
+        list = await loadTeacherQuizzesFromRtdb(teacherUid);
+      } else {
+        list.sort((a, b) =>
           String(b.updatedAt || b.createdAt || '').localeCompare(String(a.updatedAt || a.createdAt || ''))
         );
+      }
+
       setQuizzes(list);
       await syncQuizzes();
       setApiFallbackByQuizId({});
@@ -273,9 +348,23 @@ export default function TeacherReports() {
     );
   }, [quizzes, submissionsByQuizId, participantsByQuizId, apiFallbackByQuizId]);
 
+  const hasRtdbReportData = useMemo(
+    () =>
+      Object.values(submissionsByQuizId).some(
+        (node) => node && typeof node === 'object' && Object.keys(node).length > 0
+      ) ||
+      Object.values(participantsByQuizId).some(
+        (node) => node && typeof node === 'object' && Object.keys(node).length > 0
+      ),
+    [submissionsByQuizId, participantsByQuizId]
+  );
+
   const loading =
     loadingQuizzes ||
-    (loadingResults && quizzes.length > 0 && !Object.keys(apiFallbackByQuizId).length);
+    (loadingResults &&
+      quizzes.length > 0 &&
+      !Object.keys(apiFallbackByQuizId).length &&
+      !hasRtdbReportData);
 
   const overviewStats = useMemo(() => {
     const allSubmissions = quizReports.flatMap((r) => r.submissions).filter(isSubmittedRow);

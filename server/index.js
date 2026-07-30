@@ -19,6 +19,14 @@ const studentRoutes = require('./routes/students');
 const studyAssistantConversationRoutes = require('./routes/studyAssistantConversations');
 const studyAssistantRoutes = require('./routes/studyAssistant');
 
+const parseAllowedOrigins = () =>
+  (process.env.CLIENT_URL || 'http://localhost:3000')
+    .split(',')
+    .map((origin) => origin.trim().replace(/\/$/, ''))
+    .filter(Boolean);
+
+const allowedOrigins = parseAllowedOrigins();
+
 const app = express();
 
 // Middleware
@@ -30,7 +38,18 @@ app.use(
 );
 app.use(morgan(process.env.NODE_ENV === 'production' ? 'tiny' : 'combined'));
 app.use(cors({
-  origin: process.env.CLIENT_URL || 'http://localhost:3000',
+  origin(origin, callback) {
+    if (!origin) {
+      callback(null, true);
+      return;
+    }
+    const normalized = origin.replace(/\/$/, '');
+    if (allowedOrigins.includes(normalized)) {
+      callback(null, true);
+      return;
+    }
+    callback(null, false);
+  },
   credentials: true
 }));
 app.use(express.json({ limit: '10mb' }));

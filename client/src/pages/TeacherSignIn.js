@@ -66,8 +66,10 @@ const TeacherSignIn = () => {
     } catch (err) {
       const apiError = handleAPIError(err);
       
-      if (err.code === 'NETWORK_ERROR' || !err.response) {
-        setError('Server is not responding. Please check your connection and try again.');
+      if (apiError.isTimeout) {
+        setError(apiError.message);
+      } else if (err.code === 'NETWORK_ERROR' || !err.response) {
+        setError('Server is not responding. It may be waking up — please wait a moment and try again.');
       } else {
         setError(apiError.message || 'Google sign-in failed. Please try again.');
       }

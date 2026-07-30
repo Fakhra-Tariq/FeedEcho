@@ -26,8 +26,9 @@ import {
 } from '../utils/userRoles';
 
 const isFirebaseOnly = process.env.REACT_APP_FIREBASE_ONLY === 'true';
-const AUTH_INIT_TIMEOUT_MS = 25000;
-const PROFILE_FETCH_TIMEOUT_MS = 25000;
+const AUTH_INIT_TIMEOUT_MS = process.env.NODE_ENV === 'production' ? 90000 : 25000;
+const PROFILE_FETCH_TIMEOUT_MS = process.env.NODE_ENV === 'production' ? 90000 : 25000;
+const BACKEND_SYNC_TIMEOUT_MS = process.env.NODE_ENV === 'production' ? 90000 : 30000;
 
 const withTimeout = (promise, ms, label = 'Request') =>
   Promise.race([
@@ -60,6 +61,16 @@ const buildProfileFromFirebase = (firebaseUser, roleFallback = 'student') => {
     lastName: lastName || '',
     role: roleFallback,
   };
+};
+
+const backendUnavailableMessage = (error) => {
+  if (error?.code === 'ECONNABORTED' || String(error?.message || '').includes('timed out')) {
+    return 'Server took too long to respond. It may be waking up — please wait a moment and try again.';
+  }
+  if (error?.request && !error?.response) {
+    return 'Server is not responding. It may be waking up — please wait a moment and try again.';
+  }
+  return null;
 };
 
 const AuthContext = createContext();
@@ -245,14 +256,22 @@ export const AuthProvider = ({ children }) => {
     }
 
     try {
-      await authAPI.ensureProfile({
-        idToken: token,
-        role,
-        firstName,
-        lastName,
-        mergeRole,
-      });
-      const loginResponse = await authAPI.login(token);
+      await withTimeout(
+        authAPI.ensureProfile({
+          idToken: token,
+          role,
+          firstName,
+          lastName,
+          mergeRole,
+        }),
+        BACKEND_SYNC_TIMEOUT_MS,
+        'Ensure profile'
+      );
+      const loginResponse = await withTimeout(
+        authAPI.login(token),
+        BACKEND_SYNC_TIMEOUT_MS,
+        'Login sync'
+      );
       const u = loginResponse.data.user;
       const normalized = { ...u, uid: u?.uid || firebaseUser.uid };
       setUserProfile(normalized);
@@ -260,7 +279,7 @@ export const AuthProvider = ({ children }) => {
     } catch (error) {
       console.error('Backend sync error:', error);
 
-      if (error.code === 'NETWORK_ERROR' || !error.response) {
+      if (error.code === 'NETWORK_ERROR' || error.code === 'ECONNABORTED' || !error.response) {
         console.warn('Backend unavailable, using Firebase-only mode');
         const profile = buildProfileFromFirebase(firebaseUser, role || 'student');
         setUserProfile(profile);
@@ -336,9 +355,8 @@ export const AuthProvider = ({ children }) => {
           default:
             errorMessage = error.message || 'Login failed';
         }
-      } else if (error.request && !error.response) {
-        // Network error (no response received)
-        errorMessage = 'Server is not responding. Please check your internet connection.';
+      } else if (backendUnavailableMessage(error)) {
+        errorMessage = backendUnavailableMessage(error);
       } else {
         errorMessage = error?.message || 'Login failed';
       }
@@ -428,8 +446,8 @@ export const AuthProvider = ({ children }) => {
           default:
             errorMessage = error.message || 'Login failed';
         }
-      } else if (error.request && !error.response) {
-        errorMessage = 'Server is not responding. Please check your internet connection.';
+      } else if (backendUnavailableMessage(error)) {
+        errorMessage = backendUnavailableMessage(error);
       } else {
         errorMessage = error?.message || 'Login failed';
       }
@@ -527,9 +545,8 @@ export const AuthProvider = ({ children }) => {
           default:
             errorMessage = error.message || 'Google sign-in failed';
         }
-      } else if (error.request && !error.response) {
-        // Network error (no response received)
-        errorMessage = 'Server is not responding. Please check your internet connection.';
+      } else if (backendUnavailableMessage(error)) {
+        errorMessage = backendUnavailableMessage(error);
       } else {
         errorMessage = error?.message || 'Google sign-in failed';
       }
@@ -578,8 +595,8 @@ export const AuthProvider = ({ children }) => {
           default:
             errorMessage = error.message || 'Google sign-in failed';
         }
-      } else if (error.request && !error.response) {
-        errorMessage = 'Server is not responding. Please check your internet connection.';
+      } else if (backendUnavailableMessage(error)) {
+        errorMessage = backendUnavailableMessage(error);
       } else {
         errorMessage = error?.message || 'Google sign-in failed';
       }

@@ -1,35 +1,47 @@
 import React, { useState, useEffect } from 'react';
 import { checkServerHealth } from '../services/api';
 
+const IS_PRODUCTION = process.env.NODE_ENV === 'production';
+
 const ServerHealthCheck = ({ children }) => {
   const [serverStatus, setServerStatus] = useState('checking'); // 'checking', 'healthy', 'error'
-  const [retryCount, setRetryCount] = useState(0);
+  const [attempt, setAttempt] = useState(1);
+  const [errorMessage, setErrorMessage] = useState('');
 
   useEffect(() => {
-    const checkHealth = async () => {
+    let cancelled = false;
+
+    const runCheck = async () => {
+      setServerStatus('checking');
+      setErrorMessage('');
+
       try {
         await checkServerHealth();
-        setServerStatus('healthy');
+        if (!cancelled) {
+          setServerStatus('healthy');
+        }
       } catch (error) {
-        setServerStatus('error');
-        
-        // Auto-retry if it's a network error and we haven't retried too many times
-        if (error.isNetworkError && retryCount < 3) {
-          setTimeout(() => {
-            setRetryCount(prev => prev + 1);
-            checkHealth();
-          }, 2000 * (retryCount + 1)); // Exponential backoff
+        if (!cancelled) {
+          setServerStatus('error');
+          setErrorMessage(
+            error?.message ||
+              'Unable to reach the server. Please try again in a moment.'
+          );
         }
       }
     };
 
-    checkHealth();
-  }, [retryCount]);
+    runCheck();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [attempt]);
 
   if (serverStatus === 'checking') {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4">
-        <div className="text-center">
+        <div className="text-center max-w-md">
           <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
             <svg className="animate-spin h-8 w-8 text-blue-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
               <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
@@ -37,16 +49,13 @@ const ServerHealthCheck = ({ children }) => {
             </svg>
           </div>
           <h2 className="text-xl font-semibold text-gray-900 mb-2">
-            Server is starting...
+            {IS_PRODUCTION ? 'Connecting to server...' : 'Server is starting...'}
           </h2>
           <p className="text-gray-600 mb-4">
-            Please wait while we connect to the server.
+            {IS_PRODUCTION
+              ? 'On the free hosting plan the backend may take up to 60 seconds to wake after idle time.'
+              : 'Please wait while we connect to the server.'}
           </p>
-          {retryCount > 0 && (
-            <p className="text-sm text-gray-500">
-              Retry attempt {retryCount}/3...
-            </p>
-          )}
         </div>
       </div>
     );
@@ -78,23 +87,30 @@ const ServerHealthCheck = ({ children }) => {
           </h1>
           
           <p className="text-gray-600 mb-6">
-            We can't connect to the server right now. Please make sure the backend server is running on port 5000.
+            {errorMessage}
+            {IS_PRODUCTION && (
+              <span className="block mt-2 text-sm">
+                If this is the first visit after a while, wait about a minute and retry — the backend may still be waking up.
+              </span>
+            )}
           </p>
 
           <div className="space-y-3">
             <button
-              onClick={() => window.location.reload()}
+              onClick={() => setAttempt((prev) => prev + 1)}
               className="w-full bg-primary hover:bg-primary-dark text-white font-medium py-2.5 px-4 rounded-lg transition-colors duration-200"
             >
               Retry Connection
             </button>
             
-            <div className="text-sm text-gray-500 space-y-1">
-              <p>To start the server, run:</p>
-              <code className="block bg-gray-100 p-2 rounded text-left">
-                cd server && npm start
-              </code>
-            </div>
+            {!IS_PRODUCTION && (
+              <div className="text-sm text-gray-500 space-y-1">
+                <p>To start the server locally, run:</p>
+                <code className="block bg-gray-100 p-2 rounded text-left">
+                  cd server && npm start
+                </code>
+              </div>
+            )}
           </div>
         </div>
       </div>

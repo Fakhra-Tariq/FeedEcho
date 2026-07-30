@@ -131,12 +131,12 @@ router.get('/', async (req, res) => {
     try {
       const indexedSnap = await quizzesRef().orderByChild('createdBy').equalTo(targetUid).get();
       if (indexedSnap.exists()) {
-        quizzes = mapTeacherQuizzes(indexedSnap.val());
+        quizzes = mapTeacherQuizzes(indexedSnap.val(), targetUid);
       }
     } catch (indexError) {
       console.warn('Indexed quiz list failed, falling back to full scan:', indexError.message);
       const allSnap = await quizzesRef().get();
-      quizzes = mapTeacherQuizzes(allSnap.exists() ? allSnap.val() : {});
+      quizzes = mapTeacherQuizzes(allSnap.exists() ? allSnap.val() : {}, targetUid);
     }
 
     if (status && status !== 'all') {
