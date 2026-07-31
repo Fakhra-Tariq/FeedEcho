@@ -76,6 +76,16 @@ const StudentQuizAttempt = ({
     if (question?.id !== undefined && question?.id !== null && String(question.id).trim() !== '') {
       return String(question.id);
     }
+    if (
+      question?.questionId !== undefined &&
+      question?.questionId !== null &&
+      String(question.questionId).trim() !== ''
+    ) {
+      return String(question.questionId);
+    }
+    if (question?._id !== undefined && question?._id !== null && String(question._id).trim() !== '') {
+      return String(question._id);
+    }
     return `q${index}`;
   };
 
@@ -774,19 +784,37 @@ const StudentQuizAttempt = ({
   }, [quiz, isSubmitted]);
 
   const currentQuestionData = quiz?.questions?.[currentQuestion];
+  // Prefer real question id; fallback matches server space-race keys (q0, q1, …)
   const currentQuestionId = currentQuestionData
-    ? getQuestionKey(currentQuestionData, currentQuestion)
+    ? (currentQuestionData.id ||
+        currentQuestionData.questionId ||
+        currentQuestionData._id ||
+        getSpaceRaceQuestionId(currentQuestionData, currentQuestion))
     : null;
-  const currentSpaceRaceQuestionId = currentQuestionData
-    ? getSpaceRaceQuestionId(currentQuestionData, currentQuestion)
+  const currentSpaceRaceQuestionId = currentQuestionId
+    ? String(currentQuestionId)
     : null;
 
-  // Live lock sync — when a teammate submits, all members see submitted: true instantly
+  // Live selection + lock sync for current question (dashboard + public join)
   const { value: submissionState } = useRtdbValue(
     isSpaceRace && raceId && teamId != null && currentSpaceRaceQuestionId
       ? `space_race_team_selection/${raceId}/team_${teamId}/question_${currentSpaceRaceQuestionId}`
       : null,
     { enabled: Boolean(isSpaceRace && raceId && teamId != null && currentSpaceRaceQuestionId) }
+  );
+
+  // Team score + participant answers for completion card (hooks must stay top-level)
+  const { value: liveTeamScoreRaw } = useRtdbValue(
+    isSpaceRace && raceId && teamId != null
+      ? `space_race_team_scores/${raceId}/team_${teamId}`
+      : null,
+    { enabled: Boolean(isSpaceRace && raceId && teamId != null) }
+  );
+  const { value: liveParticipantData } = useRtdbValue(
+    isSpaceRace && raceId && participantId
+      ? `space_race_participants/${raceId}/${participantId}`
+      : null,
+    { enabled: Boolean(isSpaceRace && raceId && participantId) }
   );
 
   const isTeamQuestionSubmitted = submissionState?.submitted === true;
@@ -796,10 +824,10 @@ const StudentQuizAttempt = ({
     'A teammate';
 
   const teamSelection =
+    submissionState ||
     (isSpaceRace && currentSpaceRaceQuestionId
       ? teamSelectionsMap[currentSpaceRaceQuestionId]
       : null) ||
-    submissionState ||
     localTeamSelection;
 
   const isCurrentQuestionSubmitted = isSpaceRace
@@ -809,7 +837,7 @@ const StudentQuizAttempt = ({
             (submittedQuestionKeys.has(currentSpaceRaceQuestionId) ||
               teamSelection?.submitted === true))
       )
-    : Boolean(currentQuestionId && submittedQuestionKeys.has(currentQuestionId));
+    : Boolean(currentQuestionId && submittedQuestionKeys.has(String(currentQuestionId)));
 
   const syncTeamSelectionFromServer = useCallback(async () => {
     if (!isSpaceRace || !raceId || teamId == null || !currentSpaceRaceQuestionId) return null;
@@ -919,11 +947,13 @@ const StudentQuizAttempt = ({
     });
   }, [isSpaceRace, currentSpaceRaceQuestionId, isTeamQuestionSubmitted]);
 
-  const displaySelectedOption =
-    getAnswerForQuestion(currentQuestionData, currentQuestion) ||
-    teamSelection?.selectedOption ||
-    submissionState?.selectedOption ||
-    '';
+  // Prefer live team selection so teammates see highlights instantly
+  const displaySelectedOption = isSpaceRace
+    ? (teamSelection?.selectedOption ||
+        submissionState?.selectedOption ||
+        getAnswerForQuestion(currentQuestionData, currentQuestion) ||
+        '')
+    : (getAnswerForQuestion(currentQuestionData, currentQuestion) || '');
 
   // Don't auto-update user's answer from teammate selection - let user keep their own choice
   // Teammate selection is only for display/coordination, not to override user's answer
@@ -1814,13 +1844,37 @@ const StudentQuizAttempt = ({
 
     console.log('📊 Show final score setting:', showFinalScore);
 
-    // Use the score already saved at submit time (server-confirmed when synced) —
-    // same source Progress / Quiz history reads. Do not recalculate here.
-    const displayScore = currentSubmission?.correctAnswers ?? currentSubmission?.score ?? 0;
-    const displayTotal =
-      currentSubmission?.totalQuestions ?? quiz?.questions?.length ?? 0;
-    const displayPercentage = Math.round(currentSubmission?.percentage ?? 0);
-    const displayPoints = currentSubmission?.points ?? displayScore;
+    // Space Race: show TEAM score from RTDB (shared across teammates)
+    const totalQuestionsCount = quiz?.questions?.length || 0;
+    const teamAnswers = Array.isArray(liveParticipantData?.answers)
+      ? liveParticipantData.answers
+      : [];
+    const teamCorrectCount = teamAnswers.filter((a) => a?.isCorrect === true).length;
+    const liveTeamScoreValue =
+      typeof liveTeamScoreRaw === 'number'
+        ? liveTeamScoreRaw
+        : Number(liveTeamScoreRaw?.score ?? 0) || 0;
+    const teamPercentage =
+      totalQuestionsCount > 0
+        ? Math.round((teamCorrectCount / totalQuestionsCount) * 100)
+        : Math.round(liveTeamScoreValue);
+    const teamTotalScore =
+      liveTeamScoreValue > 0
+        ? Math.round(liveTeamScoreValue)
+        : teamPercentage;
+
+    const displayScore = isSpaceRace
+      ? teamCorrectCount
+      : (currentSubmission?.correctAnswers ?? currentSubmission?.score ?? 0);
+    const displayTotal = isSpaceRace
+      ? totalQuestionsCount
+      : (currentSubmission?.totalQuestions ?? quiz?.questions?.length ?? 0);
+    const displayPercentage = isSpaceRace
+      ? teamPercentage
+      : Math.round(currentSubmission?.percentage ?? 0);
+    const displayPoints = isSpaceRace
+      ? teamTotalScore
+      : (currentSubmission?.points ?? displayScore);
 
     // Calculate score bar color based on percentage - use theme color consistently
     const getScoreColor = (percentage) => {
@@ -1879,7 +1933,9 @@ const StudentQuizAttempt = ({
               {displayPercentage}%
             </div>
             <p className="text-text-light mb-4">
-              You got {displayScore} out of {displayTotal} questions correct
+              {isSpaceRace
+                ? `Your team scored ${displayPercentage}% (${displayScore} of ${displayTotal} correct)`
+                : `You got ${displayScore} out of ${displayTotal} questions correct`}
             </p>
             
             {/* Visual Score Bar */}
@@ -2108,8 +2164,8 @@ const StudentQuizAttempt = ({
 
           {/* Answer Options */}
           {isSpaceRace && isCurrentQuestionSubmitted && (
-            <div className="mb-4 p-3 bg-green-100 border border-green-400 rounded-lg text-green-800 font-medium text-sm">
-              ✅ Answer submitted by {submittedByName} — click Next to continue
+            <div className="mb-4 p-3 bg-indigo-100 border border-indigo-400 rounded-lg text-indigo-800 font-semibold text-sm">
+              🔒 Answer submitted by <strong>{submittedByName}</strong> — click Next to continue
             </div>
           )}
 
@@ -2227,7 +2283,7 @@ const StudentQuizAttempt = ({
                 }`}
               >
                 {isCurrentQuestionSubmitted ? (
-                  <span>✅ Submitted</span>
+                  <span>🔒 Locked</span>
                 ) : isSubmittingQuestion ? (
                   <>
                     <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
@@ -2260,28 +2316,24 @@ const StudentQuizAttempt = ({
 
             {isSpaceRace ? (
               currentQuestion === quiz.questions.length - 1 ? (
-                isCurrentQuestionSubmitted ? (
-                  <button
-                    type="button"
-                    onClick={() => setIsSubmitted(true)}
-                    className="flex items-center space-x-2 px-6 py-3 rounded-xl bg-primary text-white hover:bg-primary/90 transition-all"
-                  >
-                    <span>Finish</span>
-                    <CheckCircle className="w-4 h-4" />
-                  </button>
-                ) : (
-                  <span className="text-sm text-text-light">Submit this answer to finish</span>
-                )
-              ) : (
                 <button
                   type="button"
-                  onClick={() => setCurrentQuestion(currentQuestion + 1)}
+                  onClick={() => setIsSubmitted(true)}
                   disabled={!isCurrentQuestionSubmitted}
                   className={`flex items-center space-x-2 px-6 py-3 rounded-xl transition-all ${
                     !isCurrentQuestionSubmitted
                       ? 'bg-neutral-100 text-neutral-400 cursor-not-allowed'
                       : 'bg-primary text-white hover:bg-primary/90'
                   }`}
+                >
+                  <span>Finish</span>
+                  <CheckCircle className="w-4 h-4" />
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setCurrentQuestion(currentQuestion + 1)}
+                  className="flex items-center space-x-2 px-6 py-3 rounded-xl transition-all bg-primary text-white hover:bg-primary/90"
                 >
                   <span>Next</span>
                   <ChevronRight className="w-4 h-4" />

@@ -1445,30 +1445,25 @@ router.post('/:id/submit-answer', async (req, res) => {
       }))
     });
 
-    // Get all participants in this race
     const allParticipantsSnap = await db.ref(`space_race_participants/${id}`).get();
     const allParticipants = allParticipantsSnap.val() || {};
-
-    // Find submitting participant's teamId
     const submittingParticipant = allParticipants[participantId];
     const submitTeamId = submittingParticipant?.teamId ?? teamId;
-
     const updates = {};
 
-    // Award points to every member of the same team
+    // Award points + answer to every member of the same team
     Object.entries(allParticipants).forEach(([pid, pData]) => {
       if (!pData || String(pData.teamId) !== String(submitTeamId)) return;
 
-      const currentScore = Number(pData.score) || 0;
       const existingAnswers = Array.isArray(pData.answers) ? pData.answers : [];
       const alreadyAnswered = existingAnswers.some(
         (a) =>
           String(a.questionId) === String(resolvedQuestionId) ||
-          String(a.questionId) === String(questionId) ||
-          answersIncludeQuestion([a], resolvedQuestionId, resolvedIndex)
+          String(a.questionId) === String(questionId)
       );
       if (!alreadyAnswered) {
-        updates[`space_race_participants/${id}/${pid}/score`] = currentScore + points;
+        updates[`space_race_participants/${id}/${pid}/score`] =
+          (Number(pData.score) || 0) + points;
         updates[`space_race_participants/${id}/${pid}/answers`] = [
           ...existingAnswers,
           {
@@ -1484,37 +1479,49 @@ router.post('/:id/submit-answer', async (req, res) => {
       }
     });
 
-    // Update authoritative team score for leaderboard (existing team_N path)
-    const teamScoreSnap = await db.ref(`space_race_team_scores/${id}/team_${submitTeamId}`).get();
-    const currentTeamScore = getTeamScoreValue(teamScoreSnap.val());
-    const newTeamScore = currentTeamScore + points;
+    // Authoritative team score (team_N path used by leaderboard + completion card)
+    const teamScoreSnap = await db
+      .ref(`space_race_team_scores/${id}/team_${submitTeamId}`)
+      .get();
+    const newTeamScore = getTeamScoreValue(teamScoreSnap.val()) + points;
     updates[`space_race_team_scores/${id}/team_${submitTeamId}`] = {
       score: newTeamScore,
       lastUpdatedAt: new Date().toISOString(),
       lastUpdatedBy: participantId,
     };
 
-    // Write submitted flag so all team members see question as locked
-    updates[`space_race_team_selection/${id}/team_${submitTeamId}/question_${resolvedQuestionId}/submitted`] = true;
-    updates[`space_race_team_selection/${id}/team_${submitTeamId}/question_${resolvedQuestionId}/selectedOption`] = answer;
-    updates[`space_race_team_selection/${id}/team_${submitTeamId}/question_${resolvedQuestionId}/submittedBy`] = participantId;
-    updates[`space_race_team_selection/${id}/team_${submitTeamId}/question_${resolvedQuestionId}/submittedByName`] =
-      submittingParticipant?.name || participant?.name || 'A teammate';
-    updates[`space_race_team_selection/${id}/team_${submitTeamId}/question_${resolvedQuestionId}/submittedAt`] =
-      new Date().toISOString();
-    updates[`space_race_team_selection/${id}/team_${submitTeamId}/question_${resolvedQuestionId}/isCorrect`] = isCorrect;
-    updates[`space_race_team_selection/${id}/team_${submitTeamId}/question_${resolvedQuestionId}/points`] = points;
+    // Lock question for all teammates (real-time via RTDB)
+    updates[
+      `space_race_team_selection/${id}/team_${submitTeamId}/question_${resolvedQuestionId}/submitted`
+    ] = true;
+    updates[
+      `space_race_team_selection/${id}/team_${submitTeamId}/question_${resolvedQuestionId}/selectedOption`
+    ] = answer;
+    updates[
+      `space_race_team_selection/${id}/team_${submitTeamId}/question_${resolvedQuestionId}/submittedBy`
+    ] = participantId;
+    updates[
+      `space_race_team_selection/${id}/team_${submitTeamId}/question_${resolvedQuestionId}/submittedByName`
+    ] = submittingParticipant?.name || participant?.name || 'A teammate';
+    updates[
+      `space_race_team_selection/${id}/team_${submitTeamId}/question_${resolvedQuestionId}/submittedAt`
+    ] = new Date().toISOString();
+    updates[
+      `space_race_team_selection/${id}/team_${submitTeamId}/question_${resolvedQuestionId}/isCorrect`
+    ] = isCorrect;
+    updates[
+      `space_race_team_selection/${id}/team_${submitTeamId}/question_${resolvedQuestionId}/points`
+    ] = points;
 
-    // Single atomic write
     await db.ref().update(updates);
-    
-    return res.json({ 
-      success: true, 
+
+    return res.json({
+      success: true,
       isCorrect,
       points,
       teamScore: newTeamScore,
       teamScoreUpdated: true,
-      message: isCorrect ? 'Correct answer!' : 'Incorrect answer'
+      message: isCorrect ? 'Correct answer!' : 'Incorrect answer',
     });
     
   } catch (error) {
