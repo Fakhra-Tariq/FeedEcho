@@ -2224,7 +2224,14 @@ const StudentQuizAttempt = ({
 
           {/* Answer Options */}
           {isSpaceRace && isCurrentQuestionSubmitted && (
-            <div className="mb-4 p-3 bg-indigo-100 border border-indigo-400 rounded-lg text-indigo-800 font-semibold text-sm flex items-center gap-2">
+            <div
+              className="mb-4 p-3 rounded-lg font-semibold text-sm flex items-center gap-2"
+              style={{
+                backgroundColor: '#f3e8f3',
+                border: '1.5px solid #6B2D6B',
+                color: '#6B2D6B',
+              }}
+            >
               🔒 Answer submitted by <strong>{submittedByName}</strong> — click Next to continue
             </div>
           )}
@@ -2350,27 +2357,22 @@ const StudentQuizAttempt = ({
                   isSubmittingQuestion ||
                   !(displaySelectedOption && String(displaySelectedOption).trim())
                 }
-                className={`w-full sm:w-auto flex items-center justify-center space-x-2 px-6 py-3 rounded-xl transition-all ${
-                  isCurrentQuestionSubmitted ||
-                  isSubmittingQuestion ||
-                  !(displaySelectedOption && String(displaySelectedOption).trim())
-                    ? 'bg-neutral-100 text-neutral-400 cursor-not-allowed opacity-50'
-                    : 'bg-primary text-white hover:bg-primary/90'
-                }`}
+                className={`
+                  flex items-center gap-2 px-6 py-3 rounded-lg font-semibold text-white transition-all
+                  ${
+                    isCurrentQuestionSubmitted ||
+                    isSubmittingQuestion ||
+                    !(displaySelectedOption && String(displaySelectedOption).trim())
+                      ? 'bg-gray-300 cursor-not-allowed opacity-60'
+                      : 'bg-[#6B2D6B] hover:bg-[#5a2560] cursor-pointer'
+                  }
+                `}
               >
-                {isCurrentQuestionSubmitted ? (
-                  <span>🔒 Locked</span>
-                ) : isSubmittingQuestion ? (
-                  <>
-                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                    <span>Submitting...</span>
-                  </>
-                ) : (
-                  <>
-                    <Send className="w-4 h-4" />
-                    <span>🚀 Submit Answer for Team</span>
-                  </>
-                )}
+                {isCurrentQuestionSubmitted
+                  ? '🔒 Locked'
+                  : isSubmittingQuestion
+                  ? 'Submitting...'
+                  : '🚀 Submit Answer for Team'}
               </button>
             </div>
           )}
@@ -2391,25 +2393,25 @@ const StudentQuizAttempt = ({
             </button>
 
             {isSpaceRace ? (
-              currentQuestion === quiz.questions.length - 1 ? (
-                <button
-                  type="button"
-                  onClick={() => setIsSubmitted(true)}
-                  className="flex items-center space-x-2 px-6 py-3 rounded-xl transition-all bg-indigo-700 text-white font-semibold hover:bg-indigo-800"
-                >
-                  <span>Finish</span>
-                  <CheckCircle className="w-4 h-4" />
-                </button>
-              ) : (
-                <button
-                  type="button"
-                  onClick={() => setCurrentQuestion(currentQuestion + 1)}
-                  className="flex items-center space-x-2 px-6 py-3 rounded-xl transition-all bg-indigo-700 text-white font-semibold hover:bg-indigo-800"
-                >
-                  <span>Next →</span>
-                  <ChevronRight className="w-4 h-4" />
-                </button>
-              )
+              isCurrentQuestionSubmitted ? (
+                currentQuestion === quiz.questions.length - 1 ? (
+                  <button
+                    type="button"
+                    onClick={() => setIsSubmitted(true)}
+                    className="px-6 py-3 rounded-lg font-semibold text-white bg-[#6B2D6B] hover:bg-[#5a2560] transition-all"
+                  >
+                    Finish
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setCurrentQuestion(currentQuestion + 1)}
+                    className="px-6 py-3 rounded-lg font-semibold text-white bg-[#6B2D6B] hover:bg-[#5a2560] transition-all"
+                  >
+                    Next
+                  </button>
+                )
+              ) : null
             ) : currentQuestion === quiz.questions.length - 1 ? (
               <button
                 onClick={handleSubmitQuiz}
