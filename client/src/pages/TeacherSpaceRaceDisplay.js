@@ -124,6 +124,16 @@ const getRaceIcon = (icon) => {
   return iconMap[icon] || Rocket;
 };
 
+const readScoreValue = (value) => {
+  if (typeof value === 'number') return Number.isFinite(value) ? value : 0;
+  if (value && typeof value === 'object') {
+    const score = Number(value.score ?? value.teamScore ?? value.points ?? 0);
+    return Number.isFinite(score) ? score : 0;
+  }
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : 0;
+};
+
 const normalizeTeamScores = (raw) => {
   // Accept {1: 20}, {team_1: {score}}, or array entries — RTDB uses team_N keys.
   const out = {};
@@ -133,8 +143,7 @@ const normalizeTeamScores = (raw) => {
     raw.forEach((entry) => {
       const teamId = Number(entry?.teamId);
       if (!Number.isFinite(teamId)) return;
-      const score = typeof entry?.score === 'number' ? entry.score : Number(entry?.score || 0);
-      out[teamId] = Number.isFinite(score) ? score : 0;
+      out[teamId] = readScoreValue(entry);
     });
     return out;
   }
@@ -143,17 +152,28 @@ const normalizeTeamScores = (raw) => {
     Object.entries(raw).forEach(([k, v]) => {
       const teamId = Number(String(k).replace(/^team_/, ''));
       if (!Number.isFinite(teamId)) return;
-      if (typeof v === 'number') {
-        out[teamId] = Number.isFinite(v) ? v : 0;
-      } else if (v && typeof v === 'object') {
-        const score = typeof v.score === 'number' ? v.score : Number(v.score || 0);
-        out[teamId] = Number.isFinite(score) ? score : 0;
-      } else {
-        out[teamId] = 0;
-      }
+      out[teamId] = readScoreValue(v);
     });
   }
   return out;
+};
+
+/** Resolve score from RTDB map using number/string/team_N keys. */
+const getTeamScoreFromMap = (scoresMap, teamScoresRaw, teamId) => {
+  const fromMap = scoresMap?.[teamId] ?? scoresMap?.[String(teamId)];
+  if (typeof fromMap === 'number' && Number.isFinite(fromMap)) return fromMap;
+
+  if (teamScoresRaw && typeof teamScoresRaw === 'object') {
+    const direct =
+      teamScoresRaw[teamId] ??
+      teamScoresRaw[String(teamId)] ??
+      teamScoresRaw[`team_${teamId}`] ??
+      teamScoresRaw[`team_${String(teamId)}`];
+    const parsed = readScoreValue(direct);
+    if (parsed > 0) return parsed;
+  }
+
+  return typeof fromMap === 'number' ? fromMap : 0;
 };
 
 // Join duration timer component - shows time students have to join
@@ -289,11 +309,48 @@ export default function TeacherSpaceRaceDisplay() {
     return { id: raceId, ...raceRtdb };
   }, [raceRtdb, raceId]);
 
+  // Authoritative team scores from space_race_team_scores/{raceId}
   const teamScores = useMemo(() => normalizeTeamScores(teamScoresRaw), [teamScoresRaw]);
 
   const participants = useMemo(() => participantList || [], [participantList]);
 
   const isLoading = raceLoading && !raceData;
+
+  // Team scores are stored out of 100 (each correct answer = 100/N points)
+  const totalQuestions =
+    raceData?.quiz?.questions?.length ||
+    raceData?.quizQuestions?.length ||
+    0;
+  const maxPossibleScore = 100;
+
+  const getTeamParticipants = (teamId) => {
+    return participants
+      .filter((p) => String(p.teamId) === String(teamId))
+      .sort((a, b) => (b.score || 0) - (a.score || 0));
+  };
+
+  /** Prefer RTDB team score; fall back to shared member score if node lagging. */
+  const resolveTeamScore = (teamId) => {
+    const fromRtdb = getTeamScoreFromMap(teamScores, teamScoresRaw, teamId);
+    if (fromRtdb > 0) return fromRtdb;
+
+    const members = getTeamParticipants(teamId);
+    if (members.length === 0) return fromRtdb;
+    // All teammates share the same team score on participants
+    return members.reduce((max, m) => Math.max(max, Number(m.score) || 0), 0);
+  };
+
+  const toggleTeamMembers = (teamId) => {
+    setExpandedTeams((prev) => {
+      const newSet = new Set(prev);
+      if (newSet.has(teamId)) {
+        newSet.delete(teamId);
+      } else {
+        newSet.add(teamId);
+      }
+      return newSet;
+    });
+  };
 
   if (isLoading) {
     return (
@@ -322,39 +379,10 @@ export default function TeacherSpaceRaceDisplay() {
 
   const teamCount = raceData.settings?.numberOfTeams || 2;
 
-  // Calculate relative positions for all teams
-  const getTeamPositions = () => {
-    const positions = [];
-    for (let i = 1; i <= teamCount; i++) {
-      const score = teamScores[i] ?? 0;
-      positions.push({ teamId: i, score });
-    }
-    // Sort by score to get ranking
-    positions.sort((a, b) => b.score - a.score);
-    return positions;
-  };
-
-  const teamPositions = getTeamPositions();
-
-  // Helper function to get participants for a specific team
-  const getTeamParticipants = (teamId) => {
-    return participants
-      .filter((p) => String(p.teamId) === String(teamId))
-      .sort((a, b) => (b.score || 0) - (a.score || 0)); // Sort by score descending
-  };
-
-  // Toggle team members visibility
-  const toggleTeamMembers = (teamId) => {
-    setExpandedTeams(prev => {
-      const newSet = new Set(prev);
-      if (newSet.has(teamId)) {
-        newSet.delete(teamId);
-      } else {
-        newSet.add(teamId);
-      }
-      return newSet;
-    });
-  };
+  const teamPositions = Array.from({ length: teamCount }, (_, i) => {
+    const teamId = i + 1;
+    return { teamId, score: resolveTeamScore(teamId) };
+  }).sort((a, b) => b.score - a.score);
 
   return (
     <div className="min-h-screen bg-gray-50 text-text">
@@ -393,21 +421,25 @@ export default function TeacherSpaceRaceDisplay() {
             <h2 className="text-2xl font-bold text-text mb-1">Space Race</h2>
             <p className="text-text-light">
               Watch your teams compete in real-time
+              {totalQuestions > 0 ? ` · ${totalQuestions} questions` : ''}
             </p>
           </div>
 
           <div className="space-y-8">
             {Array.from({ length: teamCount }).map((_, index) => {
               const teamId = index + 1;
-              const rawScore = typeof teamScores[teamId] === 'number' ? teamScores[teamId] : 0;
-              const score = Math.round(Math.min(100, rawScore)); // Round to whole number, cap at 100
-              const progress = Math.min(100, score); // Score is the percentage
+              const teamScore = Math.round(resolveTeamScore(teamId));
+              const percentage =
+                maxPossibleScore > 0
+                  ? Math.min((teamScore / maxPossibleScore) * 100, 100)
+                  : 0;
               const style = getTeamStyle(teamId);
               const teamParticipants = getTeamParticipants(teamId);
 
-              // Find this team's rank (0 = first place, 1 = second place, etc.)
-              const teamRank = teamPositions.findIndex((pos) => pos.teamId === teamId);
-              const isLeading = teamRank === 0;
+              const teamRank = teamPositions.findIndex(
+                (pos) => String(pos.teamId) === String(teamId)
+              );
+              const isLeading = teamRank === 0 && teamScore > 0;
 
               return (
                 <div key={teamId} className="space-y-4">
@@ -421,12 +453,14 @@ export default function TeacherSpaceRaceDisplay() {
                       <span className={`text-lg font-semibold ${style.text}`}>
                         {style.label} Team
                       </span>
-                      {isLeading && score > 0 && (
+                      {isLeading && (
                         <span className="text-xs font-medium text-amber-600">Leading</span>
                       )}
                     </div>
                     <div className="flex items-center space-x-3">
-                      <span className={`text-xl font-bold tabular-nums ${style.text}`}>{score}</span>
+                      <span className={`text-xl font-bold tabular-nums ${style.text}`}>
+                        {teamScore}
+                      </span>
                       {teamParticipants.length > 0 && (
                         <button
                           onClick={() => toggleTeamMembers(teamId)}
@@ -449,28 +483,28 @@ export default function TeacherSpaceRaceDisplay() {
                     </div>
                   </div>
 
-                  {/* Rocket Progress Bar */}
+                  {/* Rocket Progress Bar — width + icon follow live team score */}
                   <div
-                    className={`relative h-16 rounded-xl border-2 overflow-visible ${style.track} ${style.border}`}
+                    className={`relative h-14 rounded-full border-2 overflow-hidden ${style.track} ${style.border}`}
                   >
                     <div
-                      className={`absolute left-0 top-0 bottom-0 w-2 rounded-l-lg z-10 ${style.bg}`}
+                      className={`absolute left-0 top-0 bottom-0 rounded-full transition-all duration-700 ease-in-out ${style.bg}`}
+                      style={{
+                        width: `${percentage}%`,
+                        minWidth: percentage > 0 ? '2.5rem' : '0',
+                      }}
                     />
                     <div
-                      className={`absolute left-0 top-0 bottom-0 rounded-l-lg transition-all duration-500 ease-out ${style.bg} opacity-90`}
-                      style={{ width: `${progress}%`, left: 0 }}
-                    />
-                    <div
-                      className={`absolute top-1/2 -translate-y-1/2 z-20 transition-all duration-500 ease-out flex items-center justify-center ${
-                        isLeading && score > 0 ? 'scale-110' : 'scale-100'
+                      className={`absolute top-1/2 -translate-y-1/2 z-20 transition-all duration-700 ease-in-out flex items-center justify-center ${
+                        isLeading ? 'scale-110' : 'scale-100'
                       }`}
                       style={{
-                        left: progress <= 0 ? '16px' : `calc(${progress}% - 22px)`,
+                        left: `clamp(0.25rem, calc(${percentage}% - 1.25rem), calc(100% - 2.75rem))`,
                       }}
                     >
                       <div
                         className={`w-10 h-10 rounded-full ${style.bg} flex items-center justify-center shadow-md ${
-                          isLeading && score > 0 ? 'animate-pulse' : ''
+                          isLeading ? 'animate-pulse' : ''
                         }`}
                       >
                         {(() => {
@@ -484,17 +518,15 @@ export default function TeacherSpaceRaceDisplay() {
                   </div>
 
                   {/* Team Stats */}
-                  {teamParticipants.length > 0 && (
-                    <div className={`flex items-center justify-between text-sm ${style.softText}`}>
-                      <span>
-                        {teamParticipants.length} participant
-                        {teamParticipants.length !== 1 ? 's' : ''}
-                      </span>
-                      <span>Score: {score}</span>
-                    </div>
-                  )}
+                  <div className={`flex items-center justify-between text-sm ${style.softText}`}>
+                    <span>
+                      {teamParticipants.length} participant
+                      {teamParticipants.length !== 1 ? 's' : ''}
+                    </span>
+                    <span className={`font-semibold ${style.text}`}>Score: {teamScore}</span>
+                  </div>
 
-                  {/* Team Members List */}
+                  {/* Team Members List — individual scores unchanged */}
                   {expandedTeams.has(teamId) && teamParticipants.length > 0 && (
                     <div
                       className={`rounded-lg border p-4 space-y-2 ${style.softBg} ${style.softBorder}`}
