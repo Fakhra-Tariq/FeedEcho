@@ -1445,107 +1445,67 @@ router.post('/:id/submit-answer', async (req, res) => {
       }))
     });
 
-    const allParticipantsSnap = await raceParticipantsRef(id).get();
-    const allParticipants = allParticipantsSnap.exists() ? (allParticipantsSnap.val() || {}) : {};
+    // Get all participants in this race
+    const allParticipantsSnap = await db.ref(`space_race_participants/${id}`).get();
+    const allParticipants = allParticipantsSnap.val() || {};
 
-    const teamMembers = Object.entries(allParticipants).filter(
-      ([, p]) => p && String(p.teamId) === String(teamId)
-    );
-
-    const teamAlreadyAnswered = teamMembers.some(([, p]) =>
-      answersIncludeQuestion(p.answers, resolvedQuestionId, resolvedIndex)
-    );
-
-    if (teamAlreadyAnswered) {
-      return res.status(400).json({ success: false, error: 'This question was already submitted for your team' });
-    }
-    
-    const nowIso = new Date().toISOString();
-    const newAnswer = {
-      questionId: resolvedQuestionId,
-      answer,
-      isCorrect,
-      points,
-      submittedAt: nowIso,
-      questionIndex: Number.isInteger(resolvedIndex) ? resolvedIndex : 0,
-    };
-
-    // Merge existing team answers (dedupe by question) then append this submission
-    const mergedByQuestion = new Map();
-    teamMembers.forEach(([, pData]) => {
-      const existingAnswers = Array.isArray(pData.answers) ? pData.answers : [];
-      existingAnswers.forEach((ans) => {
-        const key = normalizeSpaceRaceQuestionKey(ans?.questionId, ans?.questionIndex);
-        if (!key || mergedByQuestion.has(key)) return;
-        mergedByQuestion.set(key, ans);
-      });
-    });
-    mergedByQuestion.set(
-      normalizeSpaceRaceQuestionKey(resolvedQuestionId, newAnswer.questionIndex),
-      newAnswer
-    );
-
-    const sharedTeamAnswers = Array.from(mergedByQuestion.values());
-    const { score: newTeamScore, correctCount } = calculateTeamScoreFromAnswers(
-      sharedTeamAnswers,
-      totalQuestions
-    );
+    // Find submitting participant's teamId
+    const submittingParticipant = allParticipants[participantId];
+    const submitTeamId = submittingParticipant?.teamId ?? teamId;
 
     const updates = {};
-    console.log(`🔄 Processing team score update for team ${teamId}:`, {
-      teamMembers: teamMembers.length,
-      answeredQuestions: sharedTeamAnswers.length,
-      correctCount,
-      newTeamScore,
-      pointsPerQuestion,
+
+    // Award points to every member of the same team
+    Object.entries(allParticipants).forEach(([pid, pData]) => {
+      if (!pData || String(pData.teamId) !== String(submitTeamId)) return;
+
+      const currentScore = Number(pData.score) || 0;
+      const existingAnswers = Array.isArray(pData.answers) ? pData.answers : [];
+      const alreadyAnswered = existingAnswers.some(
+        (a) =>
+          String(a.questionId) === String(resolvedQuestionId) ||
+          String(a.questionId) === String(questionId) ||
+          answersIncludeQuestion([a], resolvedQuestionId, resolvedIndex)
+      );
+      if (!alreadyAnswered) {
+        updates[`space_race_participants/${id}/${pid}/score`] = currentScore + points;
+        updates[`space_race_participants/${id}/${pid}/answers`] = [
+          ...existingAnswers,
+          {
+            questionId: resolvedQuestionId,
+            answer,
+            isCorrect,
+            points,
+            submittedAt: new Date().toISOString(),
+            questionIndex: questionIndex || 0,
+            awardedByTeammate: pid !== participantId,
+          },
+        ];
+      }
     });
-    
-    // All teammates share the same answers + same team score (collective performance)
-    const newAnswerKey = normalizeSpaceRaceQuestionKey(
-      resolvedQuestionId,
-      newAnswer.questionIndex
-    );
-    teamMembers.forEach(([pid, pData]) => {
-      const priorAnswers = Array.isArray(pData.answers) ? pData.answers : [];
-      const answersForMember = sharedTeamAnswers.map((ans) => {
-        const key = normalizeSpaceRaceQuestionKey(ans.questionId, ans.questionIndex);
-        if (key === newAnswerKey) {
-          return { ...ans, awardedByTeammate: pid !== participantId };
-        }
-        const prior = priorAnswers.find(
-          (a) => normalizeSpaceRaceQuestionKey(a.questionId, a.questionIndex) === key
-        );
-        if (prior) {
-          return { ...ans, awardedByTeammate: prior.awardedByTeammate === true };
-        }
-        // Answer originated from a teammate and is new to this member
-        return { ...ans, awardedByTeammate: true };
-      });
 
-      updates[`space_race_participants/${id}/${pid}/answers`] = answersForMember;
-      updates[`space_race_participants/${id}/${pid}/score`] = newTeamScore;
-      updates[`space_race_participants/${id}/${pid}/lastAnswerAt`] = nowIso;
-
-      console.log(`📊 Synced participant ${pid} team score: ${newTeamScore} (${correctCount}/${totalQuestions})`);
-    });
-    
-    console.log(`📝 Total updates to apply: ${Object.keys(updates).length}`);
-
-    updates[`space_race_team_scores/${id}/team_${teamId}`] = {
+    // Update authoritative team score for leaderboard (existing team_N path)
+    const teamScoreSnap = await db.ref(`space_race_team_scores/${id}/team_${submitTeamId}`).get();
+    const currentTeamScore = getTeamScoreValue(teamScoreSnap.val());
+    const newTeamScore = currentTeamScore + points;
+    updates[`space_race_team_scores/${id}/team_${submitTeamId}`] = {
       score: newTeamScore,
-      correctCount,
-      totalQuestions,
-      lastUpdatedAt: nowIso,
+      lastUpdatedAt: new Date().toISOString(),
       lastUpdatedBy: participantId,
     };
 
-    updates[`${selectionPath}/submitted`] = true;
-    updates[`${selectionPath}/selectedOption`] = answer;
-    updates[`${selectionPath}/submittedBy`] = participantId;
-    updates[`${selectionPath}/submittedAt`] = nowIso;
-    updates[`${selectionPath}/isCorrect`] = isCorrect;
-    updates[`${selectionPath}/points`] = points;
+    // Write submitted flag so all team members see question as locked
+    updates[`space_race_team_selection/${id}/team_${submitTeamId}/question_${resolvedQuestionId}/submitted`] = true;
+    updates[`space_race_team_selection/${id}/team_${submitTeamId}/question_${resolvedQuestionId}/selectedOption`] = answer;
+    updates[`space_race_team_selection/${id}/team_${submitTeamId}/question_${resolvedQuestionId}/submittedBy`] = participantId;
+    updates[`space_race_team_selection/${id}/team_${submitTeamId}/question_${resolvedQuestionId}/submittedByName`] =
+      submittingParticipant?.name || participant?.name || 'A teammate';
+    updates[`space_race_team_selection/${id}/team_${submitTeamId}/question_${resolvedQuestionId}/submittedAt`] =
+      new Date().toISOString();
+    updates[`space_race_team_selection/${id}/team_${submitTeamId}/question_${resolvedQuestionId}/isCorrect`] = isCorrect;
+    updates[`space_race_team_selection/${id}/team_${submitTeamId}/question_${resolvedQuestionId}/points`] = points;
 
+    // Single atomic write
     await db.ref().update(updates);
     
     return res.json({ 
@@ -1553,8 +1513,6 @@ router.post('/:id/submit-answer', async (req, res) => {
       isCorrect,
       points,
       teamScore: newTeamScore,
-      correctCount,
-      totalQuestions,
       teamScoreUpdated: true,
       message: isCorrect ? 'Correct answer!' : 'Incorrect answer'
     });

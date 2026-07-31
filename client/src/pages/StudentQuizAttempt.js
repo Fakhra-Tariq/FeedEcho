@@ -26,6 +26,7 @@ import {
 } from '../utils/quizLaunchStudentSettings';
 import { set as dbSet, ref as dbRef, update as dbUpdate, onValue, get } from 'firebase/database';
 import { db } from '../firebase';
+import { useRtdbValue } from '../hooks/useRtdb';
 
 const StudentQuizAttempt = ({
   embedded = false,
@@ -780,16 +781,33 @@ const StudentQuizAttempt = ({
     ? getSpaceRaceQuestionId(currentQuestionData, currentQuestion)
     : null;
 
+  // Live lock sync — when a teammate submits, all members see submitted: true instantly
+  const { value: submissionState } = useRtdbValue(
+    isSpaceRace && raceId && teamId != null && currentSpaceRaceQuestionId
+      ? `space_race_team_selection/${raceId}/team_${teamId}/question_${currentSpaceRaceQuestionId}`
+      : null,
+    { enabled: Boolean(isSpaceRace && raceId && teamId != null && currentSpaceRaceQuestionId) }
+  );
+
+  const isTeamQuestionSubmitted = submissionState?.submitted === true;
+  const submittedByName =
+    submissionState?.submittedByName ||
+    submissionState?.selectedByName ||
+    'A teammate';
+
   const teamSelection =
     (isSpaceRace && currentSpaceRaceQuestionId
       ? teamSelectionsMap[currentSpaceRaceQuestionId]
-      : null) || localTeamSelection;
+      : null) ||
+    submissionState ||
+    localTeamSelection;
 
   const isCurrentQuestionSubmitted = isSpaceRace
     ? Boolean(
-        currentSpaceRaceQuestionId &&
-          (submittedQuestionKeys.has(currentSpaceRaceQuestionId) ||
-            teamSelection?.submitted === true)
+        isTeamQuestionSubmitted ||
+          (currentSpaceRaceQuestionId &&
+            (submittedQuestionKeys.has(currentSpaceRaceQuestionId) ||
+              teamSelection?.submitted === true))
       )
     : Boolean(currentQuestionId && submittedQuestionKeys.has(currentQuestionId));
 
@@ -890,9 +908,21 @@ const StudentQuizAttempt = ({
     syncTeamSelectionFromServer();
   }, [isSpaceRace, currentSpaceRaceQuestionId, syncTeamSelectionFromServer]);
 
+  // Keep local lock set in sync with RTDB submissionState
+  useEffect(() => {
+    if (!isSpaceRace || !currentSpaceRaceQuestionId || !isTeamQuestionSubmitted) return;
+    setSubmittedQuestionKeys((prev) => {
+      if (prev.has(currentSpaceRaceQuestionId)) return prev;
+      const next = new Set(prev);
+      next.add(currentSpaceRaceQuestionId);
+      return next;
+    });
+  }, [isSpaceRace, currentSpaceRaceQuestionId, isTeamQuestionSubmitted]);
+
   const displaySelectedOption =
     getAnswerForQuestion(currentQuestionData, currentQuestion) ||
     teamSelection?.selectedOption ||
+    submissionState?.selectedOption ||
     '';
 
   // Don't auto-update user's answer from teammate selection - let user keep their own choice
@@ -2077,14 +2107,17 @@ const StudentQuizAttempt = ({
           </div>
 
           {/* Answer Options */}
-          {isSpaceRace && displaySelectedOption && (
+          {isSpaceRace && isCurrentQuestionSubmitted && (
+            <div className="mb-4 p-3 bg-green-100 border border-green-400 rounded-lg text-green-800 font-medium text-sm">
+              ✅ Answer submitted by {submittedByName} — click Next to continue
+            </div>
+          )}
+
+          {isSpaceRace && displaySelectedOption && !isCurrentQuestionSubmitted && (
             <div className="mb-4 p-3 rounded-lg bg-primary/5 border border-primary/20 text-sm text-text">
               Team selected: <strong className="text-primary">{displaySelectedOption}</strong>
               {teamSelection?.selectedByName ? (
                 <span className="text-text/70"> ({teamSelection.selectedByName})</span>
-              ) : null}
-              {isCurrentQuestionSubmitted ? (
-                <span className="text-primary font-medium"> — Submitted for your team</span>
               ) : null}
             </div>
           )}
@@ -2100,7 +2133,7 @@ const StudentQuizAttempt = ({
                 key={index}
                 className={`flex items-center p-4 rounded-xl border-2 transition-all ${
                   isCurrentQuestionSubmitted
-                    ? 'cursor-not-allowed opacity-80'
+                    ? 'pointer-events-none opacity-50 cursor-not-allowed'
                     : 'cursor-pointer'
                 } ${
                   isTeamSelected
@@ -2135,7 +2168,7 @@ const StudentQuizAttempt = ({
                     key={option}
                     className={`flex items-center p-4 rounded-xl border-2 transition-all ${
                       isCurrentQuestionSubmitted
-                        ? 'cursor-not-allowed opacity-80'
+                        ? 'pointer-events-none opacity-50 cursor-not-allowed'
                         : 'cursor-pointer'
                     } ${
                       isTeamSelected
@@ -2167,29 +2200,35 @@ const StudentQuizAttempt = ({
                 onChange={(e) => handleAnswerChange(currentQuestion, e.target.value)}
                 disabled={isSpaceRace && isCurrentQuestionSubmitted}
                 placeholder={effectiveQuestionType === 'Short Answer' ? 'Enter your answer...' : 'Provide a detailed answer...'}
-                className="w-full px-4 py-3 border-2 border-neutral-300 rounded-xl focus:ring-2 focus:ring-primary focus:border-primary transition-colors text-text resize-none disabled:opacity-70"
+                className={`w-full px-4 py-3 border-2 border-neutral-300 rounded-xl focus:ring-2 focus:ring-primary focus:border-primary transition-colors text-text resize-none ${
+                  isSpaceRace && isCurrentQuestionSubmitted ? 'pointer-events-none opacity-50' : ''
+                }`}
                 rows={effectiveQuestionType === 'Short Answer' ? 3 : 6}
               />
             )}
           </div>
 
-          {isSpaceRace && !isCurrentQuestionSubmitted && (
+          {isSpaceRace && (
             <div className="mt-4">
               <button
                 type="button"
                 onClick={handleSubmitTeamAnswer}
                 disabled={
+                  isCurrentQuestionSubmitted ||
                   isSubmittingQuestion ||
                   !(displaySelectedOption && String(displaySelectedOption).trim())
                 }
                 className={`w-full sm:w-auto flex items-center justify-center space-x-2 px-6 py-3 rounded-xl transition-all ${
+                  isCurrentQuestionSubmitted ||
                   isSubmittingQuestion ||
                   !(displaySelectedOption && String(displaySelectedOption).trim())
-                    ? 'bg-neutral-100 text-neutral-400 cursor-not-allowed'
+                    ? 'bg-neutral-100 text-neutral-400 cursor-not-allowed opacity-50'
                     : 'bg-primary text-white hover:bg-primary/90'
                 }`}
               >
-                {isSubmittingQuestion ? (
+                {isCurrentQuestionSubmitted ? (
+                  <span>✅ Submitted</span>
+                ) : isSubmittingQuestion ? (
                   <>
                     <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
                     <span>Submitting...</span>
@@ -2201,12 +2240,6 @@ const StudentQuizAttempt = ({
                   </>
                 )}
               </button>
-            </div>
-          )}
-
-          {isSpaceRace && isCurrentQuestionSubmitted && (
-            <div className="mt-4 p-3 rounded-lg bg-primary/5 border border-primary/20 text-sm text-primary">
-              Answer locked in for your team. Use Next to continue.
             </div>
           )}
 
