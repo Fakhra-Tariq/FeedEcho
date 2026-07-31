@@ -3,18 +3,114 @@ import { useParams, Link } from 'react-router-dom';
 import { useRtdbList, useRtdbValue } from '../hooks/useRtdb';
 import { Rocket, ArrowLeft, ExternalLink, Users, ChevronDown, ChevronUp, Clock, Flame, Zap, Star, Trophy, Flag } from 'lucide-react';
 
+// Full Tailwind class strings only — dynamic `bg-${color}-500` is purged by JIT.
 const TEAM_COLORS = [
-  { bg: 'bg-blue-500', border: 'border-blue-500', text: 'text-blue-700', label: 'Blue' },
-  { bg: 'bg-red-500', border: 'border-red-500', text: 'text-red-700', label: 'Red' },
-  { bg: 'bg-green-500', border: 'border-green-500', text: 'text-green-700', label: 'Green' },
-  { bg: 'bg-amber-500', border: 'border-amber-500', text: 'text-amber-700', label: 'Yellow' },
-  { bg: 'bg-purple-500', border: 'border-purple-500', text: 'text-purple-700', label: 'Purple' },
-  { bg: 'bg-pink-500', border: 'border-pink-500', text: 'text-pink-700', label: 'Pink' },
-  { bg: 'bg-cyan-500', border: 'border-cyan-500', text: 'text-cyan-700', label: 'Cyan' },
-  { bg: 'bg-orange-500', border: 'border-orange-500', text: 'text-orange-700', label: 'Orange' },
-  { bg: 'bg-teal-500', border: 'border-teal-500', text: 'text-teal-700', label: 'Teal' },
-  { bg: 'bg-indigo-500', border: 'border-indigo-500', text: 'text-indigo-700', label: 'Indigo' },
+  {
+    bg: 'bg-blue-500',
+    border: 'border-blue-500',
+    text: 'text-blue-700',
+    softBg: 'bg-blue-50',
+    softBorder: 'border-blue-200',
+    softText: 'text-blue-700',
+    track: 'bg-blue-100',
+    label: 'Blue',
+  },
+  {
+    bg: 'bg-red-500',
+    border: 'border-red-500',
+    text: 'text-red-700',
+    softBg: 'bg-red-50',
+    softBorder: 'border-red-200',
+    softText: 'text-red-700',
+    track: 'bg-red-100',
+    label: 'Red',
+  },
+  {
+    bg: 'bg-green-500',
+    border: 'border-green-500',
+    text: 'text-green-700',
+    softBg: 'bg-green-50',
+    softBorder: 'border-green-200',
+    softText: 'text-green-700',
+    track: 'bg-green-100',
+    label: 'Green',
+  },
+  {
+    bg: 'bg-amber-500',
+    border: 'border-amber-500',
+    text: 'text-amber-700',
+    softBg: 'bg-amber-50',
+    softBorder: 'border-amber-200',
+    softText: 'text-amber-700',
+    track: 'bg-amber-100',
+    label: 'Yellow',
+  },
+  {
+    bg: 'bg-purple-500',
+    border: 'border-purple-500',
+    text: 'text-purple-700',
+    softBg: 'bg-purple-50',
+    softBorder: 'border-purple-200',
+    softText: 'text-purple-700',
+    track: 'bg-purple-100',
+    label: 'Purple',
+  },
+  {
+    bg: 'bg-pink-500',
+    border: 'border-pink-500',
+    text: 'text-pink-700',
+    softBg: 'bg-pink-50',
+    softBorder: 'border-pink-200',
+    softText: 'text-pink-700',
+    track: 'bg-pink-100',
+    label: 'Pink',
+  },
+  {
+    bg: 'bg-cyan-500',
+    border: 'border-cyan-500',
+    text: 'text-cyan-700',
+    softBg: 'bg-cyan-50',
+    softBorder: 'border-cyan-200',
+    softText: 'text-cyan-700',
+    track: 'bg-cyan-100',
+    label: 'Cyan',
+  },
+  {
+    bg: 'bg-orange-500',
+    border: 'border-orange-500',
+    text: 'text-orange-700',
+    softBg: 'bg-orange-50',
+    softBorder: 'border-orange-200',
+    softText: 'text-orange-700',
+    track: 'bg-orange-100',
+    label: 'Orange',
+  },
+  {
+    bg: 'bg-teal-500',
+    border: 'border-teal-500',
+    text: 'text-teal-700',
+    softBg: 'bg-teal-50',
+    softBorder: 'border-teal-200',
+    softText: 'text-teal-700',
+    track: 'bg-teal-100',
+    label: 'Teal',
+  },
+  {
+    bg: 'bg-indigo-500',
+    border: 'border-indigo-500',
+    text: 'text-indigo-700',
+    softBg: 'bg-indigo-50',
+    softBorder: 'border-indigo-200',
+    softText: 'text-indigo-700',
+    track: 'bg-indigo-100',
+    label: 'Indigo',
+  },
 ];
+
+const getTeamStyle = (teamId) => {
+  const idx = Math.max(0, (Number(teamId) || 1) - 1);
+  return TEAM_COLORS[idx % TEAM_COLORS.length];
+};
 
 const getRaceIcon = (icon) => {
   const iconMap = {
@@ -29,14 +125,14 @@ const getRaceIcon = (icon) => {
 };
 
 const normalizeTeamScores = (raw) => {
-  // Accept {1: 20, 2: 10} OR {1: {teamId, score, members}} OR array of those.
+  // Accept {1: 20}, {team_1: {score}}, or array entries — RTDB uses team_N keys.
   const out = {};
   if (!raw) return out;
 
   if (Array.isArray(raw)) {
     raw.forEach((entry) => {
-      const teamId = entry?.teamId;
-      if (teamId === undefined || teamId === null) return;
+      const teamId = Number(entry?.teamId);
+      if (!Number.isFinite(teamId)) return;
       const score = typeof entry?.score === 'number' ? entry.score : Number(entry?.score || 0);
       out[teamId] = Number.isFinite(score) ? score : 0;
     });
@@ -45,10 +141,10 @@ const normalizeTeamScores = (raw) => {
 
   if (typeof raw === 'object') {
     Object.entries(raw).forEach(([k, v]) => {
-      const teamId = Number(k);
+      const teamId = Number(String(k).replace(/^team_/, ''));
       if (!Number.isFinite(teamId)) return;
       if (typeof v === 'number') {
-        out[teamId] = v;
+        out[teamId] = Number.isFinite(v) ? v : 0;
       } else if (v && typeof v === 'object') {
         const score = typeof v.score === 'number' ? v.score : Number(v.score || 0);
         out[teamId] = Number.isFinite(score) ? score : 0;
@@ -225,9 +321,7 @@ export default function TeacherSpaceRaceDisplay() {
   }
 
   const teamCount = raceData.settings?.numberOfTeams || 2;
-  const allScores = Object.values(teamScores).map((v) => (typeof v === 'number' ? v : 0));
-  const maxScore = 100; // Total possible score is always 100
-  
+
   // Calculate relative positions for all teams
   const getTeamPositions = () => {
     const positions = [];
@@ -239,20 +333,14 @@ export default function TeacherSpaceRaceDisplay() {
     positions.sort((a, b) => b.score - a.score);
     return positions;
   };
-  
+
   const teamPositions = getTeamPositions();
 
   // Helper function to get participants for a specific team
   const getTeamParticipants = (teamId) => {
     return participants
-      .filter(p => p.teamId === teamId)
+      .filter((p) => String(p.teamId) === String(teamId))
       .sort((a, b) => (b.score || 0) - (a.score || 0)); // Sort by score descending
-  };
-
-  // Helper to get the leading student
-  const getLeadingStudent = (teamId) => {
-    const teamParticipants = getTeamParticipants(teamId);
-    return teamParticipants.length > 0 ? teamParticipants[0] : null;
   };
 
   // Toggle team members visibility
@@ -314,37 +402,40 @@ export default function TeacherSpaceRaceDisplay() {
               const rawScore = typeof teamScores[teamId] === 'number' ? teamScores[teamId] : 0;
               const score = Math.round(Math.min(100, rawScore)); // Round to whole number, cap at 100
               const progress = Math.min(100, score); // Score is the percentage
-              const style = TEAM_COLORS[index] || TEAM_COLORS[0];
+              const style = getTeamStyle(teamId);
               const teamParticipants = getTeamParticipants(teamId);
-              const leadingStudent = getLeadingStudent(teamId);
-              
+
               // Find this team's rank (0 = first place, 1 = second place, etc.)
-              const teamRank = teamPositions.findIndex(pos => pos.teamId === teamId);
+              const teamRank = teamPositions.findIndex((pos) => pos.teamId === teamId);
               const isLeading = teamRank === 0;
-              
-              // Calculate rocket position based on percentage (same formula for all teams)
-              // Teams with same score will show at same position
-              const rocketPosition = Math.min(90, Math.max(10, (score / 100) * 80));
 
               return (
                 <div key={teamId} className="space-y-4">
                   {/* Team Header with Score */}
                   <div className="flex items-center justify-between">
                     <div className="flex items-center space-x-3">
+                      <span
+                        className={`inline-flex h-3 w-3 rounded-full ${style.bg}`}
+                        aria-hidden="true"
+                      />
                       <span className={`text-lg font-semibold ${style.text}`}>
                         {style.label} Team
                       </span>
+                      {isLeading && score > 0 && (
+                        <span className="text-xs font-medium text-amber-600">Leading</span>
+                      )}
                     </div>
                     <div className="flex items-center space-x-3">
-                      <span className="text-xl font-bold tabular-nums text-text">{score}</span>
+                      <span className={`text-xl font-bold tabular-nums ${style.text}`}>{score}</span>
                       {teamParticipants.length > 0 && (
                         <button
                           onClick={() => toggleTeamMembers(teamId)}
-                          className={`flex items-center space-x-1 px-3 py-1 rounded-lg border transition-colors ${
+                          className={[
+                            'flex items-center space-x-1 px-3 py-1 rounded-lg border transition-colors',
                             expandedTeams.has(teamId)
-                              ? `bg-${style.label.toLowerCase()}-50 border-${style.label.toLowerCase()}-200 text-${style.label.toLowerCase()}-700`
-                              : 'bg-gray-50 border-gray-200 text-text-light hover:bg-gray-100'
-                          }`}
+                              ? `${style.softBg} ${style.softBorder} ${style.softText}`
+                              : 'bg-gray-50 border-gray-200 text-text-light hover:bg-gray-100',
+                          ].join(' ')}
                         >
                           <Users className="h-4 w-4" />
                           <span className="text-sm font-medium">Show Members</span>
@@ -359,8 +450,12 @@ export default function TeacherSpaceRaceDisplay() {
                   </div>
 
                   {/* Rocket Progress Bar */}
-                  <div className="relative h-16 bg-gray-100 rounded-xl border-2 border-gray-200 overflow-visible">
-                    <div className="absolute left-0 top-0 bottom-0 w-2 rounded-l-lg z-10 bg-gray-300" />
+                  <div
+                    className={`relative h-16 rounded-xl border-2 overflow-visible ${style.track} ${style.border}`}
+                  >
+                    <div
+                      className={`absolute left-0 top-0 bottom-0 w-2 rounded-l-lg z-10 ${style.bg}`}
+                    />
                     <div
                       className={`absolute left-0 top-0 bottom-0 rounded-l-lg transition-all duration-500 ease-out ${style.bg} opacity-90`}
                       style={{ width: `${progress}%`, left: 0 }}
@@ -373,10 +468,16 @@ export default function TeacherSpaceRaceDisplay() {
                         left: progress <= 0 ? '16px' : `calc(${progress}% - 22px)`,
                       }}
                     >
-                      <div className={`w-10 h-10 rounded-full ${style.bg} flex items-center justify-center ${isLeading && score > 0 ? 'animate-pulse' : ''}`}>
+                      <div
+                        className={`w-10 h-10 rounded-full ${style.bg} flex items-center justify-center shadow-md ${
+                          isLeading && score > 0 ? 'animate-pulse' : ''
+                        }`}
+                      >
                         {(() => {
                           const IconComponent = getRaceIcon(raceData?.settings?.icon || 'rocket');
-                          return <IconComponent className="w-6 h-6 text-white drop-shadow" strokeWidth={2} />;
+                          return (
+                            <IconComponent className="w-6 h-6 text-white drop-shadow" strokeWidth={2} />
+                          );
                         })()}
                       </div>
                     </div>
@@ -384,27 +485,33 @@ export default function TeacherSpaceRaceDisplay() {
 
                   {/* Team Stats */}
                   {teamParticipants.length > 0 && (
-                    <div className="flex items-center justify-between text-sm text-text-light">
-                      <span>{teamParticipants.length} participant{teamParticipants.length !== 1 ? 's' : ''}</span>
+                    <div className={`flex items-center justify-between text-sm ${style.softText}`}>
+                      <span>
+                        {teamParticipants.length} participant
+                        {teamParticipants.length !== 1 ? 's' : ''}
+                      </span>
                       <span>Score: {score}</span>
                     </div>
                   )}
 
                   {/* Team Members List */}
                   {expandedTeams.has(teamId) && teamParticipants.length > 0 && (
-                    <div className="bg-gray-50 rounded-lg border border-gray-200 p-4 space-y-2">
-                      <h4 className="text-sm font-semibold text-text mb-3">Team Members</h4>
-                      {teamParticipants.map((participant, index) => (
-                        <div key={participant.id} className="flex items-center justify-between py-2 px-3 bg-white rounded-md border border-gray-100">
+                    <div
+                      className={`rounded-lg border p-4 space-y-2 ${style.softBg} ${style.softBorder}`}
+                    >
+                      <h4 className={`text-sm font-semibold mb-3 ${style.text}`}>Team Members</h4>
+                      {teamParticipants.map((participant, memberIndex) => (
+                        <div
+                          key={participant.id}
+                          className="flex items-center justify-between py-2 px-3 bg-white rounded-md border border-gray-100"
+                        >
                           <div className="flex items-center space-x-3">
-                            <span className="text-sm font-medium text-text-light w-6">
-                              {index + 1}.
+                            <span className={`text-sm font-medium w-6 ${style.softText}`}>
+                              {memberIndex + 1}.
                             </span>
-                            <span className="font-medium text-text">
-                              {participant.name}
-                            </span>
+                            <span className="font-medium text-text">{participant.name}</span>
                           </div>
-                          <span className="font-bold text-text">
+                          <span className={`font-bold ${style.text}`}>
                             {Math.round(participant.score || 0)}
                           </span>
                         </div>

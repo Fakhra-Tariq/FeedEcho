@@ -12,6 +12,7 @@ import {
   saveSpaceRaceParticipant,
   loadSpaceRaceParticipant,
   clearSpaceRaceParticipant,
+  normalizeTeamId,
 } from '../utils/spaceRaceSession';
 
 function normalizeTeamAssignment(value) {
@@ -22,21 +23,25 @@ function normalizeTeamAssignment(value) {
 const persistJoinSession = (trimmedName, trimmedCode, joinPayload) => {
   const { data, raceId, quizId, participantId, teamId } = joinPayload;
   const resolvedQuizId = quizId || data?.quizId || data?.quiz?.id;
+  const resolvedTeamId = normalizeTeamId(teamId ?? data?.participant?.teamId ?? null);
 
   sessionStorage.setItem('studentName', trimmedName);
   sessionStorage.setItem('sessionCode', trimmedCode);
   sessionStorage.setItem(
     'raceData',
-    JSON.stringify({ raceId, participantId, teamId, ...data })
+    JSON.stringify({ raceId, participantId, teamId: resolvedTeamId, ...data })
   );
 
   saveSpaceRaceParticipant({
     id: participantId,
     name: trimmedName,
     raceId,
-    teamId: teamId ?? data?.participant?.teamId ?? null,
+    teamId: resolvedTeamId,
   });
-  localStorage.setItem('spaceRaceData', JSON.stringify({ id: raceId, quizId: resolvedQuizId, ...data }));
+  localStorage.setItem(
+    'spaceRaceData',
+    JSON.stringify({ id: raceId, quizId: resolvedQuizId, teamId: resolvedTeamId, ...data })
+  );
 
   // Only save quiz data if it actually exists
   if (data?.quiz && data.quiz.questions && Array.isArray(data.quiz.questions)) {
@@ -47,13 +52,13 @@ const persistJoinSession = (trimmedName, trimmedCode, joinPayload) => {
       questions: data.quiz.questions,
     };
     // Use team-specific cache key to ensure different teams get different question shuffles
-    const teamIdForCache = teamId ?? data?.participant?.teamId ?? 'default';
+    const teamIdForCache = resolvedTeamId ?? 'default';
     const teamCacheKey = `spaceRaceQuiz_team_${teamIdForCache}`;
     localStorage.setItem(teamCacheKey, JSON.stringify(quizPayload));
     console.log('💾 Saved quiz with team-specific cache key:', teamCacheKey, 'teamId:', teamIdForCache);
   }
 
-  return { raceId, quizId: resolvedQuizId, teamId };
+  return { raceId, quizId: resolvedQuizId, teamId: resolvedTeamId };
 };
 
 export default function StudentSpaceRacePage() {
@@ -87,10 +92,19 @@ export default function StudentSpaceRacePage() {
       if (!p || !storedRace) return null;
 
       const r = JSON.parse(storedRace);
-      if (expectedRaceId && r?.id && String(r.id) !== String(expectedRaceId)) {
+      const raceKey = r?.id || r?.raceId;
+      if (expectedRaceId && raceKey && String(raceKey) !== String(expectedRaceId)) {
         return null;
       }
-      return { participant: p, race: r };
+
+      // Heal missing teamId from raceData (older join clients omitted it)
+      const healedTeamId = normalizeTeamId(p.teamId ?? r?.teamId ?? null);
+      const participant = healedTeamId !== p.teamId ? { ...p, teamId: healedTeamId } : p;
+      if (healedTeamId !== p.teamId) {
+        saveSpaceRaceParticipant(participant);
+      }
+
+      return { participant, race: { ...r, id: raceKey || r?.id, teamId: healedTeamId } };
     } catch {
       return null;
     }
@@ -119,7 +133,7 @@ export default function StudentSpaceRacePage() {
     }
   }, [routeRaceId, participant, loadStoredSession]);
 
-  // Keep participant teamId/score in sync with RTDB
+  // Keep participant teamId/score in sync with RTDB (works for dashboard + public join)
   useEffect(() => {
     if (!activeRaceId || !participant?.id) return undefined;
 
@@ -132,10 +146,37 @@ export default function StudentSpaceRacePage() {
       const live = snap.val() || {};
       setParticipant((prev) => {
         if (!prev) return prev;
-        const nextTeamId = live.teamId ?? prev.teamId;
-        if (prev.teamId === nextTeamId && prev.score === live.score) return prev;
-        const updated = { ...prev, teamId: nextTeamId, score: live.score ?? prev.score };
+        const nextTeamId = normalizeTeamId(live.teamId ?? prev.teamId);
+        const nextScore = live.score ?? prev.score;
+        if (
+          String(prev.teamId ?? '') === String(nextTeamId ?? '') &&
+          Number(prev.score ?? 0) === Number(nextScore ?? 0)
+        ) {
+          return prev;
+        }
+        const updated = { ...prev, teamId: nextTeamId, score: nextScore };
         saveSpaceRaceParticipant(updated);
+        // Keep raceData teamId aligned for quiz bootstrap on both join paths
+        try {
+          const raw = localStorage.getItem('spaceRaceData');
+          if (raw) {
+            const race = JSON.parse(raw);
+            localStorage.setItem(
+              'spaceRaceData',
+              JSON.stringify({ ...race, teamId: nextTeamId })
+            );
+          }
+          const raceSession = sessionStorage.getItem('raceData');
+          if (raceSession) {
+            const race = JSON.parse(raceSession);
+            sessionStorage.setItem(
+              'raceData',
+              JSON.stringify({ ...race, teamId: nextTeamId })
+            );
+          }
+        } catch {
+          // ignore storage sync errors
+        }
         return updated;
       });
     });
@@ -170,7 +211,9 @@ export default function StudentSpaceRacePage() {
         return;
       }
 
-      const resolvedTeamId = assignedTeamId ?? teamId ?? data?.participant?.teamId ?? null;
+      const resolvedTeamId = normalizeTeamId(
+        assignedTeamId ?? teamId ?? data?.participant?.teamId ?? null
+      );
       const resolvedQuizId = (data?.quiz && data.quiz.questions && Array.isArray(data.quiz.questions))
         ? (quizId ?? data?.quizId ?? data?.quiz?.id)
         : null;
@@ -191,7 +234,7 @@ export default function StudentSpaceRacePage() {
         raceId,
         teamId: resolvedTeamId,
       });
-      setRaceData({ id: raceId, quizId: resolvedQuizId, ...data });
+      setRaceData({ id: raceId, quizId: resolvedQuizId, teamId: resolvedTeamId, ...data });
 
       // Navigate to game panel (same as auto-assign flow)
       navigate(`/student/space-race/${raceId}`, { replace: true });

@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { spaceRacesAPI, sessionsAPI } from '../services/api';
-import { saveSpaceRaceParticipant } from '../utils/spaceRaceSession';
+import { normalizeTeamId, saveSpaceRaceParticipant } from '../utils/spaceRaceSession';
 import {
   persistQuizParticipantSession,
 } from '../utils/quizParticipantSession';
@@ -72,32 +72,58 @@ const StudentJoin = () => {
         return;
       }
 
-      const { type, data, raceId, quizId, participantId } = joinResponse.data;
+      const { type, data, raceId, quizId, participantId, teamId: assignedTeamId } =
+        joinResponse.data;
+      // API returns teamId at the top level — must persist for team sync/locking
+      const resolvedTeamId = normalizeTeamId(
+        assignedTeamId ?? teamId ?? data?.participant?.teamId ?? null
+      );
 
-      console.log('Join response:', { type, data, raceId, quizId, participantId });
+      console.log('Join response:', {
+        type,
+        raceId,
+        quizId,
+        participantId,
+        resolvedTeamId,
+      });
 
       if (type === 'spaceRace') {
         sessionStorage.setItem('studentName', trimmedName);
         sessionStorage.setItem('sessionCode', trimmedCode);
-        sessionStorage.setItem('raceData', JSON.stringify({ raceId, participantId, ...data }));
+        sessionStorage.setItem(
+          'raceData',
+          JSON.stringify({ raceId, participantId, teamId: resolvedTeamId, ...data })
+        );
         saveSpaceRaceParticipant({
           id: participantId,
           name: trimmedName,
           raceId,
-          teamId: teamId ?? data?.participant?.teamId ?? null,
+          teamId: resolvedTeamId,
         });
-        localStorage.setItem('spaceRaceData', JSON.stringify({
-          id: raceId,
-          ...data
-        }));
+        localStorage.setItem(
+          'spaceRaceData',
+          JSON.stringify({
+            id: raceId,
+            quizId,
+            teamId: resolvedTeamId,
+            ...data,
+          })
+        );
 
-        if (data.quiz && data.quiz.questions && data.quiz.questions.length > 0) {
-          navigate(`/student/quiz/${quizId}`);
-        } else if (quizId) {
-          navigate(`/student/quiz/${quizId}`);
-        } else {
-          setError('Quiz data not found. Please try again.');
+        if (data?.quiz?.questions && Array.isArray(data.quiz.questions)) {
+          const teamCacheKey = `spaceRaceQuiz_team_${resolvedTeamId ?? 'default'}`;
+          localStorage.setItem(
+            teamCacheKey,
+            JSON.stringify({
+              ...data.quiz,
+              id: quizId || data.quiz.id,
+              launched: true,
+            })
+          );
         }
+
+        // Same landing as dashboard join — enables RTDB team sync, chat, and timers
+        navigate(`/student/space-race/${raceId}`);
       } else if (type === 'quiz') {
         if (!data || !data.title) {
           console.error('Quiz data is incomplete:', data);

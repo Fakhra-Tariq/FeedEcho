@@ -4,7 +4,7 @@ import {
   sessionsAPI,
   spaceRacesAPI,
 } from '../services/api';
-import { saveSpaceRaceParticipant } from './spaceRaceSession';
+import { normalizeTeamId, saveSpaceRaceParticipant } from './spaceRaceSession';
 import { getStoredStudentSession } from './studentSession';
 import { persistQuizParticipantSession } from './quizParticipantSession';
 
@@ -82,17 +82,25 @@ export async function proceedWithSessionJoin({
     throw new Error(joinResponse.data.message || joinResponse.data.error || 'Failed to join session');
   }
 
-  const { type, data, raceId, quizId, participantId } = joinResponse.data;
+  const { type, data, raceId, quizId, participantId, teamId: assignedTeamId } =
+    joinResponse.data;
+  // API returns teamId at the top level (not data.participant.teamId)
+  const resolvedTeamId = normalizeTeamId(
+    assignedTeamId ?? teamId ?? data?.participant?.teamId ?? null
+  );
 
   persistJoinIdentity(trimmedName, ctx);
 
   if (type === 'spaceRace') {
-    sessionStorage.setItem('raceData', JSON.stringify({ raceId, participantId, ...data }));
+    sessionStorage.setItem(
+      'raceData',
+      JSON.stringify({ raceId, participantId, teamId: resolvedTeamId, ...data })
+    );
     saveSpaceRaceParticipant({
       id: participantId,
       name: trimmedName,
       raceId,
-      teamId: teamId ?? data?.participant?.teamId ?? null,
+      teamId: resolvedTeamId,
       studentUid: ctx.studentUid,
       studentEmail: ctx.studentEmail,
     });
@@ -101,11 +109,24 @@ export async function proceedWithSessionJoin({
       JSON.stringify({
         id: raceId,
         quizId,
+        teamId: resolvedTeamId,
         ...data,
       })
     );
+    // Team-specific quiz cache so shuffle matches teammates on both join paths
+    if (data?.quiz?.questions && Array.isArray(data.quiz.questions)) {
+      const teamCacheKey = `spaceRaceQuiz_team_${resolvedTeamId ?? 'default'}`;
+      localStorage.setItem(
+        teamCacheKey,
+        JSON.stringify({
+          ...data.quiz,
+          id: quizId || data.quiz.id,
+          launched: true,
+        })
+      );
+    }
     navigate(`/student/space-race/${raceId}`);
-    return { success: true, type: 'spaceRace', raceId };
+    return { success: true, type: 'spaceRace', raceId, teamId: resolvedTeamId };
   }
 
   if (type === 'quiz') {
