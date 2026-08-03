@@ -277,7 +277,7 @@ export default function StudentProgress() {
     }
   ]);
   const [chatInput, setChatInput] = useState('');
-  const { items: activityHistory } = useStudentLiveActivity(student, 200);
+  const { items: activityHistory, loading: loadingActivity } = useStudentLiveActivity(student, 200);
   const [hiddenActivityIds, setHiddenActivityIds] = useState([]);
   const [viewModal, setViewModal] = useState(null);
   const [deleteConfirm, setDeleteConfirm] = useState(null);
@@ -294,8 +294,9 @@ export default function StudentProgress() {
     const ids = new Set();
     serverQuizRows.forEach((row) => row.quizId && ids.add(row.quizId));
     localSubmissions.forEach((row) => row.quizId && ids.add(row.quizId));
+    activityHistory.forEach((item) => item?.type === 'quiz' && item.quizId && ids.add(item.quizId));
     return [...ids];
-  }, [serverQuizRows, localSubmissions]);
+  }, [serverQuizRows, localSubmissions, activityHistory]);
 
   const { submissionsByQuizId } = useQuizSubmissionListeners(trackedQuizIds);
 
@@ -722,12 +723,20 @@ export default function StudentProgress() {
             a.participantId === item.participantId) ||
           getAttemptKey(a) === getAttemptKey(item)
       );
-      const base = fromAttempts || item;
+      // Prefer the richer of attempt row vs activity item (API activity often has questions)
+      const base =
+        activityRichnessScore(fromAttempts) >= activityRichnessScore(item)
+          ? { ...item, ...fromAttempts }
+          : { ...(fromAttempts || {}), ...item };
       const quizId = base.quizId || item.quizId;
       const quizMeta = quizzesTree?.[quizId] || {};
       const quizType = base.quizType || item.quizType || quizMeta.type || '';
-      const questions = getQuizQuestions(quizId, base.questions || item.questions, quizType);
-      const answers = base.answers || item.answers || {};
+      const questions = getQuizQuestions(
+        quizId,
+        base.questions || item.questions || fromAttempts?.questions,
+        quizType
+      );
+      const answers = base.answers || item.answers || fromAttempts?.answers || {};
       const recomputedScore =
         questions.length > 0
           ? calculateQuizScore(questions, answers, quizType)
@@ -801,7 +810,8 @@ export default function StudentProgress() {
     navigate('/student/auth');
   };
 
-  const isLoading = loadingServerQuizRows && allQuizAttempts.length === 0;
+  const isLoading =
+    (loadingServerQuizRows || loadingActivity) && visibleActivityHistory.length === 0;
 
   return (
     <div className="min-h-screen bg-background">
@@ -819,14 +829,14 @@ export default function StudentProgress() {
 
             {/* Center Navigation */}
             <div className="hidden md:flex items-center space-x-6">
-              <a href="/student/home" className="flex items-center space-x-2 text-gray-700 hover:text-primary transition-colors">
+              <Link to="/student/home" className="flex items-center space-x-2 text-gray-700 hover:text-primary transition-colors">
                 <Home className="w-4 h-4" />
                 <span className="font-medium">Home</span>
-              </a>
-              <a href="/student/progress" className="flex items-center space-x-2 text-primary font-medium">
+              </Link>
+              <Link to="/student/progress" className="flex items-center space-x-2 text-primary font-medium">
                 <TrendingUp className="w-4 h-4" />
                 <span className="font-medium">Progress</span>
-              </a>
+              </Link>
             </div>
 
             {/* Right Side Icons */}
@@ -900,7 +910,9 @@ export default function StudentProgress() {
         <div className="mt-6">
           <p className="text-xs uppercase tracking-widest text-gray-500 mb-4" style={{ fontSize: '12px', letterSpacing: '0.08em' }}>Activity history</p>
           
-          {visibleActivityHistory.length === 0 ? (
+          {isLoading ? (
+            <p className="text-center text-gray-500 py-12">Loading activity...</p>
+          ) : visibleActivityHistory.length === 0 ? (
             <p className="text-center text-gray-500 py-12">No activity recorded yet.</p>
           ) : (
             <div className="space-y-3" style={{ marginTop: '12px' }}>

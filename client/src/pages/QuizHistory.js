@@ -268,14 +268,18 @@ const QuizHistory = () => {
             </div>
           </div>
 
-          <div className="p-6 shadow-sm" style={{ backgroundColor: '#FFFFFF', border: '0.5px solid #E8E0F0', borderRadius: '12px' }}>
-            <div className="flex items-center space-x-3">
-              <div className="p-3 rounded-lg bg-primary">
+          <div className="p-6 shadow-sm min-w-0 overflow-hidden" style={{ backgroundColor: '#FFFFFF', border: '0.5px solid #E8E0F0', borderRadius: '12px' }}>
+            <div className="flex items-center space-x-3 min-w-0">
+              <div className="p-3 rounded-lg bg-primary flex-shrink-0">
                 <Calendar className="w-6 h-6 text-white" />
               </div>
-              <div>
+              <div className="min-w-0 flex-1">
                 <p className="text-sm" style={{ color: '#6B7280' }}>Most Recent</p>
-                <p className="text-lg font-bold truncate" style={{ color: '#1a1a1a' }}>
+                <p
+                  className="text-lg font-bold truncate"
+                  style={{ color: '#1a1a1a' }}
+                  title={mostRecentQuiz?.name || '—'}
+                >
                   {mostRecentQuiz?.name || '—'}
                 </p>
               </div>
@@ -332,16 +336,20 @@ const QuizHistory = () => {
               filteredQuizzes.map((quiz) => (
                 <div
                   key={quiz.id}
-                  className="p-6 flex items-center justify-between"
+                  className="p-6 flex items-center justify-between min-w-0"
                   style={{ borderBottom: '0.5px solid #F3EEF8' }}
                 >
-                  <div className="flex-1">
-                    <div className="flex items-center space-x-3 mb-2">
-                      <h3 className="text-lg font-bold" style={{ color: '#1a1a1a' }}>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center space-x-3 mb-2 min-w-0">
+                      <h3
+                        className="text-lg font-bold truncate min-w-0 flex-1"
+                        style={{ color: '#1a1a1a' }}
+                        title={quiz.name}
+                      >
                         {quiz.name}
                       </h3>
                       <span
-                        className="px-3 py-1 text-xs font-medium"
+                        className="px-3 py-1 text-xs font-medium flex-shrink-0"
                         style={{
                           borderRadius: '20px',
                           ...(quiz.status === 'Passed'
@@ -371,7 +379,7 @@ const QuizHistory = () => {
                       </div>
                     </div>
                   </div>
-                  <div className="ml-6 flex items-center space-x-3">
+                  <div className="ml-6 flex items-center space-x-3 flex-shrink-0">
                     {quiz.status === 'Passed' ? (
                       <div
                         className="w-12 h-12 rounded-full flex items-center justify-center"

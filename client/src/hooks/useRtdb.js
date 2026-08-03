@@ -34,9 +34,12 @@ export function useRtdbValue(path, { enabled = true } = {}) {
   useEffect(() => {
     if (!enabled || !path) {
       setLoading(false);
+      setValue(null);
       return undefined;
     }
 
+    // Clear stale value immediately when path changes so listeners never show old question state
+    setValue(null);
     setLoading(true);
     setError(null);
 

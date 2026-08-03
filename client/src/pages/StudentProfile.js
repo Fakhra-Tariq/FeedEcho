@@ -1,7 +1,8 @@
-import React, { useEffect, useMemo, useState, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useCallback, useEffect, useMemo, useState, useRef } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
 import {
   ChevronRight,
+  ChevronDown,
   LogOut,
   Trash2,
   Lock,
@@ -15,11 +16,14 @@ import {
   Award,
   TrendingUp,
   Target,
+  Home,
+  User,
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { authAPI } from '../services/api';
 import { getStoredStudentSession, persistStudentSession, clearStudentSession } from '../utils/studentSession';
 import { useStudentQuizStats } from '../hooks/useStudentQuizStats';
+import { useClickOutside } from '../hooks/useClickOutside';
 import StudentAvatar from '../components/StudentAvatar';
 import ProfileStatsRow from '../components/ProfileStatsRow';
 
@@ -73,6 +77,12 @@ export default function StudentProfile() {
   const [savingProfile, setSavingProfile] = useState(false);
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
   const fileInputRef = useRef(null);
+  const [showProfileDropdown, setShowProfileDropdown] = useState(false);
+  const profileDropdownRef = useRef(null);
+  const closeProfileDropdown = useCallback(() => {
+    setShowProfileDropdown(false);
+  }, []);
+  useClickOutside(profileDropdownRef, closeProfileDropdown, showProfileDropdown);
 
   const { stats: quizStats, loading: loadingQuizStats } = useStudentQuizStats(student);
 
@@ -267,17 +277,91 @@ export default function StudentProfile() {
     return d.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
   };
 
+  const navDisplayName = profile?.fullName || student?.name || 'Student';
+  const navDisplayEmail = profile?.email || student?.email || '';
+
+  const studentNavbar = (
+    <nav className="bg-white shadow-sm border-b border-gray-200 flex-shrink-0">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="flex justify-between items-center h-16">
+          <div className="flex items-center space-x-3">
+            <img
+              src="/FeedEcho-logo.png.png"
+              alt="FeedEcho"
+              className="h-32 w-auto object-contain mix-blend-mode: multiply"
+            />
+          </div>
+
+          <div className="hidden md:flex items-center space-x-6">
+            <a href="/student/home" className="flex items-center space-x-2 text-gray-700 hover:text-primary transition-colors">
+              <Home className="w-4 h-4" />
+              <span className="font-medium">Home</span>
+            </a>
+            <Link to="/student/progress" className="flex items-center space-x-2 text-gray-700 hover:text-primary transition-colors">
+              <TrendingUp className="w-4 h-4" />
+              <span className="font-medium">Progress</span>
+            </Link>
+          </div>
+
+          <div className="flex items-center space-x-3">
+            <div className="relative" ref={profileDropdownRef}>
+              <button
+                onClick={() => setShowProfileDropdown(!showProfileDropdown)}
+                className="flex items-center space-x-2 p-2 rounded-lg hover:bg-gray-100 transition-colors"
+              >
+                <StudentAvatar name={navDisplayName} />
+                <span className="font-medium text-text">{navDisplayName.split(' ')[0] || 'Student'}</span>
+                <ChevronDown className="w-4 h-4 text-gray-500" />
+              </button>
+
+              {showProfileDropdown && (
+                <div className="absolute right-0 mt-2 w-56 bg-white rounded-lg shadow-lg border border-gray-200 z-50">
+                  <div className="p-3 border-b border-gray-200">
+                    <p className="font-medium text-text">{navDisplayName}</p>
+                    <p className="text-sm text-gray-600">{navDisplayEmail}</p>
+                  </div>
+                  <div className="py-2">
+                    <Link to="/student/profile" className="block px-4 py-2 text-gray-700 hover:bg-gray-100">
+                      <div className="flex items-center space-x-2">
+                        <User className="w-4 h-4" />
+                        <span>Profile</span>
+                      </div>
+                    </Link>
+                    <button
+                      onClick={handleLogout}
+                      className="w-full text-left px-4 py-2 text-gray-700 hover:bg-gray-100"
+                    >
+                      <div className="flex items-center space-x-2">
+                        <LogOut className="w-4 h-4" />
+                        <span>Logout</span>
+                      </div>
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+    </nav>
+  );
+
   if (loadingProfile || !profile) {
     return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
-        <p className="text-sm text-gray-500">Loading profile…</p>
+      <div className="min-h-screen bg-background">
+        {studentNavbar}
+        <div className="flex items-center justify-center py-20">
+          <p className="text-sm text-gray-500">Loading profile…</p>
+        </div>
       </div>
     );
   }
 
   return (
     <div className="min-h-screen bg-background font-sans">
-      <div className="max-w-3xl mx-auto px-4 sm:px-6 py-8">
+      {studentNavbar}
+
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Page header */}
         <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4 mb-8">
           <div>

@@ -3,7 +3,6 @@ import {
   CheckSquare, 
   Circle, 
   Type, 
-  FileText,
   Plus,
   ChevronDown
 } from 'lucide-react';
@@ -37,14 +36,6 @@ const QuestionTypeDropdown = ({ onAddQuestion, currentQuizType = '' }) => {
       icon: Type,
       color: 'from-purple-500 to-purple-600',
       hoverColor: 'hover:from-purple-600 hover:to-purple-700'
-    },
-    {
-      key: 'long-answer',
-      title: 'Long Answer',
-      fullTitle: 'Long Answer Questions',
-      icon: FileText,
-      color: 'from-orange-500 to-orange-600',
-      hoverColor: 'hover:from-orange-600 hover:to-orange-700'
     }
   ];
 

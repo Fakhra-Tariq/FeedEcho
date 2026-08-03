@@ -258,7 +258,7 @@ export default function TeacherProfile() {
 
   return (
     <div className="font-sans">
-      <div className="max-w-3xl mx-auto">
+      <div className="w-full">
         <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4 mb-8">
           <div>
             <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">Teacher profile</h1>

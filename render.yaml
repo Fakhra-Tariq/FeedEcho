@@ -66,6 +66,11 @@ services:
     plan: free
     buildCommand: npm install && npm --prefix client install && npm run build
     staticPublishPath: client/build
+    # SPA fallback: deep links like /student/progress must serve index.html
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
     envVars:
       - key: REACT_APP_API_URL
         sync: false

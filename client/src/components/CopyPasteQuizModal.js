@@ -20,12 +20,14 @@ A) London
 B) Berlin
 C) Paris
 D) Madrid
+Answer: C
 
 2. Which planet is known as the Red Planet?
 A) Venus
 B) Mars
 C) Jupiter
-D) Saturn`;
+D) Saturn
+Answer: B`;
       
       case 'True / False':
         return `Paste your true/false questions in this format:
@@ -52,7 +54,7 @@ Sample Answer: William Shakespeare
 Sample Answer: Jupiter`;
         
       case 'Mixed Type':
-        return `Paste your mixed-type questions in this format:
+        return `Paste your mixed-type questions in this format (use any 2 or all 3 tags, in any order):
 
 [MCQ]
 1. What is the capital of France?
@@ -68,12 +70,7 @@ Answer: False
 
 [SHORT ANSWER]
 3. What is the chemical symbol for water?
-Sample Answer: H2O
-
-[LONG ANSWER]
-4. Explain the process of photosynthesis.
-Model Answer: Photosynthesis is the process by which plants convert sunlight into energy...
-Marks: 10`;
+Sample Answer: H2O`;
         
       default:
         return 'Paste your quiz content here...';
@@ -145,7 +142,10 @@ Marks: 10`;
   };
 
   const parseContent = (content, type) => {
-    const questions = [];
+    if (type === 'Mixed Type') {
+      return parseMixedType(content);
+    }
+
     const lines = content.split('\n').filter(line => line.trim());
     
     switch (type) {
@@ -158,6 +158,159 @@ Marks: 10`;
       default:
         return [];
     }
+  };
+
+  /** Normalize Mixed Type section tags. Long Answer is recognized only as a boundary and ignored. */
+  const normalizeMixedTag = (raw) => {
+    const key = String(raw || '')
+      .toUpperCase()
+      .replace(/\s+/g, ' ')
+      .trim();
+    if (key === 'MCQ' || key === 'MULTIPLE CHOICE') return 'MCQ';
+    if (key === 'TRUE/FALSE' || key === 'TRUE / FALSE' || key === 'T/F') return 'TRUE/FALSE';
+    if (key === 'SHORT ANSWER' || key === 'SHORTANSWER') return 'SHORT ANSWER';
+    if (key === 'LONG ANSWER' || key === 'LONGANSWER') return 'LONG ANSWER';
+    return null;
+  };
+
+  /**
+   * Split pasted Mixed Type content by recognized tags and parse each section independently.
+   * Any combination of [MCQ], [TRUE/FALSE], and [SHORT ANSWER] is supported (2 or all 3).
+   */
+  const parseMixedType = (content) => {
+    const questions = [];
+    const tagRegex = /\[\s*(MCQ|MULTIPLE\s+CHOICE|TRUE\s*\/\s*FALSE|T\/F|SHORT\s*ANSWER|LONG\s*ANSWER)\s*\]/gi;
+    const sections = [];
+    let match;
+
+    while ((match = tagRegex.exec(content)) !== null) {
+      const kind = normalizeMixedTag(match[1]);
+      if (!kind) continue;
+      sections.push({
+        kind,
+        bodyStart: match.index + match[0].length,
+        tagStart: match.index,
+      });
+    }
+
+    if (sections.length === 0) {
+      return [];
+    }
+
+    for (let i = 0; i < sections.length; i++) {
+      const { kind, bodyStart } = sections[i];
+      if (kind === 'LONG ANSWER') continue;
+
+      const bodyEnd = i + 1 < sections.length ? sections[i + 1].tagStart : content.length;
+      const lines = content
+        .slice(bodyStart, bodyEnd)
+        .split('\n')
+        .map((line) => line.trim())
+        .filter(Boolean);
+
+      if (kind === 'MCQ') {
+        questions.push(...parseMixedMultipleChoice(lines));
+      } else if (kind === 'TRUE/FALSE') {
+        questions.push(...parseMixedTrueFalse(lines));
+      } else if (kind === 'SHORT ANSWER') {
+        questions.push(...parseMixedShortAnswer(lines));
+      }
+    }
+
+    return questions;
+  };
+
+  const parseMixedMultipleChoice = (lines) => {
+    const questions = [];
+    let currentQuestion = null;
+
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
+
+      if (/^\d+\./.test(line)) {
+        if (currentQuestion) questions.push(currentQuestion);
+        currentQuestion = {
+          id: Date.now() + questions.length,
+          type: 'multiple-choice',
+          questionText: line.replace(/^\d+\.\s*/, ''),
+          options: ['', '', '', ''],
+          correctAnswer: 0,
+        };
+      } else if (/^[A-D]\)/i.test(line) && currentQuestion) {
+        const optionIndex = line[0].toUpperCase().charCodeAt(0) - 65;
+        const optionText = line.replace(/^[A-D]\)\s*/i, '');
+        if (optionIndex >= 0 && optionIndex < 4) {
+          currentQuestion.options[optionIndex] = optionText;
+        }
+      } else if (/^answer:\s*/i.test(line) && currentQuestion) {
+        const letter = line.replace(/^answer:\s*/i, '').trim().charAt(0).toUpperCase();
+        if (letter >= 'A' && letter <= 'D') {
+          currentQuestion.correctAnswer = letter.charCodeAt(0) - 65;
+        }
+      }
+    }
+
+    if (currentQuestion) questions.push(currentQuestion);
+    return questions;
+  };
+
+  const parseMixedTrueFalse = (lines) => {
+    const questions = [];
+
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
+      if (!/^\d+\./.test(line)) continue;
+
+      const questionText = line.replace(/^\d+\.\s*/, '');
+      let correctAnswer = true;
+
+      for (let j = i + 1; j < Math.min(i + 3, lines.length); j++) {
+        const nextLine = lines[j].toLowerCase();
+        if (nextLine.includes('answer:')) {
+          if (nextLine.includes('false')) correctAnswer = false;
+          else if (nextLine.includes('true')) correctAnswer = true;
+          break;
+        }
+      }
+
+      questions.push({
+        id: Date.now() + questions.length,
+        type: 'true-false',
+        questionText,
+        correctAnswer,
+      });
+    }
+
+    return questions;
+  };
+
+  const parseMixedShortAnswer = (lines) => {
+    const questions = [];
+
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
+      if (!/^\d+\./.test(line)) continue;
+
+      const questionText = line.replace(/^\d+\.\s*/, '');
+      let sampleAnswer = '';
+
+      for (let j = i + 1; j < Math.min(i + 3, lines.length); j++) {
+        const nextLine = lines[j];
+        if (nextLine.toLowerCase().includes('sample answer:')) {
+          sampleAnswer = nextLine.replace(/sample answer:\s*/i, '');
+          break;
+        }
+      }
+
+      questions.push({
+        id: Date.now() + questions.length,
+        type: 'short-answer',
+        questionText,
+        sampleAnswer,
+      });
+    }
+
+    return questions;
   };
 
   const parseMultipleChoice = (lines) => {
@@ -191,6 +344,15 @@ Marks: 10`;
         
         if (optionIndex < 4) {
           currentQuestion.options[optionIndex].text = optionText;
+        }
+      }
+      // Correct answer line (e.g. "Answer: B" or "Answer: b")
+      else if (/^answer:\s*/i.test(line) && currentQuestion) {
+        const letter = line.replace(/^answer:\s*/i, '').trim().charAt(0).toLowerCase();
+        if (letter >= 'a' && letter <= 'd') {
+          currentQuestion.options.forEach((opt) => {
+            opt.isCorrect = opt.id === letter;
+          });
         }
       }
     }

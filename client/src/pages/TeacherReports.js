@@ -343,9 +343,12 @@ export default function TeacherReports() {
 
   const quizReports = useMemo(() => {
     if (!quizzes.length) return [];
-    return quizzes.map((quiz) =>
-      collectReportDataForQuiz(quiz, submissionsByQuizId, participantsByQuizId, apiFallbackByQuizId)
-    );
+    return quizzes
+      .map((quiz) =>
+        collectReportDataForQuiz(quiz, submissionsByQuizId, participantsByQuizId, apiFallbackByQuizId)
+      )
+      // Only show quizzes that at least one student has joined and attempted
+      .filter((report) => Number(report.submittedCount) > 0);
   }, [quizzes, submissionsByQuizId, participantsByQuizId, apiFallbackByQuizId]);
 
   const hasRtdbReportData = useMemo(

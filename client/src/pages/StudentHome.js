@@ -690,10 +690,10 @@ const StudentHome = () => {
                 <Home className="w-4 h-4" />
                 <span className="font-medium">Home</span>
               </a>
-              <a href="/student/progress" className="flex items-center space-x-2 text-gray-700 hover:text-primary transition-colors">
+              <Link to="/student/progress" className="flex items-center space-x-2 text-gray-700 hover:text-primary transition-colors">
                 <TrendingUp className="w-4 h-4" />
                 <span className="font-medium">Progress</span>
-              </a>
+              </Link>
             </div>
 
             {/* Right Side Icons */}

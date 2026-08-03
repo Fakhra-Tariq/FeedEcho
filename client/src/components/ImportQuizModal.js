@@ -1,12 +1,14 @@
 import React, { useState, useRef } from 'react';
 import { X, Upload, FileText, CheckCircle, AlertCircle, Sparkles, File } from 'lucide-react';
 import clsx from 'clsx';
+import { importQuestionsFromFile } from '../utils/importQuizFromFile';
 
 const ImportQuizModal = ({ isOpen, onClose, onCreateQuiz }) => {
   const [selectedType, setSelectedType] = useState('Multiple Choice');
   const [uploadedFile, setUploadedFile] = useState(null);
   const [isImporting, setIsImporting] = useState(false);
   const [importStatus, setImportStatus] = useState('');
+  const [importErrorDetail, setImportErrorDetail] = useState('');
   const fileInputRef = useRef(null);
 
   const questionTypes = ['Multiple Choice', 'True / False', 'Short Answer', 'Mixed Type'];
@@ -38,38 +40,45 @@ const ImportQuizModal = ({ isOpen, onClose, onCreateQuiz }) => {
       
       if (!allowedTypes.includes(fileExtension)) {
         setImportStatus('error');
+        setImportErrorDetail('Unsupported file type. Please upload PDF, DOC, DOCX, XLS, XLSX, or TXT.');
         return;
       }
       
       // Check file size (max 10MB)
       if (file.size > 10 * 1024 * 1024) {
         setImportStatus('error');
+        setImportErrorDetail('File is too large. Maximum size is 10MB.');
         return;
       }
       
       setUploadedFile(file);
       setImportStatus('');
+      setImportErrorDetail('');
     }
   };
 
   const handleImportQuiz = async () => {
     if (!uploadedFile) {
       setImportStatus('error');
+      setImportErrorDetail('Please select a valid file to import.');
       return;
     }
 
     setIsImporting(true);
     setImportStatus('processing');
+    setImportErrorDetail('');
     
     try {
-      // Simulate file processing and parsing
-      await new Promise(resolve => setTimeout(resolve, 2000));
+      const { questions: parsedQuestions } = await importQuestionsFromFile(
+        uploadedFile,
+        selectedType
+      );
       
-      // Parse the file content based on question type
-      const parsedQuestions = parseFileContent(uploadedFile, selectedType);
-      
-      if (parsedQuestions.length === 0) {
+      if (!parsedQuestions.length) {
         setImportStatus('error');
+        setImportErrorDetail(
+          'Could not find any questions in the file. Use the same format as Copy & Paste (numbered questions, A) B) C) D) options, Answer: lines, or [MCQ]/[TRUE/FALSE]/[SHORT ANSWER] tags for Mixed Type).'
+        );
         setIsImporting(false);
         return;
       }
@@ -119,69 +128,19 @@ const ImportQuizModal = ({ isOpen, onClose, onCreateQuiz }) => {
     } catch (error) {
       console.error('Error importing quiz:', error);
       setImportStatus('error');
+      setImportErrorDetail(
+        error?.message ||
+          'Could not parse the file content. Please check the file format and try again.'
+      );
     } finally {
       setIsImporting(false);
     }
   };
 
-  const parseFileContent = (file, type) => {
-    // Simulate parsing different file types
-    // In production, this would use actual file parsing libraries
-    const sampleQuestions = {
-      'Multiple Choice': [
-        {
-          id: Date.now() + 1,
-          questionText: `What is the capital of ${file.name.includes('Geography') ? 'France' : 'Spain'}?`,
-          options: [
-            { id: 'a', text: 'London', isCorrect: false },
-            { id: 'b', text: file.name.includes('Geography') ? 'Paris' : 'Madrid', isCorrect: true },
-            { id: 'c', text: 'Berlin', isCorrect: false },
-            { id: 'd', text: 'Rome', isCorrect: false }
-          ]
-        },
-        {
-          id: Date.now() + 2,
-          questionText: 'Which planet is known as the Red Planet?',
-          options: [
-            { id: 'a', text: 'Venus', isCorrect: false },
-            { id: 'b', text: 'Mars', isCorrect: true },
-            { id: 'c', text: 'Jupiter', isCorrect: false },
-            { id: 'd', text: 'Saturn', isCorrect: false }
-          ]
-        }
-      ],
-      'True / False': [
-        {
-          id: Date.now() + 1,
-          questionText: 'The Earth is flat.',
-          correctAnswer: 'false'
-        },
-        {
-          id: Date.now() + 2,
-          questionText: 'The sun rises in the east.',
-          correctAnswer: 'true'
-        }
-      ],
-      'Short Answer': [
-        {
-          id: Date.now() + 1,
-          questionText: 'What is the chemical symbol for water?',
-          sampleAnswer: 'H2O'
-        },
-        {
-          id: Date.now() + 2,
-          questionText: 'Who wrote Romeo and Juliet?',
-          sampleAnswer: 'William Shakespeare'
-        }
-      ]
-    };
-
-    return sampleQuestions[type] || [];
-  };
-
   const resetModal = () => {
     setUploadedFile(null);
     setImportStatus('');
+    setImportErrorDetail('');
     setSelectedType('Multiple Choice');
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
@@ -348,10 +307,10 @@ const ImportQuizModal = ({ isOpen, onClose, onCreateQuiz }) => {
                 <div>
                   <p className="text-sm font-medium text-red-900 mb-1">Import Failed</p>
                   <p className="text-xs text-red-700">
-                    {uploadedFile ? 
-                      'Could not parse the file content. Please check the file format and try again.' :
-                      'Please select a valid file to import.'
-                    }
+                    {importErrorDetail ||
+                      (uploadedFile
+                        ? 'Could not parse the file content. Please check the file format and try again.'
+                        : 'Please select a valid file to import.')}
                   </p>
                 </div>
               </div>

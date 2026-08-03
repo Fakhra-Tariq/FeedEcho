@@ -299,61 +299,103 @@ const MixedTypeQuizEditor = () => {
 
         {/* Type-specific fields */}
         {question.type === 'multiple-choice' && (
-          <div className="space-y-3">
+          <div className="space-y-3 sm:space-y-4">
             <label className="block text-sm sm:text-base font-semibold text-gray-700 mb-2">
               Answer Options
             </label>
-            {question.options.map((option, optIndex) => (
-              <div key={optIndex} className="flex items-center space-x-3">
-                <input
-                  type="radio"
-                  name={`correct-${question.id}`}
-                  checked={question.correctAnswer === optIndex}
-                  onChange={() => updateQuestion(question.id, { correctAnswer: optIndex })}
-                  className="w-4 h-4 text-purple-500 focus:ring-purple-500"
-                />
-                <input
-                  type="text"
-                  value={option}
-                  onChange={(e) => {
-                    const newOptions = [...question.options];
-                    newOptions[optIndex] = e.target.value;
-                    updateQuestion(question.id, { options: newOptions });
-                  }}
-                  placeholder={`Option ${optIndex + 1}`}
-                  className="flex-1 px-4 py-2 text-sm border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                />
-              </div>
-            ))}
+            {question.options.map((option, optIndex) => {
+              const isCorrect = question.correctAnswer === optIndex;
+              const optionLetter = String.fromCharCode(65 + optIndex);
+              return (
+                <div key={optIndex} className="flex items-center space-x-3 sm:space-x-4">
+                  <button
+                    type="button"
+                    onClick={() => updateQuestion(question.id, { correctAnswer: optIndex })}
+                    className="flex-shrink-0"
+                  >
+                    <div
+                      className={`w-5 h-5 sm:w-6 sm:h-6 rounded-full border-2 flex items-center justify-center transition-all duration-200 ${
+                        isCorrect
+                          ? 'border-[#6D415F] bg-[#6D415F]'
+                          : 'border-gray-300 hover:border-[#6D415F]'
+                      }`}
+                    >
+                      {isCorrect && (
+                        <div className="w-2 h-2 sm:w-2.5 sm:h-2.5 bg-white rounded-full" />
+                      )}
+                    </div>
+                  </button>
+                  <span className="text-sm sm:text-base font-semibold text-gray-600 uppercase">
+                    {optionLetter}.
+                  </span>
+                  <input
+                    type="text"
+                    value={option}
+                    onChange={(e) => {
+                      const newOptions = [...question.options];
+                      newOptions[optIndex] = e.target.value;
+                      updateQuestion(question.id, { options: newOptions });
+                    }}
+                    placeholder={`Option ${optionLetter}`}
+                    className="flex-1 px-4 py-2 sm:py-3 text-sm sm:text-base border border-gray-200 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all duration-200 bg-orange-50/50 hover:bg-orange-50/70"
+                  />
+                </div>
+              );
+            })}
           </div>
         )}
 
         {question.type === 'true-false' && (
-          <div className="space-y-3">
+          <div className="space-y-3 sm:space-y-4">
             <label className="block text-sm sm:text-base font-semibold text-gray-700 mb-2">
-              Correct Answer
+              Answer Options
             </label>
-            <div className="flex space-x-4">
-              <label className="flex items-center space-x-2">
-                <input
-                  type="radio"
-                  name={`tf-${question.id}`}
-                  checked={question.correctAnswer === true}
-                  onChange={() => updateQuestion(question.id, { correctAnswer: true })}
-                  className="w-4 h-4 text-purple-500 focus:ring-purple-500"
-                />
-                <span className="text-sm">True</span>
-              </label>
-              <label className="flex items-center space-x-2">
-                <input
-                  type="radio"
-                  name={`tf-${question.id}`}
-                  checked={question.correctAnswer === false}
-                  onChange={() => updateQuestion(question.id, { correctAnswer: false })}
-                  className="w-4 h-4 text-purple-500 focus:ring-purple-500"
-                />
-                <span className="text-sm">False</span>
-              </label>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
+              <button
+                type="button"
+                onClick={() => updateQuestion(question.id, { correctAnswer: true })}
+                className={`flex items-center space-x-3 px-4 py-3 rounded-xl border-2 transition-all duration-200 font-medium text-sm sm:text-base ${
+                  question.correctAnswer === true
+                    ? 'border-[#6D415F] bg-[#6D415F] text-white'
+                    : 'border-gray-300 bg-white text-gray-700 hover:border-[#6D415F] hover:bg-orange-50'
+                }`}
+              >
+                <div
+                  className={`w-5 h-5 sm:w-6 sm:h-6 rounded-full border-2 flex items-center justify-center transition-all duration-200 ${
+                    question.correctAnswer === true
+                      ? 'border-white bg-white'
+                      : 'border-gray-400 bg-white'
+                  }`}
+                >
+                  {question.correctAnswer === true && (
+                    <div className="w-2 h-2 sm:w-2.5 sm:h-2.5 bg-[#6D415F] rounded-full" />
+                  )}
+                </div>
+                <span className="font-semibold">True</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => updateQuestion(question.id, { correctAnswer: false })}
+                className={`flex items-center space-x-3 px-4 py-3 rounded-xl border-2 transition-all duration-200 font-medium text-sm sm:text-base ${
+                  question.correctAnswer === false
+                    ? 'border-[#6D415F] bg-[#6D415F] text-white'
+                    : 'border-gray-300 bg-white text-gray-700 hover:border-[#6D415F] hover:bg-orange-50'
+                }`}
+              >
+                <div
+                  className={`w-5 h-5 sm:w-6 sm:h-6 rounded-full border-2 flex items-center justify-center transition-all duration-200 ${
+                    question.correctAnswer === false
+                      ? 'border-white bg-white'
+                      : 'border-gray-400 bg-white'
+                  }`}
+                >
+                  {question.correctAnswer === false && (
+                    <div className="w-2 h-2 sm:w-2.5 sm:h-2.5 bg-[#6D415F] rounded-full" />
+                  )}
+                </div>
+                <span className="font-semibold">False</span>
+              </button>
             </div>
           </div>
         )}
