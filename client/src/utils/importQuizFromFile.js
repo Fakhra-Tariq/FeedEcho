@@ -353,25 +353,20 @@ const parseMixedShortAnswer = (lines) => {
   const questions = [];
 
   for (let i = 0; i < lines.length; i++) {
-    const line = lines[i];
+    const line = String(lines[i] || '').trim();
     if (!/^\d+\./.test(line)) continue;
 
-    const questionText = line.replace(/^\d+\.\s*/, '');
-    let sampleAnswer = '';
-
-    for (let j = i + 1; j < Math.min(i + 3, lines.length); j++) {
-      const nextLine = lines[j];
-      if (nextLine.toLowerCase().includes('sample answer:')) {
-        sampleAnswer = nextLine.replace(/sample answer:\s*/i, '');
-        break;
-      }
-    }
+    const questionText = line.replace(/^\d+\.\s*/, '').trim();
+    // Same extraction as standalone Short Answer import
+    const sampleAnswer = extractShortAnswerValue(lines, i);
 
     questions.push({
       id: Date.now() + questions.length,
       type: 'short-answer',
       questionText,
       sampleAnswer,
+      // Keep both keys so Mixed Type editor normalization finds the expected answer
+      correctAnswer: sampleAnswer,
     });
   }
 

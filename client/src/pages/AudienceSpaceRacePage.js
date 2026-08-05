@@ -451,9 +451,14 @@ export default function AudienceSpaceRacePage() {
                 <div className="space-race-quiz-embed min-h-full quiz-embed-root">
                   <AudienceQuizAttempt
                     embedded
+                    spaceRaceMode
                     spaceRaceId={activeRaceId}
                     spaceRaceQuizId={activeQuizId}
                     spaceRaceParticipant={participant}
+                    raceId={activeRaceId}
+                    teamId={participant?.teamId}
+                    participantId={participant?.id}
+                    participantName={participant?.name}
                   />
                 </div>
               ) : (

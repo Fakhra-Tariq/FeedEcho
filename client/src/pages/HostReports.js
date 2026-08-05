@@ -92,8 +92,8 @@ const loadHostQuizzesFromRtdb = (teacherUid, { includeDeleted = false } = {}) =>
             return normalizeListStatus(quiz.status) !== 'ended';
           })
           .sort((a, b) =>
-            String(b.updatedAt || b.createdAt || '').localeCompare(
-              String(a.updatedAt || a.createdAt || '')
+            String(b.createdAt || b.updatedAt || '').localeCompare(
+              String(a.createdAt || a.updatedAt || '')
             )
           );
 
@@ -292,8 +292,9 @@ export default function HostReports() {
       if (!list.length) {
         list = await loadHostQuizzesFromRtdb(teacherUid, { includeDeleted: true });
       } else {
+        // Prefer createdAt so soft-delete (or other library-only updates) cannot reorder reports
         list.sort((a, b) =>
-          String(b.updatedAt || b.createdAt || '').localeCompare(String(a.updatedAt || a.createdAt || ''))
+          String(b.createdAt || b.updatedAt || '').localeCompare(String(a.createdAt || a.updatedAt || ''))
         );
       }
 
@@ -698,7 +699,10 @@ export default function HostReports() {
                       <p className="font-medium text-text">{report.quiz.title || 'Untitled Quiz'}</p>
                       <p className="text-xs text-text-light mt-0.5">
                         {normalizeQuizTypeLabel(report.quiz.type || 'Quiz')} ·{' '}
-                        {normalizeQuestionsList(report.quiz.questions).length} questions
+                        {report.quiz.questionCount ??
+                          normalizeQuestionsList(report.quiz.questions).length ??
+                          0}{' '}
+                        questions
                       </p>
                     </td>
                     <td className="px-5 py-4 text-sm text-text">{report.participantCount}</td>
@@ -719,7 +723,7 @@ export default function HostReports() {
                       )}
                     </td>
                     <td className="px-5 py-4 text-sm text-text-light whitespace-nowrap">
-                      {formatDate(report.quiz.updatedAt || report.quiz.createdAt)}
+                      {formatDate(report.quiz.createdAt || report.quiz.updatedAt)}
                   </td>
                     <td className="px-5 py-4">
                       <div className="flex items-center justify-end gap-2">

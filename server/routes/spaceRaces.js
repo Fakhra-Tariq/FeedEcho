@@ -1600,12 +1600,27 @@ router.post('/:id/start-quiz', async (req, res) => {
 router.post('/:id/team-selection', async (req, res) => {
   try {
     const { id: raceId } = req.params;
-    const { participantId, teamId, questionId, selectedOption, senderName } = req.body;
+    const {
+      participantId,
+      teamId,
+      questionId,
+      selectedOption,
+      submitted,
+      submittedByName,
+      senderName,
+    } = req.body;
 
-    if (!participantId || teamId === undefined || teamId === null || !questionId || selectedOption === undefined) {
+    if (!participantId || teamId === undefined || teamId === null || !questionId) {
       return res.status(400).json({
         success: false,
-        error: 'Missing required fields: participantId, teamId, questionId, selectedOption',
+        error: 'Missing required fields: participantId, teamId, questionId',
+      });
+    }
+
+    if (selectedOption === undefined && !submitted) {
+      return res.status(400).json({
+        success: false,
+        error: 'Missing required fields: selectedOption',
       });
     }
 
@@ -1634,12 +1649,24 @@ router.post('/:id/team-selection', async (req, res) => {
       return res.status(400).json({ success: false, error: 'Question already submitted for this team' });
     }
 
-    await db.ref(selectionPath).set({
-      selectedOption,
+    const displayName =
+      submittedByName || senderName || participant.name || 'A teammate';
+    const now = new Date().toISOString();
+
+    await db.ref(selectionPath).update({
+      selectedOption: selectedOption !== undefined ? selectedOption : existingSnap.val()?.selectedOption || null,
       selectedBy: participantId,
-      selectedByName: senderName || participant.name || 'Teammate',
-      selectedAt: new Date().toISOString(),
-      submitted: false,
+      selectedByName: displayName,
+      selectedAt: now,
+      submitted: Boolean(submitted),
+      ...(submitted
+        ? {
+            submittedBy: participantId,
+            submittedByName: displayName,
+            submittedAt: now,
+          }
+        : {}),
+      updatedAt: now,
     });
 
     return res.json({ success: true });

@@ -321,12 +321,12 @@ router.delete('/:id', async (req, res) => {
       await db.ref().update(updates);
       return res.json({ success: true, message: 'Quiz permanently deleted' });
     } else {
-      // Soft delete — remove from library / block future joins; keep attempts & reports
+      // Soft delete — remove from library / block future joins; keep attempts & reports.
+      // Do not bump updatedAt: Reports sort by recency and must keep original order.
       console.log('📝 Soft deleting quiz (preserving submissions):', req.params.id);
       const code = existing?.launchSettings?.accessCode;
       const updates = {
         deletedAt: now,
-        updatedAt: now,
         status: 'Ended',
         launched: false,
         launchSettings: null,

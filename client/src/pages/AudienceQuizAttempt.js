@@ -33,6 +33,11 @@ const AudienceQuizAttempt = ({
   spaceRaceId = null,
   spaceRaceQuizId = null,
   spaceRaceParticipant = null,
+  spaceRaceMode = false,
+  raceId: raceIdProp = null,
+  teamId: teamIdProp = null,
+  participantId: participantIdProp = null,
+  participantName: participantNameProp = null,
 } = {}) => {
   const { quizId: paramQuizId } = useParams();
   const effectiveQuizId = spaceRaceQuizId || paramQuizId;
@@ -56,11 +61,19 @@ const AudienceQuizAttempt = ({
   const redirectTimerRef = useRef(null);
   const quizStartedAtRef = useRef(null);
   const { alert } = useHybridAlert();
-  const [isSpaceRace, setIsSpaceRace] = useState(false);
-  const [raceId, setRaceId] = useState(null);
-  const [teamId, setTeamId] = useState(null);
-  const [participantId, setParticipantId] = useState(null);
-  const [participantName, setParticipantName] = useState('Student');
+  const [isSpaceRace, setIsSpaceRace] = useState(
+    Boolean(spaceRaceMode || spaceRaceId || raceIdProp)
+  );
+  const [raceId, setRaceId] = useState(raceIdProp || spaceRaceId || null);
+  const [teamId, setTeamId] = useState(
+    teamIdProp ?? spaceRaceParticipant?.teamId ?? null
+  );
+  const [participantId, setParticipantId] = useState(
+    participantIdProp || spaceRaceParticipant?.id || null
+  );
+  const [participantName, setParticipantName] = useState(
+    participantNameProp || spaceRaceParticipant?.name || 'Student'
+  );
   const [isSubmittingQuestion, setIsSubmittingQuestion] = useState(false);
   const [localTeamSelection, setLocalTeamSelection] = useState(null);
   const [teamSelectionsMap, setTeamSelectionsMap] = useState({});
@@ -130,28 +143,48 @@ const AudienceQuizAttempt = ({
     ? 'min-h-0 bg-background'
     : 'min-h-screen bg-gradient-to-br from-orange-50 via-white to-purple-50';
 
-  const applyQuizTimer = (quizData, joinedAtIso = null) => {
-    console.log('🕐 applyQuizTimer called with quizData:', { countdown: quizData.launchSettings?.countdown, endTime: quizData.launchSettings?.endTime, isSpaceRace });
-    
-    // For Space Races, prefer quiz-phase endTime from startQuiz (never join-phase timer fields)
-    if (isSpaceRace) {
-      const storedEndTime = localStorage.getItem('spaceRaceEndTime');
-      if (storedEndTime && !quizData.launchSettings?.endTime) {
-        quizData.launchSettings = quizData.launchSettings || {};
-        quizData.launchSettings.endTime = storedEndTime;
-        console.log('🕐 Using stored quiz endTime from localStorage for Space Race:', storedEndTime);
+  const applyQuizTimer = (quizData, joinedAtIso = null, { forceSpaceRace = false } = {}) => {
+    const treatAsSpaceRace =
+      forceSpaceRace ||
+      isSpaceRace ||
+      spaceRaceMode ||
+      Boolean(spaceRaceId) ||
+      Boolean(raceIdProp) ||
+      isSpaceRaceRoute;
+
+    console.log('🕐 applyQuizTimer called with quizData:', {
+      countdown: quizData.launchSettings?.countdown,
+      endTime: quizData.launchSettings?.endTime,
+      treatAsSpaceRace,
+    });
+
+    // Resolve Space Race endTime: launchSettings → spaceRaceEndTime → spaceRaceData.endTime
+    let spaceRaceEndTimeIso = quizData?.launchSettings?.endTime || null;
+    if (treatAsSpaceRace && !spaceRaceEndTimeIso) {
+      try {
+        spaceRaceEndTimeIso = localStorage.getItem('spaceRaceEndTime') || null;
+      } catch {
+        spaceRaceEndTimeIso = null;
       }
     }
-    
-    // For Space Races, use quiz endTime if available; otherwise quiz countdown (NOT joinDuration)
-    if (isSpaceRace && quizData.launchSettings?.endTime) {
-      // Quiz has started - use synchronized quiz endTime
-      const endTime = new Date(quizData.launchSettings.endTime);
+    if (treatAsSpaceRace && !spaceRaceEndTimeIso) {
+      try {
+        const raceData = JSON.parse(localStorage.getItem('spaceRaceData') || '{}');
+        spaceRaceEndTimeIso = raceData?.endTime || null;
+      } catch {
+        spaceRaceEndTimeIso = null;
+      }
+    }
+
+    if (treatAsSpaceRace && spaceRaceEndTimeIso) {
+      quizData.launchSettings = quizData.launchSettings || {};
+      quizData.launchSettings.endTime = spaceRaceEndTimeIso;
+      const endTime = new Date(spaceRaceEndTimeIso);
       const now = new Date();
       const remaining = Math.max(0, Math.floor((endTime.getTime() - now.getTime()) / 1000));
-      console.log('🕐 Space Race: Setting timeLeft from quiz endTime:', remaining);
+      console.log('🕐 Space Race: Setting timeLeft from endTime:', remaining);
       setTimeLeft(remaining);
-    } else if (isSpaceRace) {
+    } else if (treatAsSpaceRace) {
       const quizDurationSeconds = resolveQuizDurationSeconds(quizData);
       console.log('🕐 Space Race: No endTime yet, showing quiz duration countdown:', quizDurationSeconds);
       setTimeLeft(quizDurationSeconds);
@@ -176,8 +209,7 @@ const AudienceQuizAttempt = ({
       const remaining = Math.max(0, Math.floor((endTime.getTime() - now.getTime()) / 1000));
       console.log('🕐 Regular quiz: Using quizAvailabilityMinutes with endTime:', remaining);
       setTimeLeft(remaining);
-    } else if (!isSpaceRace) {
-      // For regular quizzes with no timer settings, set a reasonable default or null (no timer)
+    } else {
       console.log('🕐 Regular quiz: No timer settings configured, setting timer to null (no time limit)');
       setTimeLeft(null);
     }
@@ -298,7 +330,7 @@ const AudienceQuizAttempt = ({
       setTeamId(participantData?.teamId ?? null);
       setParticipantId(participantData?.id ?? null);
       setParticipantName(participantData?.name || 'Student');
-      applyQuizTimer(quizToUse);
+      applyQuizTimer(quizToUse, null, { forceSpaceRace: true });
       
       // Save with team-specific cache key to ensure different teams get different shuffles
       const teamId = participantData?.teamId || 'default';
@@ -368,8 +400,21 @@ const AudienceQuizAttempt = ({
             quizData.launchSettings = quizData.launchSettings || {};
             quizData.launchSettings.endTime = res.data.endTime;
             console.log('🕐 Updated quiz endTime from backend:', res.data.endTime);
+            try {
+              localStorage.setItem('spaceRaceEndTime', res.data.endTime);
+              const raw = localStorage.getItem('spaceRaceData');
+              if (raw) {
+                const stored = JSON.parse(raw);
+                localStorage.setItem(
+                  'spaceRaceData',
+                  JSON.stringify({ ...stored, endTime: res.data.endTime })
+                );
+              }
+            } catch {
+              // ignore storage errors
+            }
             // Re-apply timer with the synchronized endTime
-            applyQuizTimer(quizData);
+            applyQuizTimer(quizData, null, { forceSpaceRace: true });
           }
           return res.data;
         } else {
@@ -476,7 +521,7 @@ const AudienceQuizAttempt = ({
           // Start quiz timer when quiz loads
           await startQuizTimer(raceIdResolved, fromApi, teamIdForTimer, raceData.settings);
           // Re-apply timer after startQuizTimer to ensure synchronized endTime is used
-          applyQuizTimer(fromApi);
+          applyQuizTimer(fromApi, null, { forceSpaceRace: true });
           return true;
         }
       }
@@ -499,7 +544,7 @@ const AudienceQuizAttempt = ({
               // Start quiz timer when quiz loads from cache
               await startQuizTimer(raceIdResolved, normalized, teamIdForTimer, raceDataStored?.settings || raceData?.settings);
               // Re-apply timer after startQuizTimer to ensure synchronized endTime is used
-              applyQuizTimer(normalized);
+              applyQuizTimer(normalized, null, { forceSpaceRace: true });
               return true;
             }
           } else {
@@ -524,7 +569,7 @@ const AudienceQuizAttempt = ({
               // Start quiz timer when quiz loads from old cache
               await startQuizTimer(raceIdResolved, normalized, teamIdForTimer, raceDataStored?.settings || raceData?.settings);
               // Re-apply timer after startQuizTimer to ensure synchronized endTime is used
-              applyQuizTimer(normalized);
+              applyQuizTimer(normalized, null, { forceSpaceRace: true });
               return true;
             }
           }
@@ -544,7 +589,7 @@ const AudienceQuizAttempt = ({
           // Start quiz timer when quiz loads from race data
           await startQuizTimer(raceIdResolved, fromRace, teamIdForTimer);
           // Re-apply timer after startQuizTimer to ensure synchronized endTime is used
-          applyQuizTimer(fromRace);
+          applyQuizTimer(fromRace, null, { forceSpaceRace: true });
           return true;
         }
       }
@@ -670,11 +715,45 @@ const AudienceQuizAttempt = ({
   ]);
 
   useEffect(() => {
+    if (spaceRaceMode || spaceRaceId || raceIdProp) setIsSpaceRace(true);
+    if (raceIdProp || spaceRaceId) setRaceId(raceIdProp || spaceRaceId);
+    if (teamIdProp != null) setTeamId(teamIdProp);
+    if (participantIdProp) setParticipantId(participantIdProp);
+    if (participantNameProp) setParticipantName(participantNameProp);
+  }, [
+    spaceRaceMode,
+    spaceRaceId,
+    raceIdProp,
+    teamIdProp,
+    participantIdProp,
+    participantNameProp,
+  ]);
+
+  useEffect(() => {
     if (!spaceRaceParticipant) return;
     if (spaceRaceParticipant.teamId != null) setTeamId(spaceRaceParticipant.teamId);
     if (spaceRaceParticipant.id) setParticipantId(spaceRaceParticipant.id);
     if (spaceRaceParticipant.name) setParticipantName(spaceRaceParticipant.name);
   }, [spaceRaceParticipant]);
+
+  // Space Race timer from localStorage endTime (quiz.launchSettings.timeLimit is null in Space Race)
+  useEffect(() => {
+    if (!spaceRaceMode && !isSpaceRace) return;
+    try {
+      const raceData = JSON.parse(localStorage.getItem('spaceRaceData') || '{}');
+      const endTime =
+        raceData?.endTime || localStorage.getItem('spaceRaceEndTime') || null;
+      if (endTime) {
+        const secondsLeft = Math.max(
+          0,
+          Math.floor((new Date(endTime).getTime() - Date.now()) / 1000)
+        );
+        setTimeLeft(secondsLeft);
+      }
+    } catch {
+      // ignore
+    }
+  }, [spaceRaceMode, isSpaceRace]);
 
   useEffect(() => {
     if (!quiz || isSubmitted) return;
@@ -745,8 +824,11 @@ const AudienceQuizAttempt = ({
   }, [isSpaceRace, raceId, teamId, quiz?.id, quiz?.launchSettings?.countdown]);
 
   // Local countdown timer - decrements every second from the Firebase-synced time
+  const spaceRaceTimerActive =
+    isSpaceRace && timeLeft != null && timeLeft > 0 && !isSubmitted;
+
   useEffect(() => {
-    if (!isSpaceRace || timeLeft === null || isSubmitted || timeLeft <= 0) {
+    if (!spaceRaceTimerActive) {
       return;
     }
 
@@ -760,7 +842,7 @@ const AudienceQuizAttempt = ({
     }, 1000);
 
     return () => clearInterval(timer);
-  }, [isSpaceRace, isSubmitted, teamId]);
+  }, [spaceRaceTimerActive, teamId]);
 
   // Auto-submit when quiz timer reaches 0
   useEffect(() => {
@@ -1179,6 +1261,7 @@ const AudienceQuizAttempt = ({
           selectedOption: answer,
           submitted: true,
           submittedBy: participantId,
+          submittedByName: participantName || 'A teammate',
         };
         setLocalTeamSelection((prev) => ({
           ...(prev || {}),
@@ -1196,6 +1279,24 @@ const AudienceQuizAttempt = ({
           next.add(questionId);
           return next;
         });
+
+        // Broadcast lock so teammates see submitted state in real time
+        if (raceId && teamId != null && questionId) {
+          try {
+            await spaceRacesAPI.setTeamSelection(raceId, {
+              participantId,
+              teamId: String(teamId),
+              questionId,
+              selectedOption: answer,
+              submitted: true,
+              submittedByName: participantName || 'A teammate',
+              senderName: participantName,
+            });
+          } catch (e) {
+            // submit-answer already wrote the lock; ignore duplicate/race errors
+          }
+        }
+
         // Show feedback based on settings
         const showFeedback = quiz?.launchSettings?.spaceRaceSettings?.showQuestionFeedback || quiz?.spaceRaceSettings?.showQuestionFeedback || false;
         if (showFeedback) {
@@ -1205,9 +1306,7 @@ const AudienceQuizAttempt = ({
         } else {
           alert.toast.success('Answer submitted for your team.');
         }
-        if (currentQuestion < quiz.questions.length - 1) {
-          setCurrentQuestion((prev) => prev + 1);
-        }
+        // Stay on question so lock banner + Next are visible (do not auto-advance)
       }
     } catch (error) {
       const errMsg = error.response?.data?.error || '';
@@ -2142,40 +2241,41 @@ const AudienceQuizAttempt = ({
                   </span>
                 </div>
               )}
-                {timeLeft !== null && (
-                  <div className={`flex items-center space-x-2 ${
-                    isSpaceRace 
-                      ? (timeLeft < 60 ? 'text-error-600' : 'text-success-600')
-                      : (timeLeft < 60 ? 'text-error-600' : timeLeft < 300 ? 'text-warning-600' : 'text-text-light')
-                  }`}>
-                  <Clock className="w-4 h-4" />
-                  <span className="font-medium">{formatTime(timeLeft)}</span>
-                  {timeLeft === 0 && !hasAnyAnswer() && (
-                    <span className="ml-2 text-xs text-error-600">(No questions answered)</span>
-                  )}
-                </div>
-              )}
             </div>
           </div>
-          {/* Quiz duration notice — static message only; live countdown stays in the header above */}
+          {/* Duration notice + single live countdown (header shows Duration label only) */}
           {(isSpaceRace || (quiz.launchSettings && (quiz.launchSettings.timePerStudentMinutes || quiz.launchSettings.quizAvailabilityMinutes || quiz.launchSettings.timeLimit || quiz.launchSettings.countdown))) && (
             <div className="mt-3 p-3 rounded-lg border bg-primary/10 border-primary/20">
-              <div className="flex items-center space-x-2 text-primary">
-                <Clock className="w-4 h-4" />
-                <span className="text-sm font-medium">
-                  {isSpaceRace
-                    ? 'Quiz duration timer'
-                    : quiz.launchSettings.countdown
-                    ? `Quiz duration: ${Math.round(quiz.launchSettings.countdown / 60)} minutes`
-                    : quiz.launchSettings.timePerStudentMinutes
-                    ? `You have ${quiz.launchSettings.timePerStudentMinutes} minutes to complete this quiz`
-                    : quiz.launchSettings.quizAvailabilityMinutes
-                    ? `Quiz available for ${quiz.launchSettings.quizAvailabilityMinutes} minutes`
-                    : quiz.launchSettings.timeLimit
-                    ? `Quiz duration: ${quiz.launchSettings.timeLimit} minutes`
-                    : 'Quiz timed'
-                  }
-                </span>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center space-x-2 text-primary">
+                  <Clock className="w-4 h-4" />
+                  <span className="text-sm font-medium">
+                    {isSpaceRace
+                      ? 'Quiz duration timer'
+                      : quiz.launchSettings.countdown
+                      ? `Quiz duration: ${Math.round(quiz.launchSettings.countdown / 60)} minutes`
+                      : quiz.launchSettings.timePerStudentMinutes
+                      ? `You have ${quiz.launchSettings.timePerStudentMinutes} minutes to complete this quiz`
+                      : quiz.launchSettings.quizAvailabilityMinutes
+                      ? `Quiz available for ${quiz.launchSettings.quizAvailabilityMinutes} minutes`
+                      : quiz.launchSettings.timeLimit
+                      ? `Quiz duration: ${quiz.launchSettings.timeLimit} minutes`
+                      : 'Quiz timed'
+                    }
+                  </span>
+                </div>
+                {timeLeft !== null && (
+                  <div className={`text-sm font-medium ${
+                    isSpaceRace
+                      ? (timeLeft < 60 ? 'text-error-600' : 'text-success-600')
+                      : 'text-primary'
+                  }`}>
+                    Time remaining: {formatTime(timeLeft)}
+                    {timeLeft === 0 && !hasAnyAnswer() && (
+                      <span className="ml-2 text-xs text-error-600">(No questions answered)</span>
+                    )}
+                  </div>
+                )}
               </div>
             </div>
           )}
