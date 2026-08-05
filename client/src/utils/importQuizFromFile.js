@@ -92,9 +92,11 @@ export const normalizeExtractedQuizText = (rawText = '') => {
   text = text.replace(/([^\n])\s+(\d+\.\s+)/g, '$1\n$2');
   // Ensure A) B) C) D) options start on new lines
   text = text.replace(/([^\n])\s+([A-D]\))/gi, '$1\n$2');
-  // Ensure Answer / Sample Answer markers start on new lines
+  // Ensure Answer / Sample Answer markers start on new lines (optional spaces before :)
   text = text.replace(/([^\n])\s+(Answer\s*:)/gi, '$1\n$2');
-  text = text.replace(/([^\n])\s+(Sample Answer\s*:)/gi, '$1\n$2');
+  text = text.replace(/([^\n])\s+(Sample\s+Answer\s*:)/gi, '$1\n$2');
+  text = text.replace(/([^\n])\s+(Expected\s+Answer\s*:)/gi, '$1\n$2');
+  text = text.replace(/([^\n])\s+(Correct\s+Answer\s*:)/gi, '$1\n$2');
   // Mixed-type tags
   text = text.replace(
     /([^\n])\s*(\[(?:MCQ|TRUE\s*\/\s*FALSE|SHORT\s*ANSWER|LONG\s*ANSWER)\])/gi,
@@ -214,28 +216,57 @@ const parseTrueFalse = (lines) => {
   return questions;
 };
 
+/**
+ * Extract Sample / Expected Answer for a Short Answer question.
+ * Accepts common file labels (Answer / Sample Answer / Expected Answer / Correct Answer)
+ * and optional spaces around the colon (common in PDF text extraction).
+ * Scans until the next numbered question so wrapped PDF lines are not missed.
+ */
+const SHORT_ANSWER_MARKER =
+  /^(?:sample\s*answer|expected\s*answer|correct\s*answer|answer)\s*:\s*(.*)$/i;
+
+const extractShortAnswerValue = (lines, questionIndex) => {
+  for (let j = questionIndex + 1; j < lines.length; j++) {
+    const nextLine = String(lines[j] || '').trim();
+    if (!nextLine) continue;
+    // Stop at the next question
+    if (/^\d+\.\s*/.test(nextLine)) break;
+
+    const match = nextLine.match(SHORT_ANSWER_MARKER);
+    if (!match) continue;
+
+    let sampleAnswer = String(match[1] || '').trim();
+    // PDF often puts the value on the following line after "Sample Answer :"
+    if (!sampleAnswer) {
+      for (let k = j + 1; k < lines.length; k++) {
+        const following = String(lines[k] || '').trim();
+        if (!following) continue;
+        if (/^\d+\.\s*/.test(following) || SHORT_ANSWER_MARKER.test(following)) break;
+        sampleAnswer = following;
+        break;
+      }
+    }
+    return sampleAnswer;
+  }
+  return '';
+};
+
 const parseShortAnswer = (lines) => {
   const questions = [];
 
   for (let i = 0; i < lines.length; i++) {
-    const line = lines[i].trim();
+    const line = String(lines[i] || '').trim();
     if (!/^\d+\./.test(line)) continue;
 
-    const questionText = line.replace(/^\d+\.\s*/, '');
-    let sampleAnswer = '';
-
-    for (let j = i + 1; j < Math.min(i + 3, lines.length); j++) {
-      const nextLine = lines[j].trim();
-      if (nextLine.toLowerCase().includes('sample answer:')) {
-        sampleAnswer = nextLine.replace(/sample answer:\s*/i, '');
-        break;
-      }
-    }
+    const questionText = line.replace(/^\d+\.\s*/, '').trim();
+    const sampleAnswer = extractShortAnswerValue(lines, i);
 
     questions.push({
       id: Date.now() + questions.length,
       questionText,
       sampleAnswer,
+      // Keep both keys so editor normalization always finds the expected answer
+      correctAnswer: sampleAnswer,
     });
   }
 
