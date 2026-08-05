@@ -135,14 +135,8 @@ const CreateLongAnswerQuiz = () => {
       return;
     }
 
-    const savedQuizzes = JSON.parse(localStorage.getItem('savedQuizzes') || '[]');
-    const hasActiveQuiz = savedQuizzes.some(q => q.launched && q.status === 'Launched');
-
-    if (hasActiveQuiz) {
-      alert.modal.warning('Only one quiz can be active at a time. Please finish the current active quiz before launching another one.');
-      return;
-    }
-
+    // Single source of truth: the server validates against sessions/{id}.currentActivity
+    // (fresh on every request, auto-clears stale flags) when the launch request is submitted.
     setShowLaunchModal(true);
   };
 

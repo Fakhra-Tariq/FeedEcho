@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, Plus, X, FileText, Sparkles, Users, CheckCircle, Copy, Check } from 'lucide-react';
-import { exitTicketsAPI, quizzesAPI, spaceRacesAPI } from '../services/api';
+import { exitTicketsAPI } from '../services/api';
 import { useHostData } from '../contexts/HostDataContext';
 import { useAuth } from '../contexts/AuthContext';
 import { useHybridAlert } from '../contexts/HybridAlertContext';
@@ -253,31 +253,8 @@ export default function CreateExitTicketPage() {
       return;
     }
 
-    // Check if any other activity is active BEFORE creating draft
-    try {
-      const exitTicketsResponse = await exitTicketsAPI.getAll({ status: 'active' });
-      const activeExitTickets = exitTicketsResponse.data?.success ? exitTicketsResponse.data.data : [];
-      
-      const quizzesResponse = await quizzesAPI.getAll({ status: 'launched' });
-      const activeQuizzes = quizzesResponse.data?.success ? quizzesResponse.data.data : [];
-      
-      const spaceRacesResponse = await spaceRacesAPI.getAll({ status: 'active' });
-      const activeSpaceRaces = spaceRacesResponse.data?.success ? spaceRacesResponse.data.data : [];
-      
-      if (activeExitTickets.length > 0) {
-        alert.toast.error('An Exit Ticket is already active. Please end it first before launching a new one.');
-        return;
-      }
-      
-      if (activeQuizzes.length > 0 || activeSpaceRaces.length > 0) {
-        const activeQuizType = activeQuizzes.length > 0 ? 'Library Quiz' : 'Space Race Quiz';
-        alert.toast.error(`A ${activeQuizType} is already active. Please end it first before launching an Exit Ticket.`);
-        return;
-      }
-    } catch (error) {
-      console.log('Could not check other activities, proceeding with exit ticket launch');
-    }
-
+    // Single source of truth: the server validates against sessions/{id}.currentActivity
+    // (fresh on every request, auto-clears stale flags) when /start is called below.
     setIsSaving(true);
 
     try {

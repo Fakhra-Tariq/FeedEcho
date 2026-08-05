@@ -189,12 +189,25 @@ router.put('/:id', async (req, res) => {
     if (req.body.status === 'archived' && existing.status !== 'archived') {
       updates.previousStatus = existing.status;
     }
+
+    // Resuming a paused ticket re-activates it — enforce the same one-activity-at-a-time
+    // guard used by /start (single source of truth: sessions/{id}.currentActivity).
+    let resumeLaunchPrep = null;
+    if (req.body.status === 'active' && existing.status !== 'active') {
+      resumeLaunchPrep = await prepareActivityLaunch('exitTicket');
+      if (!resumeLaunchPrep.ok) {
+        return res.status(400).json({ success: false, error: resumeLaunchPrep.error });
+      }
+    }
     
     if (updates.questions) {
       await saveQuestions(id, updates.questions);
       delete updates.questions;
     }
     await ticketRef(id).update(updates);
+    if (resumeLaunchPrep) {
+      await setSessionCurrentActivity(resumeLaunchPrep.sessionId, 'exitTicket');
+    }
     if (updates.status) {
       await assertTicketPersisted(id, { status: updates.status });
     }

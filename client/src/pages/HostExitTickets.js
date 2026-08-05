@@ -22,7 +22,7 @@ import {
 } from 'lucide-react';
 import clsx from 'clsx';
 import { useAuth } from '../contexts/AuthContext';
-import { exitTicketsAPI, quizzesAPI, spaceRacesAPI } from '../services/api';
+import { exitTicketsAPI } from '../services/api';
 import { useHostData } from '../contexts/HostDataContext';
 import {
   NO_ACTIVE_SESSION_MESSAGE,
@@ -330,23 +330,8 @@ const HostExitTickets = () => {
       return;
     }
 
-    // Check if any other quiz is active (Library Quiz or Space Race)
-    try {
-      const quizzesResponse = await quizzesAPI.getAll({ status: 'launched' });
-      const activeQuizzes = quizzesResponse.data?.success ? quizzesResponse.data.data : [];
-      
-      const spaceRacesResponse = await spaceRacesAPI.getAll({ status: 'active' });
-      const activeSpaceRaces = spaceRacesResponse.data?.success ? spaceRacesResponse.data.data : [];
-      
-      if (activeQuizzes.length > 0 || activeSpaceRaces.length > 0) {
-        const activeQuizType = activeQuizzes.length > 0 ? 'Library Quiz' : 'Space Race Quiz';
-        alert.toast.error(`A ${activeQuizType} is already active. Please end it first before launching an Exit Ticket.`);
-        return;
-      }
-    } catch (error) {
-      console.log('Could not check other quizzes, proceeding with exit ticket launch');
-    }
-
+    // Single source of truth: the server validates against sessions/{id}.currentActivity
+    // (fresh on every request, auto-clears stale flags) — no separate client-side pre-check here.
     try {
       console.log('Launching exit ticket:', ticketId);
 
@@ -356,15 +341,11 @@ const HostExitTickets = () => {
         alert.toast.success(`Exit ticket launched! Join code: ${response.data.data.joinCode}`);
         await fetchExitTickets();
       } else {
-        if (response.data.error === 'Another Exit Ticket is already active') {
-          alert.toast.error('Another Exit Ticket is already active. Please end it first.');
-        } else {
-          alert.toast.error('Failed to launch ticket: ' + (response.data.error || 'Unknown error'));
-        }
+        alert.toast.error(response.data.error || 'Failed to launch ticket. Please try again.');
       }
     } catch (error) {
       console.error('Launch error:', error);
-      alert.toast.error('Error launching ticket: ' + (error.response?.data?.error || error.message));
+      alert.toast.error(error.response?.data?.error || error.message || 'Failed to launch ticket. Please try again.');
     }
   };
 

@@ -4,7 +4,7 @@ import { Plus, Play, Square, Settings, Users, Clock, Trophy, Star, Filter, Monit
 import { useHostData } from '../contexts/HostDataContext';
 import { useAuth } from '../contexts/AuthContext';
 import SpaceRaceSettings from '../components/SpaceRaceSettings';
-import { quizzesAPI, spaceRacesAPI, exitTicketsAPI } from '../services/api';
+import { quizzesAPI, spaceRacesAPI } from '../services/api';
 import { useRtdbList } from '../hooks/useRtdb';
 import {
   NO_ACTIVE_SESSION_MESSAGE,
@@ -472,38 +472,8 @@ export default function HostSpaceRace() {
     }
 
     try {
-      try {
-        const exitTicketsResponse = await exitTicketsAPI.getAll({ status: 'active' });
-        const activeExitTickets = exitTicketsResponse.data?.data || [];
-        if (activeExitTickets.length > 0) {
-          hybridAlert.toast.error('An Exit Ticket is already active. Please end it first before launching a Space Race.');
-          return;
-        }
-      } catch (error) {
-        console.log('Could not check exit tickets, proceeding with space race launch');
-      }
-
-      try {
-        const quizzesResponse = await quizzesAPI.getAll();
-        const allQ = quizzesResponse.data?.data || [];
-        const now = Date.now();
-        const activeLibraryQuizzes = allQ.filter((q) => {
-          if (teacherId && q.createdBy !== teacherId) return false;
-          if (!q.launched) return false;
-          const status = String(q.status || '').toLowerCase();
-          if (!['active', 'launched'].includes(status)) return false;
-          const endTime = q.launchSettings?.endTime ? new Date(q.launchSettings.endTime).getTime() : null;
-          // If the quiz launch window already expired, don't block Space Race.
-          if (endTime && !Number.isNaN(endTime) && endTime <= now) return false;
-          return true;
-        });
-        if (activeLibraryQuizzes.length > 0) {
-          hybridAlert.toast.error('A Library Quiz is already active. Please end it first before launching a Space Race.');
-          return;
-        }
-      } catch (error) {
-        console.log('Could not check library quizzes, proceeding with space race launch');
-      }
+      // Single source of truth: the server validates against sessions/{id}.currentActivity
+      // (fresh on every request, auto-clears stale flags) — no separate client-side pre-check here.
 
       // Check if any space race is already active
       const existingActiveRace = races.find(race => getRaceStatus(race) === 'active');

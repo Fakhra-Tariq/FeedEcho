@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom';
 import { Plus, Play, Square, Eye, Users, Clock, FileText, X, BarChart3, CheckCircle, Copy, RotateCcw, Trash2, Archive, RotateCcw as Restore, Loader2, Check } from 'lucide-react';
 import { useHybridAlert } from '../contexts/HybridAlertContext';
-import { exitTicketsAPI, quizzesAPI, spaceRacesAPI } from '../services/api';
+import { exitTicketsAPI } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
 import { useRtdbList, useRtdbValue } from '../hooks/useRtdb';
 import { useHostData } from '../contexts/HostDataContext';
@@ -318,35 +318,8 @@ export default function ExitTicketDashboard() {
 
   const handleResumeTicket = async (ticketId) => {
     try {
-      // Check if any other exit ticket is already active (not counting the current paused one)
-      const otherActiveTickets = tickets.filter(t => 
-        t.status === 'active' && t.id !== ticketId
-      );
-      
-      if (otherActiveTickets.length > 0) {
-        alert.toast.error('Another Exit Ticket is already active. Please end it first.');
-        return;
-      }
-
-      // Check if any other quiz is active (Library Quiz or Space Race)
-      try {
-        // Check for active Library Quizzes
-        const quizzesResponse = await quizzesAPI.getAll({ status: 'launched' });
-        const activeQuizzes = quizzesResponse.data?.success ? quizzesResponse.data.data : [];
-        
-        // Check for active Space Races
-        const spaceRacesResponse = await spaceRacesAPI.getAll({ status: 'active' });
-        const activeSpaceRaces = spaceRacesResponse.data?.success ? spaceRacesResponse.data.data : [];
-        
-        if (activeQuizzes.length > 0 || activeSpaceRaces.length > 0) {
-          const activeQuizType = activeQuizzes.length > 0 ? 'Library Quiz' : 'Space Race Quiz';
-          alert.toast.error(`A ${activeQuizType} is already active. Only one quiz can be active at a time. Please end the ${activeQuizType} first.`);
-          return;
-        }
-      } catch (error) {
-        console.log('Could not check other quizzes, proceeding with resume');
-      }
-
+      // Single source of truth: the server validates against sessions/{id}.currentActivity
+      // (fresh on every request, auto-clears stale flags) — no separate client-side pre-check here.
       const response = await exitTicketsAPI.update(ticketId, { status: 'active' });
       if (!response.data?.success) {
         alert.toast.error('Failed to resume ticket: ' + (response.data?.error || 'Unknown error'));
@@ -462,33 +435,8 @@ export default function ExitTicketDashboard() {
     }
 
     try {
-      // Check if any other exit ticket is already active
-      const activeExitTicket = tickets.find(t => t.status === 'active');
-      if (activeExitTicket) {
-        alert.toast.error('Another Exit Ticket is already active. Please end it first.');
-        return;
-      }
-
-      // Check if any other quiz is active (Library Quiz or Space Race)
-      // We'll need to check this via API calls
-      try {
-        // Check for active Library Quizzes
-        const quizzesResponse = await quizzesAPI.getAll({ status: 'launched' });
-        const activeQuizzes = quizzesResponse.data?.success ? quizzesResponse.data.data : [];
-        
-        // Check for active Space Races
-        const spaceRacesResponse = await spaceRacesAPI.getAll({ status: 'active' });
-        const activeSpaceRaces = spaceRacesResponse.data?.success ? spaceRacesResponse.data.data : [];
-        
-        if (activeQuizzes.length > 0 || activeSpaceRaces.length > 0) {
-          const activeQuizType = activeQuizzes.length > 0 ? 'Library Quiz' : 'Space Race Quiz';
-          alert.toast.error(`A ${activeQuizType} is already active. Only one quiz can be active at a time. Please end the ${activeQuizType} first.`);
-          return;
-        }
-      } catch (error) {
-        console.log('Could not check other quizzes, proceeding with exit ticket launch');
-      }
-
+      // Single source of truth: the server validates against sessions/{id}.currentActivity
+      // (fresh on every request, auto-clears stale flags) — no separate client-side pre-check here.
       const response = await exitTicketsAPI.start(ticketId);
 
       if (!response.data?.success || !response.data?.data) {

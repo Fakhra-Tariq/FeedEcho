@@ -880,39 +880,11 @@ router.post('/start', async (req, res) => {
       return res.status(400).json({ message: 'Quiz ID is required' });
     }
 
+    // Single source of truth: sessions/{id}.currentActivity, checked fresh and
+    // self-healing (auto-clears stale flags) on every launch request.
     const launchPrep = await prepareActivityLaunch('spaceRace');
     if (!launchPrep.ok) {
       return res.status(400).json({ success: false, error: launchPrep.error });
-    }
-
-    // Additional check: active Library Quiz for THIS teacher only
-    const quizzesSnap = await db.ref('quizzes').orderByChild('createdBy').equalTo(uid).get();
-    if (quizzesSnap.exists()) {
-      const raw = quizzesSnap.val() || {};
-      const now = Date.now();
-      const found = Object.entries(raw).find(([, q]) => {
-        if (!q || q.launched !== true) return false;
-        const status = String(q.status || '').toLowerCase();
-        if (!['active', 'launched'].includes(status)) return false;
-        const endTime = q.launchSettings?.endTime ? new Date(q.launchSettings.endTime).getTime() : null;
-        // Ignore stale launched records that already expired
-        if (endTime && !Number.isNaN(endTime) && endTime <= now) return false;
-        return true;
-      });
-      if (found) {
-        const [activeQuizId, activeQuiz] = found;
-        console.log('Found active quiz blocking space race:', activeQuiz.title);
-
-        return res.status(400).json({
-          success: false,
-          error: `A Quiz "${activeQuiz.title}" is currently active in Quiz Library. Please finish the quiz first before starting a Space Race.`,
-          activeQuiz: {
-            id: activeQuizId,
-            title: activeQuiz.title,
-            accessCode: activeQuiz.launchSettings?.accessCode
-          }
-        });
-      }
     }
 
     const raceId = racesRef().push().key;

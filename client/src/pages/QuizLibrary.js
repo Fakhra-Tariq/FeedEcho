@@ -164,27 +164,8 @@ const QuizLibrary = () => {
       return;
     }
 
-    const activeExitTickets = (teacherData.exitTickets || []).filter(
-      (ticket) => String(ticket.status || '').toLowerCase() === 'active'
-    );
-    if (activeExitTickets.length > 0) {
-      alert.toast.error(
-        'An Exit Ticket is already active. Please end it first before launching a Library Quiz.'
-      );
-      return;
-    }
-
-    const activeSpaceRaces = (teacherData.spaceRaces || []).filter((race) => {
-      const status = String(race.status || '').toLowerCase();
-      return status === 'active' || status === 'running' || status === 'started';
-    });
-    if (activeSpaceRaces.length > 0) {
-      alert.toast.error(
-        'A Space Race is already active. Please end it first before launching a Library Quiz.'
-      );
-      return;
-    }
-
+    // Single source of truth: the server validates against sessions/{id}.currentActivity
+    // (fresh on every request, auto-clears stale flags) — no separate client-side pre-check here.
     const quiz = savedQuizzes.find(q => q.id === quizId);
 
     if (quiz) {
