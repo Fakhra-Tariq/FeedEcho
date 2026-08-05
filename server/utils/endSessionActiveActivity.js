@@ -111,6 +111,7 @@ async function endExitTicketForSession(sessionCode, now) {
     endedAt: now,
     updatedAt: now,
   });
+  await ticketJoinCodeRef(sessionCode).remove();
 
   console.log('endSessionActiveActivity: exit ticket ended', ticketId);
   return { ended: true, type: SESSION_ACTIVITY_TYPES.exitTicket, id: ticketId };
@@ -126,6 +127,7 @@ async function endLiveChatForSession(sessionCode, now) {
   const chatId = chatIdSnap.val();
   const snap = await chatSessionRef(chatId).get();
   if (!snap.exists()) {
+    await chatJoinCodeRef(sessionCode).remove();
     return { ended: false, type: SESSION_ACTIVITY_TYPES.anonymousChat, id: chatId };
   }
 
@@ -136,6 +138,7 @@ async function endLiveChatForSession(sessionCode, now) {
     lastActivity: now,
     updatedAt: now,
   });
+  await chatJoinCodeRef(sessionCode).remove();
 
   console.log('endSessionActiveActivity: live chat ended', chatId);
   return { ended: true, type: SESSION_ACTIVITY_TYPES.anonymousChat, id: chatId };

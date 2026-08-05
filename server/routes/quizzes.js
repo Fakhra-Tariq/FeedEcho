@@ -409,8 +409,8 @@ router.post('/:id/launch', async (req, res) => {
       sessionCode: joinCode,
       updatedAt: now,
     });
-    await setSessionCurrentActivity(launchPrep.sessionId, 'quiz');
     await quizCodeRef(joinCode).set(id);
+    await setSessionCurrentActivity(launchPrep.sessionId, 'quiz', id);
     await appendSessionActivityHistory(launchPrep.sessionId, {
       type: 'quiz',
       name: existing.title || 'Quiz',

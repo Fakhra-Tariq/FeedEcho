@@ -206,7 +206,11 @@ router.put('/:id', async (req, res) => {
     }
     await ticketRef(id).update(updates);
     if (resumeLaunchPrep) {
-      await setSessionCurrentActivity(resumeLaunchPrep.sessionId, 'exitTicket');
+      const joinCode = resumeLaunchPrep.sessionCode;
+      if (joinCode) {
+        await ticketJoinCodeRef(joinCode).set(id);
+      }
+      await setSessionCurrentActivity(resumeLaunchPrep.sessionId, 'exitTicket', id);
     }
     if (updates.status) {
       await assertTicketPersisted(id, { status: updates.status });
@@ -286,7 +290,7 @@ router.post('/:id/start', async (req, res) => {
     await ticketRef(id).update(ticketData);
     await ticketJoinCodeRef(joinCode).set(id);
     await assertTicketPersisted(id, { status: 'active' });
-    await setSessionCurrentActivity(launchPrep.sessionId, 'exitTicket');
+    await setSessionCurrentActivity(launchPrep.sessionId, 'exitTicket', id);
     await appendSessionActivityHistory(launchPrep.sessionId, {
       type: 'exitTicket',
       name: existing.title || 'Exit Ticket',

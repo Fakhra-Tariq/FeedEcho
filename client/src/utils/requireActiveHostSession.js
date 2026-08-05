@@ -4,7 +4,7 @@ export const NO_ACTIVE_SESSION_MESSAGE =
   'Please create a session first before launching an activity.';
 
 export const ACTIVITY_IN_USE_MESSAGE =
-  'Another activity is already active. Please end it before launching a new one.';
+  'Another activity is already active. Please finish the current activity before launching a new one.';
 
 /**
  * @param {object|null|undefined} activeSession - from HostDataContext data.activeSession

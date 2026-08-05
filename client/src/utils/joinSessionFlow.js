@@ -1,9 +1,4 @@
-import {
-  anonymousChatAPI,
-  exitTicketsAPI,
-  sessionsAPI,
-  spaceRacesAPI,
-} from '../services/api';
+import { sessionsAPI } from '../services/api';
 import { normalizeTeamId, saveSpaceRaceParticipant } from './spaceRaceSession';
 import { getStoredAudienceSession } from './audienceSession';
 import { persistQuizParticipantSession } from './quizParticipantSession';
@@ -57,6 +52,10 @@ function buildQuizSessionPayload(trimmedName, trimmedCode, quizId, participantId
   return payload;
 }
 
+/**
+ * Apply a successful /sessions/join payload and navigate to the matching activity.
+ * Session currentActivity is the single source of truth on the server.
+ */
 export async function proceedWithSessionJoin({
   trimmedName,
   trimmedCode,
@@ -65,6 +64,7 @@ export async function proceedWithSessionJoin({
   studentUid = null,
   studentEmail = null,
   loggedInAudience = null,
+  onTeamSelectionRequired = null,
 }) {
   const ctx = {
     trimmedName,
@@ -78,18 +78,38 @@ export async function proceedWithSessionJoin({
     studentEmail: ctx.studentEmail,
   });
 
-  if (!joinResponse.data.success) {
-    throw new Error(joinResponse.data.message || joinResponse.data.error || 'Failed to join session');
+  const payload = joinResponse.data || {};
+
+  if (payload.needsTeamSelection && payload.type === 'spaceRace') {
+    if (onTeamSelectionRequired) {
+      onTeamSelectionRequired({
+        sessionCode: trimmedCode,
+        studentName: trimmedName,
+        raceData: payload.data,
+        studentUid: ctx.studentUid,
+        studentEmail: ctx.studentEmail,
+      });
+    }
+    return {
+      success: false,
+      needsTeamSelection: true,
+      raceData: payload.data,
+      raceId: payload.raceId,
+    };
   }
 
-  const { type, data, raceId, quizId, participantId, teamId: assignedTeamId } =
-    joinResponse.data;
-  // API returns teamId at the top level (not data.participant.teamId)
+  if (!payload.success) {
+    throw new Error(payload.message || payload.error || 'Failed to join session');
+  }
+
+  const { type, data, raceId, quizId, participantId, teamId: assignedTeamId, joinCode, ticketId, chatId } =
+    payload;
   const resolvedTeamId = normalizeTeamId(
     assignedTeamId ?? teamId ?? data?.participant?.teamId ?? null
   );
 
   persistJoinIdentity(trimmedName, ctx);
+  sessionStorage.setItem('sessionCode', trimmedCode);
 
   if (type === 'spaceRace') {
     sessionStorage.setItem(
@@ -113,7 +133,6 @@ export async function proceedWithSessionJoin({
         ...data,
       })
     );
-    // Team-specific quiz cache so shuffle matches teammates on both join paths
     if (data?.quiz?.questions && Array.isArray(data.quiz.questions)) {
       const teamCacheKey = `spaceRaceQuiz_team_${resolvedTeamId ?? 'default'}`;
       localStorage.setItem(
@@ -150,12 +169,24 @@ export async function proceedWithSessionJoin({
     return { success: true, type: 'quiz', quizId };
   }
 
+  if (type === 'exitTicket') {
+    const code = String(joinCode || trimmedCode).toUpperCase();
+    navigate(`/audience/exit-ticket/${code}`, { replace: true });
+    return { success: true, type: 'exitTicket', ticketId, joinCode: code };
+  }
+
+  if (type === 'liveChat' || type === 'anonymousChat') {
+    const code = String(joinCode || trimmedCode).toUpperCase();
+    navigate(`/audience/chat?code=${encodeURIComponent(code)}`, { replace: true });
+    return { success: true, type: 'liveChat', chatId, joinCode: code };
+  }
+
   throw new Error('Unsupported session type');
 }
 
 /**
- * Join a live session by code. Logged-in students skip the extra join page;
- * returns needsTeamSelection when the student must pick a Space Race team.
+ * Join a live session by code using the session's currentActivity as the only source of truth.
+ * Both Student Dashboard and External Join must call this (or proceedWithSessionJoin).
  */
 export async function joinSessionByCode({
   code,
@@ -164,6 +195,7 @@ export async function joinSessionByCode({
   loggedInAudience,
   onError = () => {},
   onTeamSelectionRequired,
+  teamId = null,
 }) {
   const trimmedCode = String(code || '').trim().toUpperCase();
 
@@ -176,58 +208,19 @@ export async function joinSessionByCode({
   const { trimmedName, studentUid, studentEmail } = ctx;
 
   try {
-    try {
-      const ticketResponse = await exitTicketsAPI.getByCode(trimmedCode);
-      if (ticketResponse.data.success) {
-        persistJoinIdentity(trimmedName, ctx);
-        navigate(`/audience/exit-ticket/${trimmedCode}`, { replace: true });
-        return { success: true, type: 'exitTicket' };
-      }
-    } catch {
-      // Not an exit ticket
-    }
-
-    try {
-      const chatResponse = await anonymousChatAPI.getByCode(trimmedCode);
-      if (chatResponse.data?.success) {
-        persistJoinIdentity(trimmedName, ctx);
-        navigate(`/audience/chat?code=${encodeURIComponent(trimmedCode)}`, { replace: true });
-        return { success: true, type: 'chat' };
-      }
-    } catch {
-      // Not a chat code
-    }
-
-    try {
-      const raceResponse = await spaceRacesAPI.getRaceByCode(trimmedCode);
-      if (raceResponse.data?.success) {
-        const race = raceResponse.data.data;
-        if (normalizeTeamAssignment(race.settings?.teamAssignment) === 'student-choice') {
-          if (onTeamSelectionRequired) {
-            onTeamSelectionRequired({
-              sessionCode: trimmedCode,
-              studentName: trimmedName,
-              raceData: race,
-              studentUid,
-              studentEmail,
-            });
-          }
-          return { success: false, needsTeamSelection: true, raceData: race };
-        }
-      }
-    } catch {
-      // Fall through to unified join
-    }
-
-    await proceedWithSessionJoin({
+    const result = await proceedWithSessionJoin({
       trimmedName,
       trimmedCode,
+      teamId,
       navigate,
       studentUid,
       studentEmail,
       loggedInAudience: ctx.loggedInAudience,
+      onTeamSelectionRequired,
     });
-    return { success: true };
+    return result.success === false && result.needsTeamSelection
+      ? result
+      : { success: true, ...result };
   } catch (error) {
     const message =
       error.response?.data?.message ||

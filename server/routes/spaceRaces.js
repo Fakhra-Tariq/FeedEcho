@@ -1016,7 +1016,7 @@ router.post('/start', async (req, res) => {
     await raceCodeRef(normalizedCode).set(raceId);
     console.log('✅ Code mapping stored successfully');
     
-    await setSessionCurrentActivity(launchPrep.sessionId, 'spaceRace');
+    await setSessionCurrentActivity(launchPrep.sessionId, 'spaceRace', raceId);
     await appendSessionActivityHistory(launchPrep.sessionId, {
       type: 'spaceRace',
       name: quizTitle || 'Space Race',
@@ -2146,7 +2146,7 @@ router.put('/status/:id', async (req, res) => {
 
       await raceCodeRef(launchPrep.sessionCode).set(raceId);
       
-      await setSessionCurrentActivity(launchPrep.sessionId, 'spaceRace');
+      await setSessionCurrentActivity(launchPrep.sessionId, 'spaceRace', raceId);
       await appendSessionActivityHistory(launchPrep.sessionId, {
         type: 'spaceRace',
         name: race.title || 'Space Race',

@@ -1,18 +1,10 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { spaceRacesAPI, sessionsAPI, handleAPIError } from '../services/api';
+import { handleAPIError } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
-import { normalizeTeamId, saveSpaceRaceParticipant } from '../utils/spaceRaceSession';
-import {
-  persistQuizParticipantSession,
-} from '../utils/quizParticipantSession';
+import { joinSessionByCode } from '../utils/joinSessionFlow';
 import { onValue, ref as dbRef, off } from 'firebase/database';
 import { db } from '../firebase';
-
-function normalizeTeamAssignment(value) {
-  const normalized = String(value || 'auto-assign').toLowerCase().replace(/_/g, '-');
-  return normalized === 'student-choice' ? 'student-choice' : 'auto-assign';
-}
 
 const AudienceJoin = () => {
   const navigate = useNavigate();
@@ -70,102 +62,23 @@ const AudienceJoin = () => {
     return options;
   }, [raceData]);
 
-  const proceedWithJoin = async (trimmedName, trimmedCode, teamId = null) => {
+  const runJoin = async (trimmedName, trimmedCode, teamId = null) => {
     setIsLoading(true);
     setError('');
 
     try {
-      const joinResponse = await sessionsAPI.join(trimmedName, trimmedCode, teamId);
-
-      if (!joinResponse.data.success) {
-        setError(joinResponse.data.message || joinResponse.data.error || 'Failed to join session');
-        return;
-      }
-
-      const { type, data, raceId, quizId, participantId, teamId: assignedTeamId } =
-        joinResponse.data;
-      // API returns teamId at the top level — must persist for team sync/locking
-      const resolvedTeamId = normalizeTeamId(
-        assignedTeamId ?? teamId ?? data?.participant?.teamId ?? null
-      );
-
-      console.log('Join response:', {
-        type,
-        raceId,
-        quizId,
-        participantId,
-        resolvedTeamId,
+      await joinSessionByCode({
+        code: trimmedCode,
+        studentName: trimmedName,
+        navigate,
+        teamId,
+        onError: (message) => setError(message),
+        onTeamSelectionRequired: ({ sessionCode, studentName, raceData: race }) => {
+          setRaceData(race);
+          setPendingJoin({ trimmedName: studentName, trimmedCode: sessionCode });
+          setShowTeamSelection(true);
+        },
       });
-
-      if (type === 'spaceRace') {
-        sessionStorage.setItem('studentName', trimmedName);
-        sessionStorage.setItem('sessionCode', trimmedCode);
-        sessionStorage.setItem(
-          'raceData',
-          JSON.stringify({ raceId, participantId, teamId: resolvedTeamId, ...data })
-        );
-        saveSpaceRaceParticipant({
-          id: participantId,
-          name: trimmedName,
-          raceId,
-          teamId: resolvedTeamId,
-        });
-        localStorage.setItem(
-          'spaceRaceData',
-          JSON.stringify({
-            id: raceId,
-            quizId,
-            teamId: resolvedTeamId,
-            ...data,
-          })
-        );
-
-        if (data?.quiz?.questions && Array.isArray(data.quiz.questions)) {
-          const teamCacheKey = `spaceRaceQuiz_team_${resolvedTeamId ?? 'default'}`;
-          localStorage.setItem(
-            teamCacheKey,
-            JSON.stringify({
-              ...data.quiz,
-              id: quizId || data.quiz.id,
-              launched: true,
-            })
-          );
-        }
-
-        // Same landing as dashboard join — enables RTDB team sync, chat, and timers
-        navigate(`/audience/space-race/${raceId}`);
-      } else if (type === 'quiz') {
-        if (!data || !data.title) {
-          console.error('Quiz data is incomplete:', data);
-          setError('Quiz data is incomplete. Please try again.');
-          return;
-        }
-
-        const sessionData = {
-          studentName: trimmedName,
-          sessionCode: trimmedCode,
-          quizId: quizId,
-          participantId: participantId,
-          quizTitle: data.title || 'Untitled Quiz',
-          quizType: data.type || 'Multiple Choice',
-          quiz: data,
-          joinedAt: new Date().toISOString(),
-          isLocked: true,
-          lockTimestamp: new Date().toISOString()
-        };
-
-        localStorage.setItem('studentSession', JSON.stringify(sessionData));
-        persistQuizParticipantSession(quizId, {
-          participantId,
-          sessionCode: trimmedCode,
-          studentName: trimmedName,
-          joinedAt: sessionData.joinedAt,
-        });
-        navigate(`/audience/quiz/${quizId}`);
-      }
-    } catch (err) {
-      console.error('Join error:', err);
-      setError(err.response?.data?.message || 'Failed to join session');
     } finally {
       setIsLoading(false);
     }
@@ -178,9 +91,8 @@ const AudienceJoin = () => {
     }
 
     const teamId = parseInt(selectedTeam, 10);
-    // Remove team capacity check - allow students to always join and proceed
     setShowTeamSelection(false);
-    await proceedWithJoin(pendingJoin.trimmedName, pendingJoin.trimmedCode, teamId);
+    await runJoin(pendingJoin.trimmedName, pendingJoin.trimmedCode, teamId);
   };
 
   const handleSubmit = async (e) => {
@@ -196,58 +108,7 @@ const AudienceJoin = () => {
       return;
     }
 
-    setIsLoading(true);
-    setError('');
-
-    try {
-      console.log('🚀 Starting join process for code:', trimmedCode);
-      console.log('🔗 API Base URL:', process.env.REACT_APP_API_URL || 'http://localhost:5001/api');
-      // First check if it's a Space Race with student-choice team assignment
-      const raceResponse = await spaceRacesAPI.getRaceByCode(trimmedCode);
-      console.log('📡 Race API response:', raceResponse.data);
-      console.log('📡 Full response:', raceResponse);
-
-      if (raceResponse.data?.success) {
-        const race = raceResponse.data.data;
-        console.log('🎯 Race data loaded:', race);
-        console.log('🎯 Race settings:', race.settings);
-        console.log('🎯 Team assignment value:', race.settings?.teamAssignment);
-        console.log('🔍 Normalized team assignment:', normalizeTeamAssignment(race.settings?.teamAssignment));
-
-        if (normalizeTeamAssignment(race.settings?.teamAssignment) === 'student-choice') {
-          console.log('✅ Student-choice mode detected, showing team selection');
-          console.log('📝 Setting raceData:', race);
-          console.log('📝 Setting pendingJoin:', { trimmedName, trimmedCode });
-          console.log('📝 Setting showTeamSelection to true');
-          setRaceData(race);
-          setPendingJoin({ trimmedName, trimmedCode });
-          setShowTeamSelection(true);
-          setIsLoading(false);
-          console.log('✅ State updated, showTeamSelection should now be true');
-          return;
-        } else {
-          console.log('ℹ️ Not student-choice mode, proceeding with normal join');
-          console.log('ℹ️ Normalized value:', normalizeTeamAssignment(race.settings?.teamAssignment));
-        }
-      } else {
-        console.log('⚠️ Race lookup failed or not a Space Race:', raceResponse.data?.message);
-        console.log('⚠️ Success flag:', raceResponse.data?.success);
-      }
-
-      // If not student-choice or race lookup failed, proceed with normal join
-      console.log('🔄 Proceeding with normal join flow');
-      await proceedWithJoin(trimmedName, trimmedCode);
-    } catch (err) {
-      console.error('❌ Join error:', err);
-      console.error('❌ Error message:', err.message);
-      console.error('❌ Error response:', err.response?.data);
-      console.error('❌ Error status:', err.response?.status);
-      // If race lookup fails, try normal join anyway
-      console.log('🔄 Falling back to normal join due to error');
-      await proceedWithJoin(trimmedName, trimmedCode);
-    } finally {
-      setIsLoading(false);
-    }
+    await runJoin(trimmedName, trimmedCode);
   };
 
   // Show team selection UI

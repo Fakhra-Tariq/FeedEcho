@@ -235,7 +235,7 @@ const HostDashboard = () => {
                   </span>
                 ) : (
                   <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-gray-100 text-gray-600 text-sm font-semibold">
-                    No activity running
+                    No Active Activity
                   </span>
                 )}
                 <div className="flex items-center gap-2">

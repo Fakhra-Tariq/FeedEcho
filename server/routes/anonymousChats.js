@@ -170,7 +170,7 @@ router.post('/create', optionalAuth, async (req, res) => {
     };
     await chatSessionRef(id).set(newChat);
     await chatJoinCodeRef(joinCode).set(id);
-    await setSessionCurrentActivity(launchPrep.sessionId, 'anonymousChat');
+    await setSessionCurrentActivity(launchPrep.sessionId, 'anonymousChat', id);
     await appendSessionActivityHistory(launchPrep.sessionId, {
       type: 'anonymousChat',
       name: newChat.title,

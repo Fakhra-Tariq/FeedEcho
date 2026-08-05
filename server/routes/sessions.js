@@ -6,6 +6,10 @@ const { endActiveActivityForSession } = require('../utils/endSessionActiveActivi
 const { reconcileTeacherActiveSessions, repairActiveSessionSingleton } = require('../utils/sessionStatusReconcile');
 const { saveStudentParticipation } = require('../utils/spaceRaceResourceArchive');
 const { normalizeQuizRecord } = require('../utils/quizNormalization');
+const {
+  resolveActivityKind,
+  resolveActivityId,
+} = require('../utils/teacherSessionGuard');
 const router = express.Router();
 
 // ERD-aligned RTDB paths
@@ -23,6 +27,10 @@ const incrementStandaloneSessionParticipants = async (standaloneSessionId) => {
     .transaction((cur) => Number(cur || 0) + 1);
 };
 const raceCodeRef = (code) => db.ref(`space_race_codes/${String(code).toUpperCase()}`);
+const ticketRef = (id) => db.ref(`exit_tickets/${id}`);
+const ticketCodeRef = (code) => db.ref(`exit_ticket_codes/${String(code).toUpperCase()}`);
+const chatSessionRef = (id) => db.ref(`chat_sessions/${id}`);
+const chatCodeRef = (code) => db.ref(`chat_join_codes/${String(code).toUpperCase()}`);
 
 const generateJoinCode = () => {
   const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
@@ -143,14 +151,10 @@ router.post('/join', async (req, res) => {
       }
 
       const standalone = sessionSnap.val() || {};
-      let activityKind = standalone.currentActivity;
+      const kind = resolveActivityKind(standalone.currentActivity);
+      const preferredActivityId = resolveActivityId(standalone.currentActivity);
 
-      // Legacy shape: { type, id }
-      if (activityKind && typeof activityKind === 'object' && activityKind.type) {
-        activityKind = activityKind.type === 'spaceRace' ? 'spacerace' : String(activityKind.type).toLowerCase();
-      }
-
-      if (activityKind == null || activityKind === '') {
+      if (!kind) {
         return res.status(404).json({
           success: false,
           error: 'No activity launched',
@@ -158,11 +162,13 @@ router.post('/join', async (req, res) => {
         });
       }
 
-      const kind = String(activityKind).toLowerCase();
-
       if (kind === 'quiz') {
-        const quizIdSnap = await quizCodeRef(activeCode).get();
-        if (!quizIdSnap.exists()) {
+        let quizId = preferredActivityId;
+        if (!quizId) {
+          const quizIdSnap = await quizCodeRef(activeCode).get();
+          quizId = quizIdSnap.exists() ? quizIdSnap.val() : null;
+        }
+        if (!quizId) {
           return res.status(404).json({
             success: false,
             error: 'Quiz not found',
@@ -171,15 +177,17 @@ router.post('/join', async (req, res) => {
         }
         effectiveSession = {
           type: 'quiz',
-          sessionId: quizIdSnap.val(),
+          sessionId: quizId,
           accessCode: activeCode,
           status: 'active',
         };
       } else if (kind === 'spacerace') {
-        console.log('🔑 Looking up space race code in space_race_codes:', activeCode);
-        const raceIdSnap = await raceCodeRef(activeCode).get();
-        console.log('🔑 Space race code lookup result:', { exists: raceIdSnap.exists(), value: raceIdSnap.val() });
-        if (!raceIdSnap.exists()) {
+        let raceId = preferredActivityId;
+        if (!raceId) {
+          const raceIdSnap = await raceCodeRef(activeCode).get();
+          raceId = raceIdSnap.exists() ? raceIdSnap.val() : null;
+        }
+        if (!raceId) {
           return res.status(404).json({
             success: false,
             error: 'Space race not found',
@@ -188,18 +196,92 @@ router.post('/join', async (req, res) => {
         }
         effectiveSession = {
           type: 'spaceRace',
-          sessionId: raceIdSnap.val(),
+          sessionId: raceId,
           accessCode: activeCode,
           status: 'active',
         };
-      } else if (kind === 'exitticket' || kind === 'livechat') {
-        return res.status(400).json({
-          success: false,
-          error: 'Use activity join flow',
-          message:
-            kind === 'exitticket'
-              ? 'Please join using the Exit Ticket entry for this session code.'
-              : 'Please join using the Live Chat entry for this session code.'
+      } else if (kind === 'exitticket') {
+        let ticketId = preferredActivityId;
+        if (!ticketId) {
+          const ticketIdSnap = await ticketCodeRef(activeCode).get();
+          ticketId = ticketIdSnap.exists() ? ticketIdSnap.val() : null;
+        }
+        if (!ticketId) {
+          return res.status(404).json({
+            success: false,
+            error: 'Exit ticket not found',
+            message: 'Exit ticket is not active for this session code',
+          });
+        }
+        const ticketSnap = await ticketRef(ticketId).get();
+        if (!ticketSnap.exists()) {
+          return res.status(404).json({
+            success: false,
+            error: 'Exit ticket not found',
+            message: 'Exit ticket is not active for this session code',
+          });
+        }
+        const ticket = ticketSnap.val() || {};
+        const ticketStatus = String(ticket.status || '').toLowerCase();
+        if (!['active', 'live', 'started'].includes(ticketStatus)) {
+          return res.status(404).json({
+            success: false,
+            error: 'Exit ticket is not active',
+            message: 'Exit ticket is not active',
+          });
+        }
+        if (standaloneSessionId) {
+          await incrementStandaloneSessionParticipants(standaloneSessionId);
+        }
+        return res.json({
+          success: true,
+          type: 'exitTicket',
+          ticketId,
+          joinCode: activeCode,
+          data: { id: ticketId, ...ticket, joinCode: activeCode },
+          message: 'Joined exit ticket session',
+        });
+      } else if (kind === 'livechat') {
+        let chatId = preferredActivityId;
+        if (!chatId) {
+          const chatIdSnap = await chatCodeRef(activeCode).get();
+          chatId = chatIdSnap.exists() ? chatIdSnap.val() : null;
+        }
+        if (!chatId) {
+          return res.status(404).json({
+            success: false,
+            error: 'Live chat not found',
+            message: 'Live chat is not active for this session code',
+          });
+        }
+        const chatSnap = await chatSessionRef(chatId).get();
+        if (!chatSnap.exists()) {
+          return res.status(404).json({
+            success: false,
+            error: 'Live chat not found',
+            message: 'Live chat is not active for this session code',
+          });
+        }
+        const chat = chatSnap.val() || {};
+        const chatLive =
+          chat.isActive === true || String(chat.status || '').toLowerCase() === 'active';
+        if (!chatLive) {
+          return res.status(404).json({
+            success: false,
+            error: 'Live chat is not active',
+            message: 'Live chat is not active',
+          });
+        }
+        if (standaloneSessionId) {
+          await incrementStandaloneSessionParticipants(standaloneSessionId);
+        }
+        return res.json({
+          success: true,
+          type: 'liveChat',
+          chatId,
+          joinCode: activeCode,
+          data: { id: chatId, ...chat, joinCode: activeCode },
+          message: 'Joined live chat session',
         });
       } else {
         return res.status(400).json({
@@ -292,8 +374,16 @@ router.post('/join', async (req, res) => {
         console.log('Auto-assigned team:', { teamCounts, assignedTeamId });
       } else if (teamAssignmentMode === 'student-choice') {
         if (requestedTeamId === undefined || requestedTeamId === null || requestedTeamId === '') {
-          return res.status(400).json({
+          return res.status(200).json({
             success: false,
+            needsTeamSelection: true,
+            type: 'spaceRace',
+            raceId: effectiveSession.sessionId,
+            data: {
+              id: effectiveSession.sessionId,
+              ...race,
+              quizId: race.quizId,
+            },
             message: 'Please select a team before joining',
           });
         }

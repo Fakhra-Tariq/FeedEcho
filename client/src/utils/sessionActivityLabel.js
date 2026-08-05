@@ -4,21 +4,26 @@
  */
 export function normalizeSessionCurrentActivity(value) {
   if (value == null || value === '') return null;
-  if (typeof value === 'object' && value.type) {
-    const t = String(value.type).toLowerCase().replace(/_/g, '');
+  if (typeof value === 'object') {
+    if (value.status && String(value.status).toLowerCase() === 'finished') return null;
+    const t = String(value.type || '').toLowerCase().replace(/_/g, '');
     if (t === 'quiz') return 'quiz';
     if (t === 'spacerace') return 'spacerace';
     if (t === 'exitticket') return 'exitticket';
     if (t === 'livechat' || t === 'anonymouschat') return 'livechat';
-    return t || null;
+    return null;
   }
   const s = String(value).toLowerCase().replace(/_/g, '');
-  return s || null;
+  if (s === 'quiz') return 'quiz';
+  if (s === 'spacerace') return 'spacerace';
+  if (s === 'exitticket') return 'exitticket';
+  if (s === 'livechat' || s === 'anonymouschat') return 'livechat';
+  return null;
 }
 
 /**
  * Human-readable label for the Explore session bar.
- * @returns {string|null} e.g. "Quiz Active", or null when idle
+ * @returns {string|null} e.g. "Active Quiz", or null when idle
  */
 export function getSessionActivityLabel(currentActivity) {
   const kind = normalizeSessionCurrentActivity(currentActivity);
@@ -26,13 +31,13 @@ export function getSessionActivityLabel(currentActivity) {
 
   switch (kind) {
     case 'quiz':
-      return 'Quiz Active';
+      return 'Active Quiz';
     case 'spacerace':
-      return 'Space Race Active';
+      return 'Active Space Race';
     case 'exitticket':
-      return 'Exit Ticket Active';
+      return 'Active Exit Ticket';
     case 'livechat':
-      return 'Live Chat Active';
+      return 'Active Live Chat';
     default:
       return null;
   }
