@@ -150,14 +150,14 @@ const SpaceRaceSettings = ({ race, onClose, onDelete, onUpdate }) => {
                         onChange={(e) => setSettings({ ...settings, teamAssignment: e.target.value })}
                         className="mr-2"
                       />
-                      <span className="text-sm text-gray-700">Student Choice</span>
+                      <span className="text-sm text-gray-700">Audience Choice</span>
                     </label>
                   </div>
                 </div>
                 {settings.teamAssignment === 'student-choice' ? (
                   <div key="students-per-team">
                     <label className="block text-sm font-medium text-gray-700 mb-2">
-                      No. of students per team
+                      No. of participants per team
                     </label>
                     <input
                       type="number"
@@ -169,7 +169,7 @@ const SpaceRaceSettings = ({ race, onClose, onDelete, onUpdate }) => {
                         setSettings({ ...settings, studentsPerTeam: Math.min(val, 6) });
                       }}
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg"
-                      placeholder="Enter max students per team"
+                      placeholder="Enter max participants per team"
                     />
                     <p className="text-xs text-gray-500 mt-1">
                       Maximum number of students allowed in each team

@@ -34,11 +34,11 @@ const QuizLaunchedModal = ({ isOpen, onClose, accessCode }) => {
           <h2 className="text-2xl font-bold text-gray-900 mb-2">Quiz Launched</h2>
           <p className="text-sm text-gray-600 mb-8">Share this code with students</p>
 
-          {/* Student Access Code box */}
+          {/* Audience Access Code box */}
           <div className="mb-8">
             <div className="bg-gray-50 border-2 border-gray-200 rounded-xl p-6">
               <label className="block text-sm font-medium text-gray-700 mb-3">
-                Student Access Code
+                Audience Access Code
               </label>
               <div className="text-3xl font-bold text-gray-900 tracking-widest uppercase">
                 {accessCode}

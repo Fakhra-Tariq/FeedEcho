@@ -1,6 +1,6 @@
 import axios from 'axios';
 import { getActivePortal } from '../utils/userRoles';
-import { getStoredStudentSession } from '../utils/studentSession';
+import { getStoredAudienceSession } from '../utils/audienceSession';
 
 const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
 
@@ -87,11 +87,11 @@ api.interceptors.response.use(
       localStorage.removeItem('token');
       localStorage.removeItem('authUser');
       const portal = getActivePortal();
-      const onStudentRoute = window.location.pathname.startsWith('/student');
-      const hasStudentSession = Boolean(getStoredStudentSession());
+      const onStudentRoute = window.location.pathname.startsWith('/audience');
+      const hasAudienceSession = Boolean(getStoredAudienceSession());
       const isStudentContext =
-        onStudentRoute || portal === 'student' || hasStudentSession;
-      window.location.href = isStudentContext ? '/student/auth' : '/teacher/signin';
+        onStudentRoute || portal === 'student' || hasAudienceSession;
+      window.location.href = isStudentContext ? '/join' : '/host/signin';
     }
     
     return Promise.reject(error);

@@ -54,7 +54,7 @@ const LibraryIcon = () => {
       setSavedQuizzes(prev => prev.filter(q => q.id !== quizId));
       
       // Navigate to launch page
-      navigate('/teacher/launch');
+      navigate('/host/launch');
     }
   };
 

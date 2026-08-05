@@ -3,14 +3,14 @@ import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, Award, TrendingUp, CheckCircle, Calendar, Clock, X, Search, Trash2, ChevronDown } from 'lucide-react';
 import { useRtdbValue } from '../hooks/useRtdb';
 import { studentsAPI } from '../services/api';
-import { getStoredStudentSession, getStudentQueryParams } from '../utils/studentSession';
-import { matchesStudentRecord } from '../utils/studentIdentifiers';
+import { getStoredAudienceSession, getStudentQueryParams } from '../utils/audienceSession';
+import { matchesStudentRecord } from '../utils/audienceIdentifiers';
 import {
   buildDedupedQuizAttempts,
   getQuizAttemptCollapseKey,
   isSameQuizAttempt,
   readDedupedLocalQuizSubmissions,
-} from '../utils/studentQuizAttempts';
+} from '../utils/audienceQuizAttempts';
 import { schedulePendingQuizSubmissionSync } from '../utils/quizSubmissionSync';
 
 const PASS_THRESHOLD = 60;
@@ -101,19 +101,19 @@ const QuizHistory = () => {
   }, []);
 
   useEffect(() => {
-    const loggedInStudent = getStoredStudentSession();
-    if (!loggedInStudent) {
-      navigate('/student/auth');
+    const loggedInAudience = getStoredAudienceSession();
+    if (!loggedInAudience) {
+      navigate('/join');
       return;
     }
-    setStudent(loggedInStudent);
+    setStudent(loggedInAudience);
     refreshLocalSubmissions();
     schedulePendingQuizSubmissionSync();
-    loadQuizHistory(loggedInStudent);
+    loadQuizHistory(loggedInAudience);
 
-    const onFocus = () => loadQuizHistory(loggedInStudent);
+    const onFocus = () => loadQuizHistory(loggedInAudience);
     const onVisibility = () => {
-      if (document.visibilityState === 'visible') loadQuizHistory(loggedInStudent);
+      if (document.visibilityState === 'visible') loadQuizHistory(loggedInAudience);
     };
     window.addEventListener('focus', onFocus);
     document.addEventListener('visibilitychange', onVisibility);
@@ -216,7 +216,7 @@ const QuizHistory = () => {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
           <div className="flex items-center justify-between">
             <button
-              onClick={() => navigate('/student/home')}
+              onClick={() => navigate('/audience/home')}
               className="flex items-center space-x-2 hover:opacity-80 transition-opacity text-primary"
             >
               <ArrowLeft className="w-5 h-5" />

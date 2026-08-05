@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { X, Play, Minus, Plus } from 'lucide-react';
 import QuizLaunchedModal from './QuizLaunchedModal';
 import { useHybridAlert } from '../contexts/HybridAlertContext';
-import { NO_ACTIVE_SESSION_MESSAGE } from '../utils/requireActiveTeacherSession';
+import { NO_ACTIVE_SESSION_MESSAGE } from '../utils/requireActiveHostSession';
 import {
   launchQuizWithSettings,
   parseOptionalMinutes,

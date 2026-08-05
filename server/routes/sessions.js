@@ -393,8 +393,9 @@ router.post('/join', async (req, res) => {
             launched: true,
             launchSettings: {
               ...(quizData.launchSettings || {}),
-              timeLimit: Math.round((race.settings?.countdown || race.settings?.timerSeconds || 300) / 60), // Use quiz duration in minutes
-              countdown: race.settings?.countdown || race.settings?.timerSeconds || 300, // Pass quiz duration in seconds
+              timeLimit: Math.round((race.settings?.countdown || 300) / 60), // Quiz duration in minutes
+              // Quiz duration only — never fall back to settings.timerSeconds (join/waiting duration)
+              countdown: race.settings?.countdown || 300,
               endTime: race.endTime?.toDate?.() ? race.endTime.toDate().toISOString() : null, // Only set endTime if quiz has started
               spaceRaceSettings: {
                 shuffleQuestions: race.settings?.shuffleQuestions ?? false,

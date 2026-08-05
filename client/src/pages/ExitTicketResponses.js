@@ -187,7 +187,7 @@ export default function ExitTicketResponses() {
         <div className="bg-white rounded-lg border border-gray-200 p-6 text-center">
           <p className="text-red-600">{errorMessage}</p>
           <button
-            onClick={() => navigate('/teacher/exit-tickets')}
+            onClick={() => navigate('/host/exit-tickets')}
             className="mt-4 px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors"
           >
             Back to Dashboard
@@ -209,7 +209,7 @@ export default function ExitTicketResponses() {
           <div className="flex items-center justify-between h-16">
             <div className="flex items-center gap-3">
               <button
-                onClick={() => navigate('/teacher/exit-tickets')}
+                onClick={() => navigate('/host/exit-tickets')}
                 className="flex items-center gap-2 text-text-light hover:text-text transition-colors"
               >
                 <ArrowLeft className="w-4 h-4" />
@@ -256,7 +256,7 @@ export default function ExitTicketResponses() {
           <div className="bg-white rounded-lg border border-gray-200 p-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-text-light text-sm">Total Students Present</p>
+                <p className="text-text-light text-sm">Total Audience Present</p>
                 <p className="text-2xl font-bold text-text">{attendance.length}</p>
               </div>
               <div className="p-2 bg-green-100 rounded-lg">
@@ -422,7 +422,7 @@ export default function ExitTicketResponses() {
                     </div>
                   </div>
                   <h3 className="text-lg font-semibold text-primary mb-2">
-                    Student Privacy Protected
+                    Audience Privacy Protected
                   </h3>
                   <p className="text-text-light mb-4">
                     Responses will appear once at least 2 students submit feedback to ensure privacy.

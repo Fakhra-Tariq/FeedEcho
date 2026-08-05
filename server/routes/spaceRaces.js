@@ -358,7 +358,8 @@ router.get('/join/:joinCode', async (req, res) => {
       ...quizData,
       launchSettings: {
         timeLimit: Math.round(raceData.settings?.countdown / 60) || Math.round((raceData.settings?.countdown || 300) / 60), // Use quiz duration in minutes from countdown setting
-        countdown: raceData.settings?.countdown || raceData.settings?.timerSeconds || 300, // Pass quiz duration in seconds
+        // Quiz duration only — never fall back to settings.timerSeconds (that is join/waiting duration)
+        countdown: raceData.settings?.countdown || 300,
         endTime: raceData.endTime?.toDate?.() ? raceData.endTime.toDate().toISOString() : null, // Only set endTime if quiz has started
         spaceRaceSettings: {
           shuffleQuestions: raceData.settings?.shuffleQuestions ?? false,
@@ -1548,8 +1549,8 @@ router.post('/:id/start-quiz', async (req, res) => {
     
     const race = raceSnap.val();
     
-    // Calculate quiz end time using quiz duration (countdown) instead of join duration
-    const quizDurationSeconds = timerSeconds || race.settings?.countdown || race.settings?.timerSeconds || 600;
+    // Calculate quiz end time using quiz duration (countdown) — never join-phase timerSeconds
+    const quizDurationSeconds = timerSeconds || race.settings?.countdown || 600;
     const quizStartedAt = new Date().toISOString();
     const endTime = new Date(Date.now() + quizDurationSeconds * 1000).toISOString();
     

@@ -5,7 +5,7 @@ import {
   spaceRacesAPI,
 } from '../services/api';
 import { normalizeTeamId, saveSpaceRaceParticipant } from './spaceRaceSession';
-import { getStoredStudentSession } from './studentSession';
+import { getStoredAudienceSession } from './audienceSession';
 import { persistQuizParticipantSession } from './quizParticipantSession';
 
 export function normalizeTeamAssignment(value) {
@@ -13,13 +13,13 @@ export function normalizeTeamAssignment(value) {
   return normalized === 'student-choice' ? 'student-choice' : 'auto-assign';
 }
 
-function buildJoinContext(studentName, loggedInStudent) {
-  const loggedIn = loggedInStudent || getStoredStudentSession();
+function buildJoinContext(studentName, loggedInAudience) {
+  const loggedIn = loggedInAudience || getStoredAudienceSession();
   return {
     trimmedName: String(studentName || loggedIn?.name || 'Student').trim(),
     studentUid: loggedIn?.uid || null,
     studentEmail: loggedIn?.email || null,
-    loggedInStudent: loggedIn,
+    loggedInAudience: loggedIn,
   };
 }
 
@@ -64,13 +64,13 @@ export async function proceedWithSessionJoin({
   navigate,
   studentUid = null,
   studentEmail = null,
-  loggedInStudent = null,
+  loggedInAudience = null,
 }) {
   const ctx = {
     trimmedName,
     studentUid,
     studentEmail,
-    loggedInStudent: loggedInStudent || getStoredStudentSession(),
+    loggedInAudience: loggedInAudience || getStoredAudienceSession(),
   };
 
   const joinResponse = await sessionsAPI.join(trimmedName, trimmedCode, teamId, {
@@ -125,7 +125,7 @@ export async function proceedWithSessionJoin({
         })
       );
     }
-    navigate(`/student/space-race/${raceId}`);
+    navigate(`/audience/space-race/${raceId}`);
     return { success: true, type: 'spaceRace', raceId, teamId: resolvedTeamId };
   }
 
@@ -146,7 +146,7 @@ export async function proceedWithSessionJoin({
       studentUid: ctx.studentUid,
       studentEmail: ctx.studentEmail,
     });
-    navigate(`/student/quiz/${quizId}`);
+    navigate(`/audience/quiz/${quizId}`);
     return { success: true, type: 'quiz', quizId };
   }
 
@@ -161,7 +161,7 @@ export async function joinSessionByCode({
   code,
   studentName,
   navigate,
-  loggedInStudent,
+  loggedInAudience,
   onError = () => {},
   onTeamSelectionRequired,
 }) {
@@ -172,7 +172,7 @@ export async function joinSessionByCode({
     return { success: false };
   }
 
-  const ctx = buildJoinContext(studentName, loggedInStudent);
+  const ctx = buildJoinContext(studentName, loggedInAudience);
   const { trimmedName, studentUid, studentEmail } = ctx;
 
   try {
@@ -180,7 +180,7 @@ export async function joinSessionByCode({
       const ticketResponse = await exitTicketsAPI.getByCode(trimmedCode);
       if (ticketResponse.data.success) {
         persistJoinIdentity(trimmedName, ctx);
-        navigate(`/student/exit-ticket/${trimmedCode}`, { replace: true });
+        navigate(`/audience/exit-ticket/${trimmedCode}`, { replace: true });
         return { success: true, type: 'exitTicket' };
       }
     } catch {
@@ -191,7 +191,7 @@ export async function joinSessionByCode({
       const chatResponse = await anonymousChatAPI.getByCode(trimmedCode);
       if (chatResponse.data?.success) {
         persistJoinIdentity(trimmedName, ctx);
-        navigate(`/student/chat?code=${encodeURIComponent(trimmedCode)}`, { replace: true });
+        navigate(`/audience/chat?code=${encodeURIComponent(trimmedCode)}`, { replace: true });
         return { success: true, type: 'chat' };
       }
     } catch {
@@ -225,7 +225,7 @@ export async function joinSessionByCode({
       navigate,
       studentUid,
       studentEmail,
-      loggedInStudent: ctx.loggedInStudent,
+      loggedInAudience: ctx.loggedInAudience,
     });
     return { success: true };
   } catch (error) {

@@ -2,7 +2,7 @@ import { quizSubmissionsAPI } from '../services/api';
 import {
   readDedupedLocalQuizSubmissions,
   saveLocalQuizSubmission,
-} from './studentQuizAttempts';
+} from './audienceQuizAttempts';
 
 const SUBMIT_MAX_RETRIES = 3;
 const RETRY_DELAYS_MS = [500, 1500, 3000];

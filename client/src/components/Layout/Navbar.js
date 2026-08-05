@@ -1,21 +1,21 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
-import { 
-  BookOpen, 
-  User, 
-  LogOut, 
-  Menu, 
-  X, 
+import {
+  BookOpen,
+  User,
+  LogOut,
+  Menu,
+  X,
   GraduationCap,
   Users,
   Settings,
-  ChevronDown
+  ChevronDown,
+  Mail,
 } from 'lucide-react';
-import { ClipLoader } from 'react-spinners';
 
 const Navbar = () => {
-  const { user, userProfile, logout } = useAuth();
+  const { user, userProfile, activePortal, logout } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -32,40 +32,39 @@ const Navbar = () => {
   };
 
   const getDashboardLink = () => {
-    if (!userProfile) return '/dashboard';
+    // Prefer active portal (tab session) over profile.role — same email can be both roles
+    if (activePortal === 'student') return '/audience/home';
+    if (activePortal === 'teacher') return '/host/explore';
+    if (!userProfile) return '/host/explore';
     switch (userProfile.role) {
       case 'teacher':
-        return '/teacher';
+        return '/host/explore';
       case 'admin':
-        return '/dashboard/admin';
+        return '/host/explore';
       default:
-        return '/dashboard/student';
+        return '/audience/home';
     }
   };
 
   const navLinks = [
     { name: 'Home', href: '/', icon: BookOpen },
     { name: 'About Us', href: '/about', icon: GraduationCap },
+    { name: 'Contact Us', href: '/contact', icon: Mail },
   ];
 
   if (userProfile) {
     navLinks.push({ name: 'Dashboard', href: getDashboardLink(), icon: Users });
   }
 
-  // Auth links for non-logged in users
-  const authLinks = [
-    { name: 'Teacher Login', href: '/teacher/signin', icon: Users }
-  ];
-
   return (
     <nav className="bg-background/80 backdrop-blur-md shadow-soft sticky top-0 z-50 border-b border-neutral-200">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between items-center h-16">
-          {/* Logo */}
+          {/* Logo — unchanged */}
           <Link to="/" className="flex items-center space-x-2">
-            <img 
-              src="/FeedEcho-logo.png.png" 
-              alt="FeedEcho" 
+            <img
+              src="/FeedEcho-logo.png.png"
+              alt="FeedEcho"
               className="h-32 w-auto object-contain mix-blend-mode: multiply"
             />
           </Link>
@@ -75,7 +74,7 @@ const Navbar = () => {
             {navLinks.map((link) => {
               const Icon = link.icon;
               const isActive = location.pathname === link.href;
-              
+
               return (
                 <Link
                   key={link.name}
@@ -93,19 +92,9 @@ const Navbar = () => {
             })}
           </div>
 
-          {/* User Menu */}
+          {/* User Menu — Login button removed; profile only when logged in */}
           <div className="hidden md:flex items-center space-x-4">
-            {!user ? (
-              <div className="flex items-center space-x-3">
-                <Link
-                  to="/teacher/signin"
-                  className="px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors font-medium"
-                >
-                  Login
-                </
-                Link>
-              </div>
-            ) : userProfile ? (
+            {user && userProfile ? (
               <div className="relative">
                 <button
                   onClick={() => setIsProfileDropdownOpen(!isProfileDropdownOpen)}
@@ -113,7 +102,9 @@ const Navbar = () => {
                 >
                   <div className="w-8 h-8 bg-gradient-to-br from-primary to-secondary rounded-full flex items-center justify-center">
                     <span className="text-white font-semibold text-sm">
-                      {userProfile.firstName?.charAt(0) || userProfile.displayName?.charAt(0) || 'U'}
+                      {userProfile.firstName?.charAt(0) ||
+                        userProfile.displayName?.charAt(0) ||
+                        'U'}
                     </span>
                   </div>
                   <span className="text-sm font-medium text-neutral-700">
@@ -149,22 +140,7 @@ const Navbar = () => {
                   </div>
                 )}
               </div>
-            ) : (
-              <div className="flex items-center space-x-3">
-                <Link
-                  to="/join"
-                  className="px-4 py-2 text-primary hover:text-primary/90 font-medium transition-colors"
-                >
-                  Join Session
-                </Link>
-                <Link
-                  to="/teacher/signin"
-                  className="px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors font-medium"
-                >
-                  Teacher Login
-                </Link>
-              </div>
-            )}
+            ) : null}
           </div>
 
           {/* Mobile menu button */}
@@ -187,7 +163,7 @@ const Navbar = () => {
               {navLinks.map((link) => {
                 const Icon = link.icon;
                 const isActive = location.pathname === link.href;
-                
+
                 return (
                   <Link
                     key={link.name}
@@ -203,7 +179,7 @@ const Navbar = () => {
                   </Link>
                 );
               })}
-              
+
               {user && userProfile ? (
                 <>
                   <div className="border-t border-neutral-200 my-2"></div>
@@ -222,23 +198,7 @@ const Navbar = () => {
                     <span>Logout</span>
                   </button>
                 </>
-              ) : (
-                <>
-                  <div className="border-t border-neutral-200 my-2"></div>
-                  <Link
-                    to="/join"
-                    className="px-3 py-2 text-secondary-500 hover:text-secondary-600 font-medium"
-                  >
-                    Join Session
-                  </Link>
-                  <Link
-                    to="/teacher/signin"
-                    className="px-3 py-2 bg-accent text-white rounded-lg hover:opacity-90 transition-colors font-medium text-center"
-                  >
-                    Teacher Login
-                  </Link>
-                </>
-              )}
+              ) : null}
             </div>
           </div>
         )}

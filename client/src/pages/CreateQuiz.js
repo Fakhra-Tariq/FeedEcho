@@ -16,7 +16,7 @@ const CreateQuiz = () => {
     sessionStorage.setItem('teacherQuizTitle', trimmedTitle);
     sessionStorage.setItem('sessionCode', trimmedCode);
 
-    navigate('/teacher');
+    navigate('/host');
   };
 
   return (

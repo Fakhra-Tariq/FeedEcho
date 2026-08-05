@@ -7,21 +7,21 @@ import LaunchQuizModal from '../components/LaunchQuizModal';
 import QuestionTypeDropdown from '../components/QuestionTypeDropdown';
 import AiQuizGeneratorPanel from '../components/AiQuizGeneratorPanel';
 import { quizzesAPI, handleAPIError } from '../services/api';
-import { useTeacherData } from '../contexts/TeacherDataContext';
+import { useHostData } from '../contexts/HostDataContext';
 import { AI_GENERATED_QUIZ_SOURCE } from '../utils/aiGeneratedQuiz';
 import { loadEditingQuizFromStorage, normalizeQuizTypeLabel, normalizeQuestionsForEditor } from '../utils/quizQuestionNormalization';
 import {
   NO_ACTIVE_SESSION_MESSAGE,
   getActiveTeacherSession,
-  requireActiveTeacherSession,
-} from '../utils/requireActiveTeacherSession';
+  requireActiveHostSession,
+} from '../utils/requireActiveHostSession';
 import { persistLaunchedQuizInLocalStorage } from '../utils/quizLaunchSettings';
 
 const MixedTypeQuizEditor = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const { alert } = useHybridAlert();
-  const { data: teacherData } = useTeacherData();
+  const { data: teacherData } = useHostData();
   const [quizTitle, setQuizTitle] = useState('');
   const [questions, setQuestions] = useState([]);
   const [isQuizSaved, setIsQuizSaved] = useState(false);
@@ -197,7 +197,7 @@ const MixedTypeQuizEditor = () => {
   const launchQuiz = () => {
     if (isQuizLaunched) return;
 
-    const sessionCheck = requireActiveTeacherSession(teacherData.activeSession);
+    const sessionCheck = requireActiveHostSession(teacherData.activeSession);
     if (!sessionCheck.ok) {
       alert.toast.error(NO_ACTIVE_SESSION_MESSAGE);
       return;

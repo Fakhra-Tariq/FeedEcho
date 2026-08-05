@@ -2,13 +2,13 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, Plus, X, FileText, Sparkles, Users, CheckCircle, Copy, Check } from 'lucide-react';
 import { exitTicketsAPI, quizzesAPI, spaceRacesAPI } from '../services/api';
-import { useTeacherData } from '../contexts/TeacherDataContext';
+import { useHostData } from '../contexts/HostDataContext';
 import { useAuth } from '../contexts/AuthContext';
 import { useHybridAlert } from '../contexts/HybridAlertContext';
 import {
   NO_ACTIVE_SESSION_MESSAGE,
   resolveActiveTeacherSession,
-} from '../utils/requireActiveTeacherSession';
+} from '../utils/requireActiveHostSession';
 
 const LIKERT_OPTIONS = [
   "Strongly Agree",
@@ -27,7 +27,7 @@ const questionTypeCatalog = [
 
 export default function CreateExitTicketPage() {
   const navigate = useNavigate();
-  const { data: teacherData } = useTeacherData();
+  const { data: teacherData } = useHostData();
   const { userProfile } = useAuth();
   const { alert } = useHybridAlert();
   const [currentStep, setCurrentStep] = useState(1);
@@ -68,7 +68,7 @@ export default function CreateExitTicketPage() {
   };
 
   const goBack = () => {
-    navigate('/teacher/exit-tickets');
+    navigate('/host/exit-tickets');
   };
 
   // Form handlers
@@ -227,7 +227,7 @@ export default function CreateExitTicketPage() {
         console.log('Exit ticket created successfully:', response.data);
         alert.toast.success('Exit ticket saved as draft!');
         setTimeout(() => {
-          navigate('/teacher/exit-tickets');
+          navigate('/host/exit-tickets');
         }, 1500);
       } else {
         alert.toast.error('Failed to save exit ticket: ' + (response.data.error || 'Unknown error'));
@@ -651,11 +651,11 @@ export default function CreateExitTicketPage() {
               <h2 className="text-2xl font-bold text-gray-900 mb-2">Exit Ticket Launched</h2>
               <p className="text-sm text-gray-600 mb-8">Share this code with students</p>
 
-              {/* Student Access Code box */}
+              {/* Audience Access Code box */}
               <div className="mb-8">
                 <div className="bg-gray-50 border-2 border-gray-200 rounded-xl p-6">
                   <label className="block text-sm font-medium text-gray-700 mb-3">
-                    Student Access Code
+                    Audience Access Code
                   </label>
                   <div className="text-3xl font-bold text-gray-900 tracking-widest uppercase">
                     {launchedTicketCode}
@@ -678,7 +678,7 @@ export default function CreateExitTicketPage() {
                 <button
                   onClick={() => {
                     setShowJoinCodeModal(false);
-                    navigate('/teacher/exit-tickets');
+                    navigate('/host/exit-tickets');
                   }}
                   className="w-full px-6 py-3 text-gray-700 hover:text-gray-900 font-medium transition-colors"
                 >

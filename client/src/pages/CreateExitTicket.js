@@ -11,13 +11,13 @@ import {
 } from 'lucide-react';
 import clsx from 'clsx';
 import { exitTicketsAPI, quizzesAPI, spaceRacesAPI } from '../services/api';
-import { useTeacherData } from '../contexts/TeacherDataContext';
+import { useHostData } from '../contexts/HostDataContext';
 import { useAuth } from '../contexts/AuthContext';
 import { useHybridAlert } from '../contexts/HybridAlertContext';
 import {
   NO_ACTIVE_SESSION_MESSAGE,
   resolveActiveTeacherSession,
-} from '../utils/requireActiveTeacherSession';
+} from '../utils/requireActiveHostSession';
 
 const LIKERT_OPTIONS = [
   "Strongly Agree",
@@ -35,7 +35,7 @@ const questionTypeCatalog = [
 ];
 
 const CreateExitTicket = () => {
-  const { data: teacherData } = useTeacherData();
+  const { data: teacherData } = useHostData();
   const { userProfile } = useAuth();
   const { alert } = useHybridAlert();
   const navigate = useNavigate();
@@ -61,7 +61,7 @@ const CreateExitTicket = () => {
   };
 
   const goBack = () => {
-    navigate('/teacher/exit-tickets');
+    navigate('/host/exit-tickets');
   };
 
   // Form handlers

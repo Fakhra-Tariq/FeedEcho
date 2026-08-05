@@ -67,12 +67,120 @@ body {
 }
 
 /* Custom components */
+/* About / marketing hero decorative backdrop — opacity set here so it always applies */
+.marketing-hero-backdrop__wash {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    to bottom,
+    rgba(109, 65, 95, 0.1) 0%,
+    rgba(109, 65, 95, 0.04) 45%,
+    transparent 100%
+  );
+}
+
+.marketing-hero-backdrop__blob {
+  position: absolute;
+  border-radius: 9999px;
+  filter: blur(48px);
+}
+
+.marketing-hero-backdrop__blob--tr {
+  top: -6rem;
+  right: -4rem;
+  width: 18rem;
+  height: 18rem;
+  background: rgba(109, 65, 95, 0.14);
+}
+
+.marketing-hero-backdrop__blob--bl {
+  bottom: 0;
+  left: -5rem;
+  width: 16rem;
+  height: 16rem;
+  background: rgba(109, 65, 95, 0.12);
+}
+
+.marketing-hero-sketch {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: min(38%, 22rem);
+  color: #6d415f; /* primary */
+  opacity: 0.34; /* clearly visible; text sits on a frosted panel above */
+}
+
+.marketing-hero-sketch--left {
+  left: 0;
+}
+
+.marketing-hero-sketch--right {
+  right: 0;
+}
+
+@media (max-width: 768px) {
+  .marketing-hero-sketch {
+    width: 42%;
+    opacity: 0.22;
+  }
+}
+
+.marketing-hero-copy-panel {
+  @apply rounded-2xl px-5 py-5 sm:px-8 sm:py-6;
+  background: rgba(244, 241, 236, 0.88); /* soft-ivory, frosted over sketch */
+  backdrop-filter: blur(6px);
+  box-shadow: 0 1px 2px rgba(31, 42, 68, 0.04);
+}
+
 .btn-primary {
-  @apply bg-primary text-white px-6 py-3 rounded-lg font-medium hover:bg-primary/90 transition-all duration-200;
+  @apply bg-primary text-white px-6 py-3 rounded-lg font-medium hover:bg-primary/90 transition-all duration-200 ease-out;
 }
 
 .btn-secondary {
-  @apply bg-white text-primary border-2 border-primary px-6 py-3 rounded-lg font-medium hover:bg-primary/10 transition-colors;
+  @apply bg-white text-primary border-2 border-primary px-6 py-3 rounded-lg font-medium hover:bg-primary/10 transition-all duration-200 ease-out;
+}
+
+/* Marketing pages (Home / About) — shared surface cards & CTAs */
+.surface-card {
+  @apply h-full rounded-2xl border border-primary/15 shadow-sm
+    p-6 sm:p-8 transition-all duration-200 ease-out
+    hover:-translate-y-1 hover:shadow-md hover:border-primary/30;
+  /* Primary purple (#6D415F) — soft enough to stay premium, strong enough to read */
+  background-image: linear-gradient(
+    155deg,
+    #ffffff 0%,
+    rgba(109, 65, 95, 0.05) 38%,
+    rgba(109, 65, 95, 0.12) 100%
+  );
+}
+
+.surface-card-icon {
+  @apply flex items-center justify-center rounded-2xl bg-white
+    border border-primary/15 shadow-sm text-primary
+    transition-all duration-200 ease-out;
+}
+
+/* Keep lucide icons on-theme even if a caller passes another text-* class */
+.surface-card-icon svg {
+  color: inherit;
+}
+
+.surface-card:hover .surface-card-icon {
+  @apply scale-110 border-primary/30 bg-primary/[0.06];
+}
+
+.btn-marketing-primary {
+  @apply inline-flex items-center justify-center space-x-2 px-8 py-4
+    bg-primary text-white rounded-lg font-medium shadow-sm
+    transition-all duration-200 ease-out
+    hover:bg-primary/90 hover:shadow-md hover:scale-[1.02] active:scale-[0.98];
+}
+
+.btn-marketing-secondary {
+  @apply inline-flex items-center justify-center space-x-2 px-8 py-4
+    bg-white text-primary border-2 border-primary rounded-lg font-medium shadow-sm
+    transition-all duration-200 ease-out
+    hover:bg-primary/10 hover:shadow-md hover:scale-[1.02] active:scale-[0.98];
 }
 
 .card {

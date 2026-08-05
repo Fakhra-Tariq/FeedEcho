@@ -5,11 +5,11 @@ import { useHybridAlert } from '../contexts/HybridAlertContext';
 import { exitTicketsAPI, quizzesAPI, spaceRacesAPI } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
 import { useRtdbList, useRtdbValue } from '../hooks/useRtdb';
-import { useTeacherData } from '../contexts/TeacherDataContext';
+import { useHostData } from '../contexts/HostDataContext';
 import {
   NO_ACTIVE_SESSION_MESSAGE,
   resolveActiveTeacherSession,
-} from '../utils/requireActiveTeacherSession';
+} from '../utils/requireActiveHostSession';
 
 function questionsForTicket(questionsTree, ticketId, fallback = []) {
   const raw = questionsTree?.[ticketId];
@@ -53,7 +53,7 @@ export default function ExitTicketDashboard() {
   const { user, userProfile } = useAuth();
   const uid = userProfile?.uid || user?.uid;
   const uidFallback = sessionStorage.getItem('feedecho-user-id');
-  const { data: teacherData } = useTeacherData();
+  const { data: teacherData } = useHostData();
   const [tickets, setTickets] = useState([]);
   const [filter, setFilter] = useState('all');
   const [isLoading, setIsLoading] = useState(true);
@@ -550,7 +550,7 @@ export default function ExitTicketDashboard() {
           <p className="text-text-light mt-1">Collect anonymous student feedback and track attendance</p>
         </div>
         <button
-          onClick={() => navigate('/teacher/exit-tickets/create')}
+          onClick={() => navigate('/host/exit-tickets/create')}
           className="flex items-center gap-2 px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors"
         >
           <Plus className="w-4 h-4" />
@@ -696,7 +696,7 @@ export default function ExitTicketDashboard() {
             <h3 className="text-lg font-semibold text-text mb-2">No {filter === 'all' ? 'exit tickets' : `${filter} exit tickets`}</h3>
             <p className="text-text-light mb-6">Create your first exit ticket to start collecting student feedback</p>
             <button
-              onClick={() => navigate('/teacher/exit-tickets/create')}
+              onClick={() => navigate('/host/exit-tickets/create')}
               className="inline-flex items-center gap-2 px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors"
             >
               <Plus className="w-4 h-4" />
@@ -799,7 +799,7 @@ export default function ExitTicketDashboard() {
                   {ticket.status === 'draft' && (
                     <div className="flex items-center space-x-2 mt-2">
                       <button
-                        onClick={() => navigate(`/teacher/exit-tickets/create?edit=${ticket.id}`)}
+                        onClick={() => navigate(`/host/exit-tickets/create?edit=${ticket.id}`)}
                         className="p-2 text-gray-600 rounded-lg border border-gray-300 hover:bg-gray-100 transition-colors text-sm flex items-center"
                         title="Edit Exit Ticket"
                       >
@@ -897,7 +897,7 @@ export default function ExitTicketDashboard() {
                 <div className="text-center py-10">
                   <FileText className="w-10 h-10 mx-auto text-gray-300" />
                   <p className="mt-4 text-sm font-semibold text-text">No responses yet</p>
-                  <p className="mt-1 text-xs text-text-light">Students haven't submitted any feedback.</p>
+                  <p className="mt-1 text-xs text-text-light">Audience members haven't submitted any feedback.</p>
                 </div>
               ) : (
                 <FeedbackView responses={responses} showAttendanceNames={showAttendanceNames} setShowAttendanceNames={setShowAttendanceNames} />
@@ -961,11 +961,11 @@ export default function ExitTicketDashboard() {
               <h2 className="text-2xl font-bold text-gray-900 mb-2">Exit Ticket Launched</h2>
               <p className="text-sm text-gray-600 mb-8">Share this code with students</p>
 
-              {/* Student Access Code box */}
+              {/* Audience Access Code box */}
               <div className="mb-8">
                 <div className="bg-gray-50 border-2 border-gray-200 rounded-xl p-6">
                   <label className="block text-sm font-medium text-gray-700 mb-3">
-                    Student Access Code
+                    Audience Access Code
                   </label>
                   <div className="text-3xl font-bold text-gray-900 tracking-widest uppercase">
                     {launchedTicketCode}
@@ -1066,7 +1066,7 @@ const FeedbackView = ({ responses, showAttendanceNames, setShowAttendanceNames }
                       </div>
                     </div>
                     <h3 className="text-lg font-semibold text-primary mb-2">
-                      Student Privacy Protected
+                      Audience Privacy Protected
                     </h3>
                     <p className="text-text-light">
                       Responses will appear once at least 2 students submit feedback to ensure privacy.
@@ -1132,7 +1132,7 @@ const FeedbackView = ({ responses, showAttendanceNames, setShowAttendanceNames }
                             </span>
                           </div>
                           <span className="text-sm text-gray-700">
-                            {response.studentName || 'Anonymous Student'}
+                            {response.studentName || 'Anonymous Audience'}
                           </span>
                         </div>
                       ))}

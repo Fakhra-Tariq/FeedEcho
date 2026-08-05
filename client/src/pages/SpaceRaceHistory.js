@@ -18,7 +18,7 @@ import {
   X,
 } from 'lucide-react';
 import { spaceRacesAPI } from '../services/api';
-import { getStoredStudentSession, getStudentQueryParams } from '../utils/studentSession';
+import { getStoredAudienceSession, getStudentQueryParams } from '../utils/audienceSession';
 
 const formatSessionDate = (iso) => {
   if (!iso) return { date: '—', time: '—', timestamp: null };
@@ -237,9 +237,9 @@ export default function SpaceRaceHistory() {
   const [resourceToDelete, setResourceToDelete] = useState(null);
 
   useEffect(() => {
-    const student = getStoredStudentSession();
+    const student = getStoredAudienceSession();
     if (!student) {
-      navigate('/student/auth');
+      navigate('/join');
       return;
     }
 
@@ -342,7 +342,7 @@ export default function SpaceRaceHistory() {
           <div className="flex items-center justify-between">
             <button
               type="button"
-              onClick={() => navigate('/student/home')}
+              onClick={() => navigate('/audience/home')}
               className="flex items-center space-x-2 hover:opacity-80 transition-opacity text-primary"
             >
               <ArrowLeft className="w-5 h-5" />

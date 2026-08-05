@@ -15,7 +15,7 @@ import {
   AlertCircle,
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
-import { useTeacherData } from '../contexts/TeacherDataContext';
+import { useHostData } from '../contexts/HostDataContext';
 import { useHybridAlert } from '../contexts/HybridAlertContext';
 import { sessionsAPI } from '../services/api';
 import {
@@ -38,7 +38,7 @@ function formatSessionDateTime(iso) {
 const SessionsPage = () => {
   const { user, userProfile } = useAuth();
   const teacherId = userProfile?.uid || user?.uid;
-  const { data, createSession } = useTeacherData();
+  const { data, createSession } = useHostData();
   const { alert } = useHybridAlert();
 
   const [sessions, setSessions] = useState([]);

@@ -1,8 +1,8 @@
 import { useEffect, useCallback } from 'react';
-import { useTeacherData } from '../contexts/TeacherDataContext';
+import { useHostData } from '../contexts/HostDataContext';
 
 const useQuizTimer = () => {
-  const { data, setData, endActiveSession } = useTeacherData();
+  const { data, setData, endActiveSession } = useHostData();
 
   // Check if any active quiz has expired and auto-finish it
   const checkQuizExpiration = useCallback(() => {

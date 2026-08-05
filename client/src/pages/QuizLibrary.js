@@ -5,11 +5,11 @@ import { useHybridAlert } from '../contexts/HybridAlertContext';
 import LaunchQuizModal from '../components/LaunchQuizModal';
 import { quizzesAPI, handleAPIError } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
-import { useTeacherData } from '../contexts/TeacherDataContext';
+import { useHostData } from '../contexts/HostDataContext';
 import {
   NO_ACTIVE_SESSION_MESSAGE,
   resolveActiveTeacherSession,
-} from '../utils/requireActiveTeacherSession';
+} from '../utils/requireActiveHostSession';
 import { persistLaunchedQuizInLocalStorage } from '../utils/quizLaunchSettings';
 import {
   getEditorRouteForQuizType,
@@ -22,7 +22,7 @@ const QuizLibrary = () => {
   const { alert } = useHybridAlert();
   const { user, userProfile } = useAuth();
   const teacherUid = userProfile?.uid || user?.uid;
-  const { data: teacherData, syncQuizzes } = useTeacherData();
+  const { data: teacherData, syncQuizzes } = useHostData();
   const [loading, setLoading] = useState(true);
   const [deleteConfirmQuiz, setDeleteConfirmQuiz] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
@@ -330,7 +330,7 @@ const QuizLibrary = () => {
         {/* Library Dashboard Header */}
         <div className="mb-4">
           <button
-            onClick={() => navigate('/teacher/launch')}
+            onClick={() => navigate('/host/launch')}
             className="flex items-center space-x-2 text-gray-600 hover:text-gray-900 transition-colors mb-4"
           >
             <ArrowLeft className="w-4 h-4 sm:w-5 sm:h-5" />
@@ -429,7 +429,7 @@ const QuizLibrary = () => {
               </p>
               {!searchTerm.trim() && savedQuizzes.length === 0 && (
                 <button
-                  onClick={() => navigate('/teacher/launch')}
+                  onClick={() => navigate('/host/launch')}
                   className="inline-flex items-center space-x-2 px-6 py-3 bg-[#6D415F] text-white rounded-xl hover:bg-[#5A344D] transition-colors font-medium shadow-lg hover:shadow-xl"
                 >
                   <Rocket className="w-5 h-5" />
@@ -506,7 +506,7 @@ const QuizLibrary = () => {
                   <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 mb-4">
                     <div className="flex items-center justify-between">
                       <div>
-                        <div className="text-xs font-medium text-gray-700 mb-1">Student Access Code</div>
+                        <div className="text-xs font-medium text-gray-700 mb-1">Audience Access Code</div>
                         <div className="text-lg font-bold text-gray-900 tracking-widest uppercase">
                           {quiz.launchSettings.accessCode}
                         </div>

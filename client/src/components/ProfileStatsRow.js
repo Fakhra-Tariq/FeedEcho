@@ -1,7 +1,7 @@
 import React from 'react';
 
 /**
- * Shared 3-column stats row for Student and Teacher profile pages.
+ * Shared 3-column stats row for Student and Host profile pages.
  */
 export default function ProfileStatsRow({ items = [], loading = false }) {
   return (

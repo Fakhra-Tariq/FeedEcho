@@ -85,7 +85,7 @@ export default function SpaceRaceGame() {
   const handleFinishRace = async () => {
     try {
       await spaceRacesAPI.updateStatus(raceId, 'completed');
-      navigate('/teacher/space-race');
+      navigate('/host/space-race');
     } catch (error) {
       console.error('Error finishing race:', error);
     }
@@ -274,7 +274,7 @@ export default function SpaceRaceGame() {
                   className="w-full py-2 bg-yellow-400 text-purple-900 font-semibold rounded-lg hover:bg-yellow-300 transition-colors flex items-center justify-center space-x-2"
                 >
                   <Users className="w-4 h-4" />
-                  <span>Invite Students</span>
+                  <span>Invite Audience</span>
                 </button>
               </div>
 

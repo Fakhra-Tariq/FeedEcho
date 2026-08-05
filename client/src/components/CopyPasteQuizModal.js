@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { X, FileText, CheckCircle, AlertCircle, Sparkles } from 'lucide-react';
 import clsx from 'clsx';
 import { appToast } from '../contexts/HybridAlertContext';
+import { ensureQuestionIds } from '../utils/quizQuestionNormalization';
 
 const CopyPasteQuizModal = ({ isOpen, onClose, onCreateQuiz }) => {
   const [selectedType, setSelectedType] = useState('Multiple Choice');
@@ -95,12 +96,12 @@ Sample Answer: H2O`;
         return;
       }
 
-      // Create quiz object
+      // Create quiz object — assign unique IDs after parse (does not change parse rules)
       const quiz = {
         id: Date.now(),
         title: `Copy & Paste Quiz - ${selectedType}`,
         type: selectedType,
-        questions: parsedQuestions,
+        questions: ensureQuestionIds(parsedQuestions),
         questionCount: parsedQuestions.length,
         createdDate: new Date().toISOString(),
         status: 'Draft',

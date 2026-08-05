@@ -74,7 +74,31 @@ const normalizeQuestionForScoring = (question, quizType) => {
 };
 
 const normalizeQuestionsForScoring = (questions, quizType) =>
-  (questions || []).map((question) => normalizeQuestionForScoring(question, quizType));
+  ensureUniqueQuestionIds(
+    (questions || []).map((question) => normalizeQuestionForScoring(question, quizType))
+  );
+
+/**
+ * Deterministic unique ids — must match client ensureQuestionIds
+ * (first keep id if unique, else q-${index}).
+ */
+const ensureUniqueQuestionIds = (questions) => {
+  const list = Array.isArray(questions) ? questions.filter(Boolean) : [];
+  const seen = new Set();
+  return list.map((question, index) => {
+    const raw = question?.id ?? question?.questionId;
+    const candidate =
+      raw !== undefined && raw !== null && String(raw).trim() !== ''
+        ? String(raw)
+        : null;
+    let id = candidate;
+    if (!id || seen.has(id)) {
+      id = `q-${index}`;
+    }
+    seen.add(id);
+    return { ...question, id };
+  });
+};
 
 const getSelectedOptionIndex = (question, response) => {
   if (!question || !response) return null;

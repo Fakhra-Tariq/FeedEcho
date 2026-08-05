@@ -283,7 +283,8 @@ export default function SpaceRaceGamePanel({
       // Always call startQuiz to ensure timer is set properly for this team
       // The backend handles the case where quiz is already started for this team
       try {
-        const timerSeconds = raceData?.settings?.countdown || raceData?.settings?.timerSeconds || raceData?.timerSeconds || 600;
+        // Quiz duration only (settings.countdown). Never use timerSeconds — that is join/waiting duration.
+        const timerSeconds = raceData?.settings?.countdown || 600;
         console.log('🚀 Starting quiz with timer:', { raceId, quizId: qId, timerSeconds, teamId: participant.teamId });
 
         const response = await spaceRacesAPI.startQuiz(raceId, {
@@ -304,7 +305,7 @@ export default function SpaceRaceGamePanel({
         // Continue anyway - the quiz can still be taken
       }
 
-      navigate(`/student/space-race/${raceId}/quiz/${qId}`);
+      navigate(`/audience/space-race/${raceId}/quiz/${qId}`);
     }
   };
 

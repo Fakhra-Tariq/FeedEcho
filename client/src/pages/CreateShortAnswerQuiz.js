@@ -4,20 +4,20 @@ import { ArrowLeft, Plus, Trash2, Save, Rocket } from 'lucide-react';
 import { useHybridAlert } from '../contexts/HybridAlertContext';
 import LaunchQuizModal from '../components/LaunchQuizModal';
 import { quizzesAPI, handleAPIError } from '../services/api';
-import { useTeacherData } from '../contexts/TeacherDataContext';
+import { useHostData } from '../contexts/HostDataContext';
 import { AI_GENERATED_QUIZ_SOURCE } from '../utils/aiGeneratedQuiz';
 import { loadEditingQuizFromStorage, normalizeQuizTypeLabel } from '../utils/quizQuestionNormalization';
 import {
   NO_ACTIVE_SESSION_MESSAGE,
   getActiveTeacherSession,
-  requireActiveTeacherSession,
-} from '../utils/requireActiveTeacherSession';
+  requireActiveHostSession,
+} from '../utils/requireActiveHostSession';
 import { persistLaunchedQuizInLocalStorage } from '../utils/quizLaunchSettings';
 
 const CreateShortAnswerQuiz = () => {
   const navigate = useNavigate();
   const { alert } = useHybridAlert();
-  const { data: teacherData } = useTeacherData();
+  const { data: teacherData } = useHostData();
   const [quizTitle, setQuizTitle] = useState('');
   const [questions, setQuestions] = useState([]);
   const [isQuizSaved, setIsQuizSaved] = useState(false);
@@ -118,7 +118,7 @@ const CreateShortAnswerQuiz = () => {
   };
 
   const launchQuiz = () => {
-    const sessionCheck = requireActiveTeacherSession(teacherData.activeSession);
+    const sessionCheck = requireActiveHostSession(teacherData.activeSession);
     if (!sessionCheck.ok) {
       alert.toast.error(NO_ACTIVE_SESSION_MESSAGE);
       return;

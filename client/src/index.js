@@ -4,8 +4,8 @@ import './index.css';
 import App from './App';
 import { AuthProvider } from './contexts/AuthContext';
 import { HybridAlertProvider } from './contexts/HybridAlertContext';
-import { TeacherRealtimeSyncProvider } from './contexts/TeacherRealtimeSyncContext';
-import { TeacherDataProvider } from './contexts/TeacherDataContext';
+import { HostRealtimeSyncProvider } from './contexts/HostRealtimeSyncContext';
+import { HostDataProvider } from './contexts/HostDataContext';
 import { wakeBackend } from './services/api';
 
 // Wake sleeping Render free-tier backend as early as possible (non-blocking).
@@ -16,11 +16,11 @@ root.render(
   <React.StrictMode>
     <HybridAlertProvider>
       <AuthProvider>
-        <TeacherRealtimeSyncProvider>
-          <TeacherDataProvider>
+        <HostRealtimeSyncProvider>
+          <HostDataProvider>
             <App />
-          </TeacherDataProvider>
-        </TeacherRealtimeSyncProvider>
+          </HostDataProvider>
+        </HostRealtimeSyncProvider>
       </AuthProvider>
     </HybridAlertProvider>
   </React.StrictMode>

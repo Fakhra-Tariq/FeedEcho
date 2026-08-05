@@ -15,14 +15,15 @@ import {
 } from 'firebase/auth';
 import { appToast as toast } from './HybridAlertContext';
 import { authAPI } from '../services/api';
-import { persistStudentSession, clearStudentSession, getStoredStudentSession } from '../utils/studentSession';
+import { persistAudienceSession, clearAudienceSession, getStoredAudienceSession } from '../utils/audienceSession';
 import { schedulePendingQuizSubmissionSync } from '../utils/quizSubmissionSync';
 import {
   canAccessStudentPortal,
   canAccessTeacherPortal,
-  setActivePortal,
-  clearActivePortal,
+  setActivePortal as persistActivePortal,
+  clearActivePortal as clearPersistedActivePortal,
   getActivePortal,
+  resolveActivePortal,
 } from '../utils/userRoles';
 
 const isFirebaseOnly = process.env.REACT_APP_FIREBASE_ONLY === 'true';
@@ -87,6 +88,18 @@ export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [userProfile, setUserProfile] = useState(null);
   const [loading, setLoading] = useState(true);
+  // Tab-scoped host vs audience session — never derive from email alone
+  const [activePortal, setActivePortalState] = useState(() => resolveActivePortal());
+
+  const markActivePortal = (portal) => {
+    persistActivePortal(portal);
+    setActivePortalState(portal);
+  };
+
+  const clearActivePortalState = () => {
+    clearPersistedActivePortal();
+    setActivePortalState(null);
+  };
 
   useEffect(() => {
     let cancelled = false;
@@ -154,10 +167,16 @@ export const AuthProvider = ({ children }) => {
 
               if (
                 canAccessStudentPortal(profile) &&
-                (getActivePortal() === 'student' || getStoredStudentSession())
+                (getActivePortal() === 'student' || getStoredAudienceSession())
               ) {
-                persistStudentSession(profile);
+                persistAudienceSession(profile);
+                if (getActivePortal() !== 'student') {
+                  persistActivePortal('student');
+                }
+                setActivePortalState('student');
                 schedulePendingQuizSubmissionSync();
+              } else {
+                setActivePortalState(resolveActivePortal());
               }
             } catch (profileError) {
               console.error('Error fetching user profile:', profileError);
@@ -307,9 +326,10 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  const teacherSignIn = async (email, password) => {
+  const hostSignIn = async (email, password) => {
     try {
       const result = await signInWithEmailAndPassword(auth, email, password);
+      // Backend/Firebase role value remains 'teacher' (stored contract — do not rename)
       const profile = await syncProfileFromBackend(result.user, 'teacher', undefined, undefined, {
         mergeRole: false,
       });
@@ -319,13 +339,15 @@ export const AuthProvider = ({ children }) => {
         localStorage.removeItem('token');
         localStorage.removeItem('authUser');
         const errorMessage =
-          'This account does not have teacher access. Sign up as a teacher or use the student login.';
+          'This account does not have host access. Sign up as a host or use the audience login.';
         toast.error(errorMessage);
         return { success: false, error: errorMessage };
       }
 
-      setActivePortal('teacher');
-      clearStudentSession();
+      // Portal key value remains 'teacher' for storage compatibility
+      markActivePortal('teacher');
+      persistRole('teacher');
+      clearAudienceSession();
       toast.success('Welcome back!');
       return { success: true, user: profile };
     } catch (error) {
@@ -366,7 +388,7 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  const teacherSignUp = async ({ firstName, lastName, email, password }) => {
+  const hostSignUp = async ({ firstName, lastName, email, password }) => {
     try {
       const firebaseUser = await createAccountOrSignIn(
         email,
@@ -382,13 +404,14 @@ export const AuthProvider = ({ children }) => {
       );
 
       if (!canAccessTeacherPortal(profile)) {
-        const errorMessage = 'Could not enable teacher access for this account.';
+        const errorMessage = 'Could not enable host access for this account.';
         toast.error(errorMessage);
         return { success: false, error: errorMessage };
       }
 
-      setActivePortal('teacher');
-      clearStudentSession();
+      markActivePortal('teacher');
+      persistRole('teacher');
+      clearAudienceSession();
       toast.success('Account created successfully');
       return { success: true, user: profile };
     } catch (error) {
@@ -398,7 +421,7 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  const studentSignIn = async (email, password) => {
+  const audienceSignIn = async (email, password) => {
     try {
       const result = await signInWithEmailAndPassword(auth, email, password);
       const profile = await syncProfileFromBackend(result.user, 'student', undefined, undefined, {
@@ -410,14 +433,14 @@ export const AuthProvider = ({ children }) => {
         localStorage.removeItem('token');
         localStorage.removeItem('authUser');
         const errorMessage =
-          'This account does not have student access. Sign up as a student first.';
+          'This account does not have audience access. Sign up as an audience member first.';
         toast.error(errorMessage);
         return { success: false, error: errorMessage };
       }
 
-      setActivePortal('student');
+      markActivePortal('student');
       persistRole('student');
-      persistStudentSession(profile);
+      persistAudienceSession(profile);
       toast.success('Welcome back!');
       return { success: true, user: profile };
     } catch (error) {
@@ -457,7 +480,7 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  const studentSignUp = async ({ firstName, lastName, email, password }) => {
+  const audienceSignUp = async ({ firstName, lastName, email, password }) => {
     try {
       const firebaseUser = await createAccountOrSignIn(
         email,
@@ -473,14 +496,14 @@ export const AuthProvider = ({ children }) => {
       );
 
       if (!canAccessStudentPortal(profile)) {
-        const errorMessage = 'Could not enable student access for this account.';
+        const errorMessage = 'Could not enable audience access for this account.';
         toast.error(errorMessage);
         return { success: false, error: errorMessage };
       }
 
-      setActivePortal('student');
+      markActivePortal('student');
       persistRole('student');
-      persistStudentSession(profile);
+      persistAudienceSession(profile);
       toast.success('Account created successfully');
       return { success: true, user: profile };
     } catch (error) {
@@ -490,15 +513,15 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  const studentLogout = async () => {
+  const audienceLogout = async () => {
     try {
       await signOut(auth);
       setUser(null);
       setUserProfile(null);
       localStorage.removeItem('token');
       localStorage.removeItem('authUser');
-      clearStudentSession();
-      clearActivePortal();
+      clearAudienceSession();
+      clearActivePortalState();
       toast.success('Logged out successfully');
     } catch (error) {
       toast.error('Error logging out');
@@ -506,7 +529,7 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  const teacherSignInWithGoogle = async () => {
+  const hostSignInWithGoogle = async () => {
     try {
       const provider = new GoogleAuthProvider();
       const result = await signInWithPopup(auth, provider);
@@ -515,13 +538,14 @@ export const AuthProvider = ({ children }) => {
       });
 
       if (!canAccessTeacherPortal(profile)) {
-        const errorMessage = 'This Google account does not have teacher access.';
+        const errorMessage = 'This Google account does not have host access.';
         toast.error(errorMessage);
         return { success: false, error: errorMessage };
       }
 
-      setActivePortal('teacher');
-      clearStudentSession();
+      markActivePortal('teacher');
+      persistRole('teacher');
+      clearAudienceSession();
       toast.success('Signed in with Google');
       return { success: true, user: profile };
     } catch (error) {
@@ -556,7 +580,7 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  const studentSignInWithGoogle = async () => {
+  const audienceSignInWithGoogle = async () => {
     try {
       const provider = new GoogleAuthProvider();
       const result = await signInWithPopup(auth, provider);
@@ -565,14 +589,14 @@ export const AuthProvider = ({ children }) => {
       });
 
       if (!canAccessStudentPortal(profile)) {
-        const errorMessage = 'This Google account does not have student access.';
+        const errorMessage = 'This Google account does not have audience access.';
         toast.error(errorMessage);
         return { success: false, error: errorMessage };
       }
 
-      setActivePortal('student');
+      markActivePortal('student');
       persistRole('student');
-      persistStudentSession(profile);
+      persistAudienceSession(profile);
       toast.success('Signed in with Google');
       return { success: true, user: profile };
     } catch (error) {
@@ -663,7 +687,7 @@ export const AuthProvider = ({ children }) => {
       setUserProfile(null);
       localStorage.removeItem('token');
       localStorage.removeItem('authUser');
-      clearActivePortal();
+      clearActivePortalState();
       toast.success('Logged out successfully');
     } catch (error) {
       toast.error('Error logging out');
@@ -786,16 +810,17 @@ export const AuthProvider = ({ children }) => {
   const value = {
     user,
     userProfile,
+    activePortal,
     loading,
     login,
     register,
-    teacherSignIn,
-    teacherSignUp,
-    teacherSignInWithGoogle,
-    studentSignIn,
-    studentSignUp,
-    studentSignInWithGoogle,
-    studentLogout,
+    hostSignIn,
+    hostSignUp,
+    hostSignInWithGoogle,
+    audienceSignIn,
+    audienceSignUp,
+    audienceSignInWithGoogle,
+    audienceLogout,
     logout,
     resetPassword,
     updateUserProfile,

@@ -169,8 +169,10 @@ export function normalizeQuestionForEditor(question, quizType) {
 }
 
 export function normalizeQuestionsForEditor(questions, quizType) {
-  return normalizeToArray(questions).map((question) =>
-    normalizeQuestionForEditor(question, quizType)
+  return ensureQuestionIds(
+    normalizeToArray(questions).map((question) =>
+      normalizeQuestionForEditor(question, quizType)
+    )
   );
 }
 
@@ -243,11 +245,34 @@ export function normalizeQuestionForStudent(question, quizType) {
   return next;
 }
 
+/**
+ * Ensure every question has a unique, stable id.
+ * Copy & Paste Mixed Type historically reused Date.now()+sectionIndex across
+ * sections, causing answer leakage and wrong scores. Deduping is deterministic
+ * (`q-${index}` for collisions) so client attempt keys match server remaps.
+ */
 export function ensureQuestionIds(questions) {
-  return normalizeToArray(questions).map((question, index) => ({
-    ...question,
-    id: question?.id ?? question?.questionId ?? `q-${index}`,
-  }));
+  const list = normalizeToArray(questions);
+  const seen = new Set();
+
+  return list.map((question, index) => {
+    const raw = question?.id ?? question?.questionId;
+    const candidate =
+      raw !== undefined && raw !== null && String(raw).trim() !== ''
+        ? String(raw)
+        : null;
+
+    let id = candidate;
+    if (!id || seen.has(id)) {
+      id = `q-${index}`;
+    }
+    seen.add(id);
+
+    return {
+      ...question,
+      id,
+    };
+  });
 }
 
 export function normalizeQuestionsForStudent(questions, quizType) {
