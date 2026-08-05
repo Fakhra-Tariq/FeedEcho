@@ -52,7 +52,7 @@ const normalizeListStatus = (status) => {
 };
 
 /** Fallback when GET /api/quizzes returns nothing — load this teacher's quizzes from RTDB. */
-const loadHostQuizzesFromRtdb = (teacherUid) =>
+const loadHostQuizzesFromRtdb = (teacherUid, { includeDeleted = false } = {}) =>
   new Promise((resolve) => {
     if (!teacherUid) {
       resolve([]);
@@ -88,7 +88,7 @@ const loadHostQuizzesFromRtdb = (teacherUid) =>
         const list = Object.entries(snap.val() || {})
           .map(([id, quiz]) => ({ id, ...(quiz || {}) }))
           .filter((quiz) => {
-            if (quiz.deletedAt) return false;
+            if (quiz.deletedAt) return includeDeleted;
             return normalizeListStatus(quiz.status) !== 'ended';
           })
           .sort((a, b) =>
@@ -282,14 +282,15 @@ export default function HostReports() {
     try {
       let list = [];
       try {
-        const response = await quizzesAPI.getAll();
+        // includeDeleted so soft-deleted quizzes still appear in historical reports
+        const response = await quizzesAPI.getAll({ includeDeleted: true });
         list = (response.data?.success ? response.data.data : []).slice();
       } catch {
         list = [];
       }
 
       if (!list.length) {
-        list = await loadHostQuizzesFromRtdb(teacherUid);
+        list = await loadHostQuizzesFromRtdb(teacherUid, { includeDeleted: true });
       } else {
         list.sort((a, b) =>
           String(b.updatedAt || b.createdAt || '').localeCompare(String(a.updatedAt || a.createdAt || ''))
@@ -462,9 +463,10 @@ export default function HostReports() {
     if (!deleteConfirmQuizId) return;
     setDeleting(true);
     try {
-      const response = await quizzesAPI.deletePermanent(deleteConfirmQuizId);
+      // Soft-delete so historical attempts remain available in reports
+      const response = await quizzesAPI.delete(deleteConfirmQuizId);
       if (!response.data?.success) throw new Error(response.data?.error || 'Delete failed');
-      alert.toast.success('Quiz report deleted successfully');
+      alert.toast.success('Quiz removed from library. Past attempts remain in reports.');
       if (selectedReport?.quiz?.id === deleteConfirmQuizId) {
         closeReportModal();
       }

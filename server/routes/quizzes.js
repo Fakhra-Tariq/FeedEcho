@@ -124,8 +124,9 @@ const mapTeacherQuizzes = (raw, targetUid) =>
 router.get('/', async (req, res) => {
   try {
     const uid = req.user.uid;
-    const { status, limit = 50, teacherUid } = req.query;
+    const { status, limit = 50, teacherUid, includeDeleted } = req.query;
     const targetUid = teacherUid || uid;
+    const keepDeleted = includeDeleted === 'true' || includeDeleted === '1';
 
     let quizzes = [];
     try {
@@ -150,7 +151,18 @@ router.get('/', async (req, res) => {
 
     const filtered = [];
     quizzes.forEach((quizData) => {
-      if (quizData.deletedAt) return;
+      // Soft-deleted quizzes stay out of the library, but reports can request them
+      if (quizData.deletedAt) {
+        if (!keepDeleted) return;
+        filtered.push(
+          normalizeQuizListRecord({
+            ...quizData,
+            status: normalizeListStatus(quizData.status) || 'ended',
+            deletedAt: quizData.deletedAt,
+          })
+        );
+        return;
+      }
 
       const normalizedStatus = normalizeListStatus(quizData.status);
       if (normalizedStatus === 'ended') return;
@@ -298,9 +310,9 @@ router.delete('/:id', async (req, res) => {
     const now = new Date().toISOString();
     
     if (permanent === 'true') {
-      // Permanent delete - completely remove from database
-      console.log('🗑️ Permanently deleting quiz:', req.params.id);
-      // also remove code index if present
+      // Permanent delete still keeps quiz_submissions / quiz_participants intact.
+      // Prefer soft-delete from the library so Reports can keep showing history.
+      console.log('🗑️ Permanently deleting quiz record (submissions preserved):', req.params.id);
       const code = existing?.launchSettings?.accessCode;
       const updates = {
         [`quizzes/${id}`]: null,
@@ -309,19 +321,22 @@ router.delete('/:id', async (req, res) => {
       await db.ref().update(updates);
       return res.json({ success: true, message: 'Quiz permanently deleted' });
     } else {
-      // Soft delete - mark as deleted
-      console.log('📝 Soft deleting quiz:', req.params.id);
+      // Soft delete — remove from library / block future joins; keep attempts & reports
+      console.log('📝 Soft deleting quiz (preserving submissions):', req.params.id);
       const code = existing?.launchSettings?.accessCode;
       const updates = {
         deletedAt: now,
         updatedAt: now,
         status: 'Ended',
         launched: false,
-        launchSettings: null
+        launchSettings: null,
       };
       await quizRef(id).update(updates);
       if (code) await quizCodeRef(code).remove();
-      return res.json({ success: true, message: 'Quiz deleted' });
+      return res.json({
+        success: true,
+        message: 'Quiz removed from library. Student attempts and reports are preserved.',
+      });
     }
   } catch (error) {
     console.error('Delete quiz error:', error);

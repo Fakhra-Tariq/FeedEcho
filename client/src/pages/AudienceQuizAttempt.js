@@ -2142,12 +2142,12 @@ const AudienceQuizAttempt = ({
                   </span>
                 </div>
               )}
-              {timeLeft !== null && (
-                <div className={`flex items-center space-x-2 ${
-                  isSpaceRace 
-                    ? (timeLeft < 60 ? 'text-error-600' : 'text-success-600')
-                    : (timeLeft < 60 ? 'text-error-600' : timeLeft < 300 ? 'text-warning-600' : 'text-text-light')
-                }`}>
+                {timeLeft !== null && (
+                  <div className={`flex items-center space-x-2 ${
+                    isSpaceRace 
+                      ? (timeLeft < 60 ? 'text-error-600' : 'text-success-600')
+                      : (timeLeft < 60 ? 'text-error-600' : timeLeft < 300 ? 'text-warning-600' : 'text-text-light')
+                  }`}>
                   <Clock className="w-4 h-4" />
                   <span className="font-medium">{formatTime(timeLeft)}</span>
                   {timeLeft === 0 && !hasAnyAnswer() && (
@@ -2157,36 +2157,25 @@ const AudienceQuizAttempt = ({
               )}
             </div>
           </div>
-          {/* Quiz Duration Display */}
+          {/* Quiz duration notice — static message only; live countdown stays in the header above */}
           {(isSpaceRace || (quiz.launchSettings && (quiz.launchSettings.timePerStudentMinutes || quiz.launchSettings.quizAvailabilityMinutes || quiz.launchSettings.timeLimit || quiz.launchSettings.countdown))) && (
             <div className="mt-3 p-3 rounded-lg border bg-primary/10 border-primary/20">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center space-x-2 text-primary">
-                  <Clock className="w-4 h-4" />
-                  <span className="text-sm font-medium">
-                    {isSpaceRace
-                      ? 'Quiz duration timer'
-                      : quiz.launchSettings.countdown
-                      ? `Quiz duration: ${Math.round(quiz.launchSettings.countdown / 60)} minutes`
-                      : quiz.launchSettings.timePerStudentMinutes
-                      ? `You have ${quiz.launchSettings.timePerStudentMinutes} minutes to complete this quiz`
-                      : quiz.launchSettings.quizAvailabilityMinutes
-                      ? `Quiz available for ${quiz.launchSettings.quizAvailabilityMinutes} minutes`
-                      : quiz.launchSettings.timeLimit
-                      ? `Quiz duration: ${quiz.launchSettings.timeLimit} minutes`
-                      : 'Quiz timed'
-                    }
-                  </span>
-                </div>
-                {timeLeft !== null && (
-                  <div className={`text-sm font-medium ${
-                    isSpaceRace 
-                      ? (timeLeft < 60 ? 'text-error-600' : 'text-success-600')
-                      : 'text-primary'
-                  }`}>
-                    Time remaining: {formatTime(timeLeft)}
-                  </div>
-                )}
+              <div className="flex items-center space-x-2 text-primary">
+                <Clock className="w-4 h-4" />
+                <span className="text-sm font-medium">
+                  {isSpaceRace
+                    ? 'Quiz duration timer'
+                    : quiz.launchSettings.countdown
+                    ? `Quiz duration: ${Math.round(quiz.launchSettings.countdown / 60)} minutes`
+                    : quiz.launchSettings.timePerStudentMinutes
+                    ? `You have ${quiz.launchSettings.timePerStudentMinutes} minutes to complete this quiz`
+                    : quiz.launchSettings.quizAvailabilityMinutes
+                    ? `Quiz available for ${quiz.launchSettings.quizAvailabilityMinutes} minutes`
+                    : quiz.launchSettings.timeLimit
+                    ? `Quiz duration: ${quiz.launchSettings.timeLimit} minutes`
+                    : 'Quiz timed'
+                  }
+                </span>
               </div>
             </div>
           )}

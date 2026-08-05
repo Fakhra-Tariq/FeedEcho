@@ -237,11 +237,11 @@ const QuizLibrary = () => {
   const confirmDelete = async () => {
     if (deleteConfirmQuiz) {
       try {
-        // Call API to permanently delete from database
-        const response = await quizzesAPI.deletePermanent(deleteConfirmQuiz);
+        // Soft-delete: leave library, keep student attempts & teacher reports
+        const response = await quizzesAPI.delete(deleteConfirmQuiz);
         
         if (response.data.success) {
-          alert.toast.success('Quiz permanently deleted successfully!');
+          alert.toast.success('Quiz removed from library. Student reports are preserved.');
           await refreshQuizzes();
         } else {
           throw new Error(response.data.error || 'Delete failed');
@@ -620,7 +620,8 @@ const QuizLibrary = () => {
             </div>
             
             <p className="text-gray-600 mb-6">
-              Are you sure you want to delete this quiz? This action cannot be undone.
+              Remove this quiz from your library? Students will not be able to attempt it
+              again, but existing scores and reports will be kept.
             </p>
             
             <div className="flex items-center space-x-3">

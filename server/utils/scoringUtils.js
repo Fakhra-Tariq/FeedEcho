@@ -177,25 +177,17 @@ const scoreQuestion = (question, response, quizType, totalQuestions) => {
       const studentAnswer = normalizeBooleanLike(response?.answer);
       isCorrect = correctAnswer !== '' && studentAnswer !== '' && correctAnswer === studentAnswer;
     } else if (normalizedType === 'short answer') {
-      const correctAnswer = normalizeString(question?.sampleAnswer || question?.correctAnswer);
+      const correctRaw = question?.sampleAnswer || question?.correctAnswer;
       const studentAnswer = normalizeString(response?.answer);
-      isCorrect =
-        correctAnswer !== '' &&
-        (studentAnswer === correctAnswer ||
-          studentAnswer.includes(correctAnswer) ||
-          correctAnswer.includes(studentAnswer) ||
-          (correctAnswer.includes(',') || correctAnswer.includes(';')
-            ? correctAnswer.split(/[,;]/).some((answer) => {
-                const trimmed = normalizeString(answer);
-                return (
-                  trimmed !== '' &&
-                  (studentAnswer === trimmed ||
-                    studentAnswer.includes(trimmed) ||
-                    trimmed.includes(studentAnswer))
-                );
-              })
-            : false) ||
-          studentAnswer.replace(/\s+/g, ' ') === correctAnswer.replace(/\s+/g, ' '));
+      // Exact match only after case/trim normalize — no substring / partial credit
+      const accepted = String(correctRaw ?? '')
+        .split(/[,;]/)
+        .map((part) => normalizeString(part))
+        .filter(Boolean);
+      const primary = normalizeString(correctRaw);
+      if (primary && !accepted.includes(primary)) accepted.unshift(primary);
+
+      isCorrect = studentAnswer !== '' && accepted.some((answer) => studentAnswer === answer);
     } else if (normalizedType === 'long answer') {
       const correctAnswer = normalizeString(question?.correctAnswer || question?.sampleAnswer);
       const studentAnswer = normalizeString(response?.answer);

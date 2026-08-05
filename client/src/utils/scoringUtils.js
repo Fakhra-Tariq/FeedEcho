@@ -283,34 +283,25 @@ const scoreQuestion = (question, response, quizType, totalQuestions) => {
       
       console.log('📊 True/False Result:', { isCorrect });
     } else if (normalizedType === 'short answer') {
-      const correctAnswer = normalizeString(question?.sampleAnswer || question?.correctAnswer);
+      const correctRaw = question?.sampleAnswer || question?.correctAnswer;
       const studentAnswer = normalizeString(response?.answer);
-      
+      // Exact match only after case/trim normalize — no substring / partial credit
+      const accepted = String(correctRaw ?? '')
+        .split(/[,;]/)
+        .map((part) => normalizeString(part))
+        .filter(Boolean);
+      const primary = normalizeString(correctRaw);
+      if (primary && !accepted.includes(primary)) accepted.unshift(primary);
+
       console.log('🔍 Short Answer Scoring:', {
-        correctAnswer,
+        accepted,
         studentAnswer,
         questionSampleAnswer: question?.sampleAnswer,
         questionCorrectAnswer: question?.correctAnswer
       });
-      
-      isCorrect =
-        correctAnswer !== '' &&
-        (studentAnswer === correctAnswer ||
-          studentAnswer.includes(correctAnswer) ||
-          correctAnswer.includes(studentAnswer) ||
-          (correctAnswer.includes(',') || correctAnswer.includes(';')
-            ? correctAnswer.split(/[,;]/).some((answer) => {
-                const trimmed = normalizeString(answer);
-                return (
-                  trimmed !== '' &&
-                  (studentAnswer === trimmed ||
-                    studentAnswer.includes(trimmed) ||
-                    trimmed.includes(studentAnswer))
-                );
-              })
-            : false) ||
-          studentAnswer.replace(/\s+/g, ' ') === correctAnswer.replace(/\s+/g, ' '));
-      
+
+      isCorrect = studentAnswer !== '' && accepted.some((answer) => studentAnswer === answer);
+
       console.log('📊 Short Answer Result:', { isCorrect });
     } else if (normalizedType === 'long answer') {
       const correctAnswer = normalizeString(question?.correctAnswer || question?.sampleAnswer);
