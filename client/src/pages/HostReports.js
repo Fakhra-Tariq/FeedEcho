@@ -91,11 +91,7 @@ const loadHostQuizzesFromRtdb = (teacherUid, { includeDeleted = false } = {}) =>
             if (quiz.deletedAt) return includeDeleted;
             return normalizeListStatus(quiz.status) !== 'ended';
           })
-          .sort((a, b) =>
-            String(b.createdAt || b.updatedAt || '').localeCompare(
-              String(a.createdAt || a.updatedAt || '')
-            )
-          );
+          .sort(compareQuizzesByLaunchDesc);
 
         finish(list);
       },
@@ -113,6 +109,20 @@ const normalizeQuestionsList = (questions) => {
   }
   return [];
 };
+
+/** Launch/publish time for Reports ordering — ignore delete/attempt/updatedAt churn. */
+const getQuizLaunchSortKey = (quiz) =>
+  String(
+    quiz?.launchSettings?.launchedAt ||
+      quiz?.launchedAt ||
+      quiz?.publishedAt ||
+      quiz?.createdAt ||
+      quiz?.updatedAt ||
+      ''
+  );
+
+const compareQuizzesByLaunchDesc = (a, b) =>
+  getQuizLaunchSortKey(b).localeCompare(getQuizLaunchSortKey(a));
 
 const extractStudentAnswer = extractSubmissionAnswer;
 
@@ -292,10 +302,8 @@ export default function HostReports() {
       if (!list.length) {
         list = await loadHostQuizzesFromRtdb(teacherUid, { includeDeleted: true });
       } else {
-        // Prefer createdAt so soft-delete (or other library-only updates) cannot reorder reports
-        list.sort((a, b) =>
-          String(b.createdAt || b.updatedAt || '').localeCompare(String(a.createdAt || a.updatedAt || ''))
-        );
+        // Newest launched/published quiz first — ignore delete/attempt/updatedAt churn
+        list.sort(compareQuizzesByLaunchDesc);
       }
 
       setQuizzes(list);
