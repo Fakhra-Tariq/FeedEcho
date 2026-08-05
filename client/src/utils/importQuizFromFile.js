@@ -3,6 +3,8 @@
  * Supports the same plain-text formats as Copy & Paste.
  */
 
+import { getQuizTypeMismatchError } from './detectQuizContentType';
+
 const readFileAsArrayBuffer = (file) =>
   new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -434,12 +436,18 @@ export function parseImportedQuizContent(content, type) {
   }
 }
 
-/** Full import pipeline: read file → extract text → parse questions. */
+/** Full import pipeline: read file → extract text → validate type → parse questions. */
 export async function importQuestionsFromFile(file, type) {
   const text = await extractTextFromQuizFile(file);
   if (!text.trim()) {
     throw new Error('No readable text found in the uploaded file.');
   }
+
+  const mismatchError = getQuizTypeMismatchError(text, type, 'uploaded');
+  if (mismatchError) {
+    throw new Error(mismatchError);
+  }
+
   const questions = parseImportedQuizContent(text, type);
   return { text, questions };
 }

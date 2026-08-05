@@ -3,6 +3,7 @@ import { X, FileText, CheckCircle, AlertCircle, Sparkles } from 'lucide-react';
 import clsx from 'clsx';
 import { appToast } from '../contexts/HybridAlertContext';
 import { ensureQuestionIds } from '../utils/quizQuestionNormalization';
+import { getQuizTypeMismatchError } from '../utils/detectQuizContentType';
 
 const CopyPasteQuizModal = ({ isOpen, onClose, onCreateQuiz }) => {
   const [selectedType, setSelectedType] = useState('Multiple Choice');
@@ -81,6 +82,12 @@ Sample Answer: H2O`;
   const handleCreateQuiz = async () => {
     if (!pastedContent.trim()) {
       appToast.error('Please paste some content before creating a quiz.');
+      return;
+    }
+
+    const mismatchError = getQuizTypeMismatchError(pastedContent, selectedType, 'pasted');
+    if (mismatchError) {
+      appToast.error(mismatchError);
       return;
     }
 
