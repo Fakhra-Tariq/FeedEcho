@@ -302,6 +302,91 @@ export const collectReportDataForQuiz = (
   return buildQuizReportRow(quiz, mergedSubmissions, joinedCount);
 };
 
+/**
+ * Build ordered launch sessions for the Launch History step.
+ * Prefers API launch bundles; otherwise groups flat rows by launchId.
+ */
+export const buildLaunchHistory = (quiz, submissions = [], participants = [], apiLaunches = null) => {
+  if (Array.isArray(apiLaunches) && apiLaunches.length > 0) {
+    return apiLaunches
+      .slice()
+      .sort((a, b) => {
+        const aTime = String(a.launchedAt || '');
+        const bTime = String(b.launchedAt || '');
+        if (aTime !== bTime) return aTime.localeCompare(bTime);
+        return Number(a.launchNumber || 0) - Number(b.launchNumber || 0);
+      })
+      .map((launch, index) => {
+        const launchSubs = Array.isArray(launch.submissions) ? launch.submissions : [];
+        const launchParts = Array.isArray(launch.participants) ? launch.participants : [];
+        const merged = mergeQuizSubmissionSources(launchSubs, launchParts, quiz);
+        const joinedCount = Math.max(
+          Number(launch.participantCount) || 0,
+          launchParts.length,
+          merged.length
+        );
+        const row = buildQuizReportRow(quiz, merged, joinedCount);
+        return {
+          ...row,
+          id: launch.id || `launch-${index + 1}`,
+          launchNumber: index + 1,
+          launchedAt: launch.launchedAt || null,
+          finishedAt: launch.finishedAt || null,
+          status: launch.status || 'ended',
+          isLegacy: Boolean(launch.isLegacy),
+        };
+      });
+  }
+
+  const byLaunch = new Map();
+  const ensureBucket = (launchId) => {
+    const key = launchId || 'legacy';
+    if (!byLaunch.has(key)) {
+      byLaunch.set(key, { id: key, submissions: [], participants: [], launchedAt: null });
+    }
+    return byLaunch.get(key);
+  };
+
+  (participants || []).forEach((p) => {
+    const bucket = ensureBucket(p?.launchId);
+    bucket.participants.push(p);
+    const candidate = p?.joinedAt || null;
+    if (candidate && (!bucket.launchedAt || String(candidate) < String(bucket.launchedAt))) {
+      bucket.launchedAt = candidate;
+    }
+  });
+
+  (submissions || []).forEach((s) => {
+    const bucket = ensureBucket(s?.launchId);
+    bucket.submissions.push(s);
+    const candidate = s?.submittedAt || s?.joinedAt || null;
+    if (candidate && (!bucket.launchedAt || String(candidate) < String(bucket.launchedAt))) {
+      bucket.launchedAt = candidate;
+    }
+  });
+
+  if (byLaunch.size === 0) {
+    return [];
+  }
+
+  return Array.from(byLaunch.values())
+    .sort((a, b) => String(a.launchedAt || '').localeCompare(String(b.launchedAt || '')))
+    .map((bucket, index) => {
+      const merged = mergeQuizSubmissionSources(bucket.submissions, bucket.participants, quiz);
+      const joinedCount = Math.max(bucket.participants.length, merged.length);
+      const row = buildQuizReportRow(quiz, merged, joinedCount);
+      return {
+        ...row,
+        id: bucket.id,
+        launchNumber: index + 1,
+        launchedAt: bucket.launchedAt,
+        finishedAt: null,
+        status: 'ended',
+        isLegacy: bucket.id === 'legacy',
+      };
+    });
+};
+
 /** Overview totals used on Teacher Reports and Teacher Profile. */
 export const computeTeacherOverviewStats = (quizReports = []) => {
   const allSubmissions = quizReports.flatMap((r) => r.submissions).filter(isSubmittedRow);

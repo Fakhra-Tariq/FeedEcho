@@ -36,6 +36,7 @@ import {
   countJoinedParticipants,
   isSubmittedRow,
   normalizeTimeTakenSeconds,
+  buildLaunchHistory,
 } from '../utils/hostQuizReports';
 
 const PASS_THRESHOLD = 60;
@@ -270,6 +271,8 @@ export default function HostReports() {
   const [loadingResults, setLoadingResults] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedReport, setSelectedReport] = useState(null);
+  const [selectedLaunch, setSelectedLaunch] = useState(null);
+  const [launchHistory, setLaunchHistory] = useState([]);
   const [selectedSubmission, setSelectedSubmission] = useState(null);
   const [reportModalView, setReportModalView] = useState(null);
   const [loadingReportDetail, setLoadingReportDetail] = useState(false);
@@ -405,8 +408,10 @@ export default function HostReports() {
   const openQuizReport = useCallback(
     async (report) => {
       setSelectedReport(report);
+      setSelectedLaunch(null);
       setSelectedSubmission(null);
-      setReportModalView('participants');
+      setLaunchHistory([]);
+      setReportModalView('launches');
       setLoadingReportDetail(true);
 
       try {
@@ -422,22 +427,45 @@ export default function HostReports() {
               next
             );
             setSelectedReport(refreshed);
+            const launches = buildLaunchHistory(
+              report.quiz,
+              refreshed.submissions,
+              data.participants || [],
+              data.launches || null
+            );
+            setLaunchHistory(launches);
             return next;
           });
+        } else {
+          setLaunchHistory(buildLaunchHistory(report.quiz, report.submissions, [], null));
         }
       } catch {
-        // Live listeners + cached data still apply
+        setLaunchHistory(buildLaunchHistory(report.quiz, report.submissions, [], null));
       } finally {
         setLoadingReportDetail(false);
       }
     },
-    [apiFallbackByQuizId, participantsByQuizId, submissionsByQuizId]
+    [participantsByQuizId, submissionsByQuizId]
   );
+
+  const openLaunchReport = useCallback((launch) => {
+    setSelectedLaunch(launch);
+    setSelectedSubmission(null);
+    setReportModalView('participants');
+  }, []);
 
   const closeReportModal = useCallback(() => {
     setSelectedReport(null);
+    setSelectedLaunch(null);
+    setLaunchHistory([]);
     setSelectedSubmission(null);
     setReportModalView(null);
+  }, []);
+
+  const backToLaunches = useCallback(() => {
+    setSelectedLaunch(null);
+    setSelectedSubmission(null);
+    setReportModalView('launches');
   }, []);
 
   const backToParticipants = useCallback(() => {
@@ -446,27 +474,44 @@ export default function HostReports() {
   }, []);
 
   useEffect(() => {
-    if (!selectedReport?.quiz?.id || reportModalView !== 'participants') return;
-    const updated = quizReports.find((r) => r.quiz.id === selectedReport.quiz.id);
-    if (updated) {
-      setSelectedReport(updated);
-    }
-  }, [quizReports, selectedReport?.quiz?.id, reportModalView]);
-
-  useEffect(() => {
-    if (!selectedReport?.quiz?.id || !selectedSubmission?.participantId || reportModalView !== 'detail') {
-      return;
-    }
+    if (!selectedReport?.quiz?.id || !reportModalView) return;
     const updated = quizReports.find((r) => r.quiz.id === selectedReport.quiz.id);
     if (!updated) return;
-    const refreshedSub = updated.submissions.find(
-      (s) => s.participantId === selectedSubmission.participantId
+
+    setSelectedReport(updated);
+    const fallback = apiFallbackByQuizId[updated.quiz.id];
+    const launches = buildLaunchHistory(
+      updated.quiz,
+      updated.submissions,
+      fallback?.participants || [],
+      fallback?.launches || null
     );
-    if (refreshedSub) {
-      setSelectedReport(updated);
-      setSelectedSubmission(refreshedSub);
+    setLaunchHistory(launches);
+
+    let activeLaunch = selectedLaunch;
+    if (selectedLaunch?.id) {
+      const refreshedLaunch = launches.find((l) => l.id === selectedLaunch.id);
+      if (refreshedLaunch) {
+        activeLaunch = refreshedLaunch;
+        setSelectedLaunch(refreshedLaunch);
+      }
     }
-  }, [quizReports, selectedReport?.quiz?.id, selectedSubmission?.participantId, reportModalView]);
+
+    if (selectedSubmission?.participantId && reportModalView === 'detail') {
+      const source = activeLaunch || updated;
+      const refreshedSub = (source.submissions || []).find(
+        (s) => s.participantId === selectedSubmission.participantId
+      );
+      if (refreshedSub) setSelectedSubmission(refreshedSub);
+    }
+  }, [
+    quizReports,
+    selectedReport?.quiz?.id,
+    selectedLaunch?.id,
+    selectedSubmission?.participantId,
+    reportModalView,
+    apiFallbackByQuizId,
+  ]);
 
   const handleDeleteQuiz = async () => {
     if (!deleteConfirmQuizId) return;
@@ -761,12 +806,13 @@ export default function HostReports() {
         )}
       </section>
 
-      {/* Quiz report modal — nested participants → detail navigation */}
+      {/* Quiz report modal — launches → participants → detail */}
       {selectedReport && reportModalView && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm"
           onClick={() => {
             if (reportModalView === 'detail') backToParticipants();
+            else if (reportModalView === 'participants') backToLaunches();
             else closeReportModal();
           }}
         >
@@ -824,18 +870,28 @@ export default function HostReports() {
                   )}
                 </div>
               </>
-            ) : (
+            ) : reportModalView === 'participants' && selectedLaunch ? (
               <>
                 <div className="flex items-start justify-between gap-4 p-6 border-b border-primary/10">
                   <div>
-                    <p className="text-xs font-semibold uppercase tracking-wide text-primary mb-1">Quiz report</p>
+                    <button
+                      type="button"
+                      onClick={backToLaunches}
+                      className="inline-flex items-center gap-1 text-sm text-primary hover:underline mb-2"
+                    >
+                      <ArrowLeft className="w-4 h-4" />
+                      Back to launch history
+                    </button>
+                    <p className="text-xs font-semibold uppercase tracking-wide text-primary mb-1">
+                      Launch {selectedLaunch.launchNumber}
+                    </p>
                     <h3 className="text-xl font-bold text-text">{selectedReport.quiz.title}</h3>
                     <p className="text-sm text-text-light mt-1">
-                      {selectedReport.joinedCount} student{selectedReport.joinedCount === 1 ? '' : 's'} joined
-                      {selectedReport.submittedCount > 0
-                        ? ` · ${selectedReport.submittedCount} submitted`
+                      {selectedLaunch.joinedCount} student{selectedLaunch.joinedCount === 1 ? '' : 's'} joined
+                      {selectedLaunch.submittedCount > 0
+                        ? ` · ${selectedLaunch.submittedCount} submitted`
                         : ''}
-                      {selectedReport.avgScore != null ? ` · Average ${selectedReport.avgScore}%` : ''}
+                      {selectedLaunch.avgScore != null ? ` · Average ${selectedLaunch.avgScore}%` : ''}
                     </p>
                   </div>
                   <button
@@ -848,16 +904,14 @@ export default function HostReports() {
                 </div>
 
                 <div className="flex-1 overflow-y-auto p-6">
-                  {loadingReportDetail ? (
-                    <div className="text-center py-12 text-text-light">Loading participants...</div>
-                  ) : selectedReport.submissions.length === 0 ? (
+                  {selectedLaunch.submissions.length === 0 ? (
                     <div className="text-center py-12 text-text-light">
                       <Users className="w-10 h-10 mx-auto mb-3 opacity-40" />
-                      <p>No students have joined this quiz yet.</p>
+                      <p>No students have joined this launch yet.</p>
                     </div>
                   ) : (
                     <div className="space-y-3">
-                      {selectedReport.submissions
+                      {selectedLaunch.submissions
                         .slice()
                         .sort(
                           (a, b) =>
@@ -929,6 +983,69 @@ export default function HostReports() {
                             </div>
                           );
                         })}
+                    </div>
+                  )}
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="flex items-start justify-between gap-4 p-6 border-b border-primary/10">
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-wide text-primary mb-1">
+                      Launch History
+                    </p>
+                    <h3 className="text-xl font-bold text-text">{selectedReport.quiz.title}</h3>
+                    <p className="text-sm text-text-light mt-1">
+                      Each launch is kept separately so earlier reports are never overwritten.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={closeReportModal}
+                    className="p-2 rounded-lg text-text-light hover:text-primary hover:bg-primary/10 transition-colors"
+                  >
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
+
+                <div className="flex-1 overflow-y-auto p-6">
+                  {loadingReportDetail ? (
+                    <div className="text-center py-12 text-text-light">Loading launch history...</div>
+                  ) : launchHistory.length === 0 ? (
+                    <div className="text-center py-12 text-text-light">
+                      <Users className="w-10 h-10 mx-auto mb-3 opacity-40" />
+                      <p>No launches recorded for this quiz yet.</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      {launchHistory
+                        .slice()
+                        .sort((a, b) => Number(b.launchNumber || 0) - Number(a.launchNumber || 0))
+                        .map((launch) => (
+                          <div
+                            key={launch.id}
+                            className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 p-4 rounded-xl border border-primary/10 hover:border-primary/25 hover:bg-primary/5 transition-colors"
+                          >
+                            <div className="min-w-0">
+                              <p className="font-semibold text-text">Launch {launch.launchNumber}</p>
+                              <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1 text-sm text-text-light">
+                                <span>{formatDate(launch.launchedAt)}</span>
+                                <span>
+                                  {launch.joinedCount} participant
+                                  {launch.joinedCount === 1 ? '' : 's'}
+                                </span>
+                              </div>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => openLaunchReport(launch)}
+                              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium bg-primary text-white rounded-lg hover:bg-[#5A344D] transition-colors shrink-0"
+                            >
+                              <Eye className="w-4 h-4" />
+                              View
+                            </button>
+                          </div>
+                        ))}
                     </div>
                   )}
                 </div>

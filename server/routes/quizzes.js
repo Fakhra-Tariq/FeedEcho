@@ -13,6 +13,7 @@ const {
 const { normalizeQuestionsForScoring } = require('../utils/scoringUtils');
 const { validateGenerateAiQuizBody, generateQuizWithAi } = require('../utils/generateAiQuiz');
 const { normalizeQuizRecord, normalizeQuizListRecord } = require('../utils/quizNormalization');
+const { createQuizLaunch, closeActiveQuizLaunch } = require('../utils/quizLaunches');
 const router = express.Router();
 
 const generateId = (prefix = 'quiz') =>
@@ -325,11 +326,13 @@ router.delete('/:id', async (req, res) => {
       // Do not bump updatedAt: Reports sort by recency and must keep original order.
       console.log('📝 Soft deleting quiz (preserving submissions):', req.params.id);
       const code = existing?.launchSettings?.accessCode;
+      await closeActiveQuizLaunch(id, existing, now);
       const updates = {
         deletedAt: now,
         status: 'Ended',
         launched: false,
         launchSettings: null,
+        currentLaunchId: null,
       };
       await quizRef(id).update(updates);
       if (code) await quizCodeRef(code).remove();
@@ -402,11 +405,14 @@ router.post('/:id/launch', async (req, res) => {
       }
     }
 
+    const launchRecord = await createQuizLaunch(id, { launchedAt: now });
+
     await quizRef(id).update({
       status: 'launched',
       launched: true,
       launchSettings,
       sessionCode: joinCode,
+      currentLaunchId: launchRecord.id,
       updatedAt: now,
     });
     await quizCodeRef(joinCode).set(id);
@@ -415,11 +421,14 @@ router.post('/:id/launch', async (req, res) => {
       type: 'quiz',
       name: existing.title || 'Quiz',
       activityId: id,
+      launchId: launchRecord.id,
     });
 
     const updated = await quizRef(id).get();
     console.log('Quiz launched successfully:', {
       quizId: id,
+      launchId: launchRecord.id,
+      launchNumber: launchRecord.launchNumber,
       status: updated.val()?.status,
       launched: updated.val()?.launched,
       accessCode: updated.val()?.launchSettings?.accessCode,
@@ -455,12 +464,14 @@ router.post('/:id/finish', async (req, res) => {
     }
 
     await clearActivityFromActiveSession();
+    await closeActiveQuizLaunch(id, existing, now);
 
     await quizRef(id).update({
       status: 'ready',
       launched: false,
       launchSettings: null,
       sessionCode: null,
+      currentLaunchId: null,
       finishedAt: now,
       updatedAt: now,
     });

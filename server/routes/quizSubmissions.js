@@ -1,6 +1,10 @@
 const express = require('express');
 const { db } = require('../config/firebase');
 const { calculateQuizScore } = require('../utils/scoringUtils');
+const {
+  writeLaunchSubmission,
+  loadLaunchBundles,
+} = require('../utils/quizLaunches');
 
 const normalizeQuestionsArray = (questions) => {
   if (Array.isArray(questions)) return questions;
@@ -110,12 +114,17 @@ router.post('/:quizId/submit', async (req, res) => {
     const isLaunchedQuiz =
       !!quiz.launched && (quizStatus === 'active' || quizStatus === 'launched');
     const launchSettings = quiz.launchSettings || {};
+    const currentLaunchId = quiz.currentLaunchId || null;
 
     const participantSnap = await quizParticipantsRef(quizId).child(participantId).get();
     const participantJoined = participantSnap.exists();
+    const participantData = participantJoined ? participantSnap.val() || {} : {};
+    const launchId = currentLaunchId || participantData.launchId || null;
 
     if (launchSettings.oneAttempt && participantJoined) {
-      const existingSubmissionSnap = await quizSubmissionsRef(quizId).child(participantId).get();
+      const existingSubmissionSnap = launchId
+        ? await db.ref(`quiz_launch_submissions/${quizId}/${launchId}/${participantId}`).get()
+        : await quizSubmissionsRef(quizId).child(participantId).get();
       if (existingSubmissionSnap.exists()) {
         console.warn('[quiz-submit] rejected duplicate attempt', logContext);
         return res.status(400).json({
@@ -126,7 +135,6 @@ router.post('/:quizId/submit', async (req, res) => {
     }
 
     if (participantJoined && launchSettings.timePerStudentMinutes > 0) {
-      const participantData = participantSnap.val() || {};
       const joinedAtMs = participantData.joinedAt
         ? new Date(participantData.joinedAt).getTime()
         : NaN;
@@ -238,6 +246,18 @@ router.post('/:quizId/submit', async (req, res) => {
           : 1,
       quizType: quiz.type,
       questions: snapshotQuestionsForReview(quiz.questions),
+      ...(launchId ? { launchId } : {}),
+      ...(studentUid ? { studentUid } : {}),
+      ...(studentEmail ? { studentEmail } : {}),
+    });
+
+    const participantUpdates = stripUndefinedDeep({
+      score,
+      percentage,
+      submittedAt: submission.submittedAt,
+      timeTaken,
+      status: 'completed',
+      ...(launchId ? { launchId } : {}),
       ...(studentUid ? { studentUid } : {}),
       ...(studentEmail ? { studentEmail } : {}),
     });
@@ -245,17 +265,10 @@ router.post('/:quizId/submit', async (req, res) => {
     // Save submission
     try {
       await quizSubmissionsRef(quizId).child(participantId).set(submission);
-      await quizParticipantsRef(quizId).child(participantId).update(
-        stripUndefinedDeep({
-          score,
-          percentage,
-          submittedAt: submission.submittedAt,
-          timeTaken,
-          status: 'completed',
-          ...(studentUid ? { studentUid } : {}),
-          ...(studentEmail ? { studentEmail } : {}),
-        })
-      );
+      await quizParticipantsRef(quizId).child(participantId).update(participantUpdates);
+      if (launchId) {
+        await writeLaunchSubmission(quizId, launchId, participantId, submission, participantUpdates);
+      }
     } catch (writeError) {
       console.error('[quiz-submit] RTDB write failed', {
         ...logContext,
@@ -270,6 +283,7 @@ router.post('/:quizId/submit', async (req, res) => {
 
     console.log('[quiz-submit] saved', {
       ...logContext,
+      launchId,
       score,
       percentage,
       totalQuestions,
@@ -377,12 +391,43 @@ router.get('/:quizId/results', async (req, res) => {
     const submissions = Array.from(submissionMap.values());
     const participants = participantEntries;
 
+    let launches = [];
+    try {
+      launches = await loadLaunchBundles(quizId);
+    } catch (launchErr) {
+      console.warn('Get quiz results: launch history load failed', launchErr?.message || launchErr);
+    }
+
+    if (launches.length === 0 && (submissions.length > 0 || participants.length > 0)) {
+      let launchedAt = quiz?.launchSettings?.launchedAt || quiz?.createdAt || null;
+      [...participants, ...submissions].forEach((row) => {
+        const candidate = row?.joinedAt || row?.submittedAt || null;
+        if (!candidate) return;
+        if (!launchedAt || String(candidate) < String(launchedAt)) launchedAt = candidate;
+      });
+      launches = [
+        {
+          id: 'legacy',
+          launchNumber: 1,
+          launchedAt,
+          finishedAt: quiz?.finishedAt || null,
+          status: 'ended',
+          isLegacy: true,
+          participants,
+          submissions,
+          participantCount: Math.max(participants.length, submissions.length),
+          submissionCount: submissions.length,
+        },
+      ];
+    }
+
     return res.json({
       success: true,
       data: {
         quiz,
         submissions,
         participants,
+        launches,
         totalSubmissions: submissions.length,
         totalParticipants: Math.max(participants.length, submissions.length),
       }

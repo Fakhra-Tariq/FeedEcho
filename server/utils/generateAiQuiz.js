@@ -9,7 +9,70 @@ const TYPE_LABELS = {
   shortAnswer: 'shortAnswer (short answer)',
 };
 
-const SYSTEM_INSTRUCTION = `You are a quiz generation assistant for a classroom platform called FeedEcho. Your only task is to generate quiz questions based on the teacher's description. If the teacher's input is not related to creating quiz content, respond respectfully that you are only able to help with creating quizzes and cannot assist with that request. Never break character regardless of what is asked.`;
+const SYSTEM_INSTRUCTION = `You are a quiz generation assistant for a classroom platform called FeedEcho. Your only task is to generate quiz questions based on the teacher's description. If the teacher's input is not related to creating quiz content, respond respectfully that you are only able to help with creating quizzes and cannot assist with that request. Never break character regardless of what is asked. For shortAnswer questions, always produce objective factual items with a short exact correctAnswer (prefer 1 word, maximum 2–3 words). Never generate Explain/Describe/Discuss-style shortAnswer prompts or paragraph answers.`;
+
+const SHORT_ANSWER_MAX_WORDS = 3;
+
+function countAnswerWords(answer) {
+  return String(answer || '')
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean).length;
+}
+
+/** Reject explanatory stems that produce long free-text answers. */
+function hasForbiddenShortAnswerStem(questionText) {
+  const text = String(questionText || '').trim();
+  if (!text) return true;
+  if (/^(explain|describe|discuss|compare|analyze|analyse|why)\b/i.test(text)) {
+    return true;
+  }
+  // Ban open-ended "How..." prompts, but allow factual forms like "How many/much/long..."
+  if (
+    /^how\b/i.test(text) &&
+    !/^how\s+(many|much|long|old|far|often|tall|wide|high|fast|large)\b/i.test(text)
+  ) {
+    return true;
+  }
+  return false;
+}
+
+function isValidShortAnswerPayload(item) {
+  const questionText = String(item?.questionText || '').trim();
+  const answer = String(item?.correctAnswer ?? '').trim();
+  if (!questionText || !answer) return false;
+  if (hasForbiddenShortAnswerStem(questionText)) return false;
+  if (countAnswerWords(answer) > SHORT_ANSWER_MAX_WORDS) return false;
+  // Exact-match scoring cannot handle sentence/paragraph answers.
+  if (/[.!?;:]/.test(answer) || answer.length > 48) return false;
+  return true;
+}
+
+function buildShortAnswerRules(questionTypes) {
+  if (!questionTypes.includes('shortAnswer')) return '';
+
+  return `
+Short Answer rules (apply ONLY when type is "shortAnswer"; do not apply these to mcq or trueFalse):
+- Generate ONLY objective, factual questions with one clear exact answer.
+- Prefer a single-word correctAnswer whenever possible.
+- If a single word is not possible, correctAnswer may contain at most 2–3 words (e.g. "Alexander Graham Bell", "carbon dioxide").
+- Never use explanatory, descriptive, analytical, essay-style, or paragraph-length sample answers.
+- Never begin shortAnswer questionText with: Explain, Describe, Discuss, Compare, Analyze, Why, or open-ended How (How many / How much / How long are allowed).
+- Students type an exact answer, so correctAnswer must be short and matchable.
+- Good shortAnswer examples:
+  - "What is the capital of Japan?" → "Tokyo"
+  - "Which planet is known as the Red Planet?" → "Mars"
+  - "What is the chemical symbol for gold?" → "Au"
+  - "What is the largest continent?" → "Asia"
+  - "Who invented the telephone?" → "Alexander Graham Bell"
+- Bad shortAnswer examples (never generate these):
+  - "Explain the concept of semantic bleaching..."
+  - "Describe the process of photosynthesis."
+  - "Discuss the causes of World War I."
+  - "Compare TCP and UDP."
+  - "Explain the four pillars of OOP."
+`;
+}
 
 function validateGenerateAiQuizBody(body = {}) {
   const errors = [];
@@ -58,6 +121,7 @@ function validateGenerateAiQuizBody(body = {}) {
 
 function buildUserPrompt({ prompt, questionTypes, difficulty, numberOfQuestions }) {
   const typeDescription = questionTypes.map((type) => TYPE_LABELS[type] || type).join(', ');
+  const shortAnswerRules = buildShortAnswerRules(questionTypes);
 
   return `Generate quiz questions for FeedEcho using the teacher's description below.
 
@@ -87,7 +151,7 @@ The response must be a JSON array of exactly ${numberOfQuestions} question objec
   {
     "questionText": "string",
     "type": "shortAnswer",
-    "correctAnswer": "expected answer"
+    "correctAnswer": "Tokyo"
   }
 ]
 
@@ -97,9 +161,10 @@ Rules:
 - Do not include options for trueFalse or shortAnswer.
 - correctAnswer for mcq must exactly match one string in options.
 - correctAnswer for trueFalse must be "true" or "false".
-- correctAnswer for shortAnswer must be a concise model answer.
+- correctAnswer for shortAnswer must be a short exact answer: prefer 1 word, maximum 2–3 words.
 - Distribute types across the allowed questionTypes.
-- Questions must match the teacher description and ${difficulty} difficulty.`;
+- Questions must match the teacher description and ${difficulty} difficulty.
+${shortAnswerRules}`;
 }
 
 function resolveCorrectOptionIndex(options, correctAnswer) {
@@ -246,6 +311,10 @@ function isValidRawQuizQuestion(item) {
     return normalized === 'true' || normalized === 'false' || answer === true || answer === false;
   }
 
+  if (type === 'shortAnswer') {
+    return isValidShortAnswerPayload(item);
+  }
+
   return String(answer ?? '').trim().length > 0;
 }
 
@@ -267,11 +336,116 @@ function buildQuizResult(payload, normalizedQuestions) {
   };
 }
 
+const TITLE_PREFIX_PATTERNS = [
+  /^(please\s+)?(can\s+you|could\s+you|would\s+you)\s+/i,
+  /^(i\s+want\s+you\s+to|i\s+would\s+like\s+you\s+to|i\s+need\s+you\s+to|i'?d\s+like\s+you\s+to)\s+/i,
+  /^(i\s+want|i\s+would\s+like|i\s+need|i'?d\s+like)\s+(a\s+|an\s+|to\s+)?/i,
+  /^(please\s+)?(help\s+me\s+)?(to\s+)?/i,
+  /^(generate|create|make|write|build|prepare|design|produce|give\s+me|make\s+me)\s+/i,
+  /^(a\s+|an\s+|some\s+|the\s+)?(short\s+|quick\s+|simple\s+|brief\s+)?(quiz|quizzes|questions?|test|exam|assessment)\s*/i,
+  /^(on|about|for|regarding|covering|based\s+on|related\s+to|with\s+topic|with\s+the\s+topic|on\s+the\s+topic\s+of|on\s+topic)\s+/i,
+  /^(topic|subject)\s*[:\-–—]\s*/i,
+];
+
+const TITLE_MAX_WORDS = 5;
+
+function stripTitlePrefixes(value) {
+  let text = String(value || '').trim();
+  if (!text) return '';
+
+  let changed = true;
+  while (changed && text) {
+    changed = false;
+    for (const pattern of TITLE_PREFIX_PATTERNS) {
+      const next = text.replace(pattern, '').trim();
+      if (next !== text) {
+        text = next;
+        changed = true;
+      }
+    }
+  }
+
+  // Drop a leftover leading "quiz on/about ..." if prefixes left a fragment.
+  text = text
+    .replace(/^(quiz|quizzes|questions?|test|exam)\s+(on|about|for|regarding)\s+/i, '')
+    .replace(/^(on|about|for|regarding)\s+/i, '')
+    .trim();
+
+  return text;
+}
+
+function titleCaseWord(word) {
+  if (!word) return word;
+
+  if (word.includes('-')) {
+    return word.split('-').map(titleCaseWord).join('-');
+  }
+
+  // Keep acronyms (HTML, DNA) and mixed-case tokens (DevOps).
+  if (word.length <= 5 && word === word.toUpperCase() && /[A-Z]/.test(word)) {
+    return word;
+  }
+  if (/[a-z]/.test(word) && /[A-Z]/.test(word.slice(1))) {
+    return word;
+  }
+
+  return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();
+}
+
+function toQuizTitleCase(text) {
+  return String(text || '')
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean)
+    .map(titleCaseWord)
+    .join(' ');
+}
+
+/** Derive a short subject title from the teacher prompt — never reuse the full prompt. */
 function buildQuizTitleFromPrompt(prompt) {
-  const trimmed = String(prompt || '').trim();
-  if (!trimmed) return 'AI Generated Quiz';
-  if (trimmed.length <= 60) return trimmed;
-  return `${trimmed.slice(0, 57).trim()}...`;
+  const original = String(prompt || '').trim().replace(/\s+/g, ' ');
+  if (!original) return 'AI Generated Quiz';
+
+  // Prefer the overall subject before a colon (subtopics after the colon are ignored).
+  // Do not split on hyphens — titles like "object-oriented programming" must stay intact.
+  const colonIndex = original.search(/[:：]/);
+  let candidate = colonIndex >= 0 ? original.slice(0, colonIndex).trim() : original;
+  if (!candidate) candidate = original;
+
+  // Use the first sentence/clause if the prompt is conversational.
+  candidate = candidate.split(/[.?!]/)[0].trim() || candidate;
+
+  candidate = stripTitlePrefixes(candidate);
+
+  // Remove trailing instructional leftovers.
+  candidate = candidate
+    .replace(/\b(please|thanks|thank\s+you)\b/gi, ' ')
+    .replace(/["""''`]+/g, '')
+    .replace(/\s+/g, ' ')
+    .replace(/^[,;.\-–—\s]+|[,;.\-–—\s]+$/g, '')
+    .trim();
+
+  if (!candidate) return 'AI Generated Quiz';
+
+  // Prefer a concise title (1–5 words).
+  const words = candidate.split(/\s+/).filter(Boolean);
+  if (words.length > TITLE_MAX_WORDS) {
+    candidate = words.slice(0, TITLE_MAX_WORDS).join(' ');
+  }
+
+  const titled = toQuizTitleCase(candidate);
+  if (!titled) return 'AI Generated Quiz';
+
+  // Safety: never fall back to dumping a long conversational prompt as the title.
+  if (
+    titled.length > 60 ||
+    (titled.toLowerCase() === original.toLowerCase() && original.split(/\s+/).length > TITLE_MAX_WORDS)
+  ) {
+    const shortened = toQuizTitleCase(words.slice(0, Math.min(TITLE_MAX_WORDS, words.length)).join(' '));
+    return shortened || 'AI Generated Quiz';
+  }
+
+  return titled;
 }
 
 async function generateQuizWithAi(payload) {
@@ -333,12 +507,17 @@ module.exports = {
   SYSTEM_INSTRUCTION,
   VALID_QUESTION_TYPES,
   VALID_DIFFICULTIES,
+  SHORT_ANSWER_MAX_WORDS,
   validateGenerateAiQuizBody,
   buildUserPrompt,
+  buildShortAnswerRules,
   buildRefusalResult,
   buildQuizResult,
+  buildQuizTitleFromPrompt,
   extractRefusalMessage,
   generateQuizWithAi,
   isValidRawQuizQuestion,
+  isValidShortAnswerPayload,
+  hasForbiddenShortAnswerStem,
   parseGeminiJson,
 };

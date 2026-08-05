@@ -34,6 +34,28 @@
         ".write": true
       }
     },
+    "quiz_launches": {
+      "$quizId": {
+        ".read": true,
+        ".write": true
+      }
+    },
+    "quiz_launch_participants": {
+      "$quizId": {
+        "$launchId": {
+          ".read": true,
+          ".write": true
+        }
+      }
+    },
+    "quiz_launch_submissions": {
+      "$quizId": {
+        "$launchId": {
+          ".read": true,
+          ".write": true
+        }
+      }
+    },
 
     "exit_tickets": {
       ".read": "auth != null",

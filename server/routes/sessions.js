@@ -10,6 +10,7 @@ const {
   resolveActivityKind,
   resolveActivityId,
 } = require('../utils/teacherSessionGuard');
+const { writeLaunchParticipant, closeActiveQuizLaunch } = require('../utils/quizLaunches');
 const router = express.Router();
 
 // ERD-aligned RTDB paths
@@ -561,6 +562,7 @@ router.post('/join', async (req, res) => {
       }
 
       const launchSettings = quiz.launchSettings || {};
+      const currentLaunchId = quiz.currentLaunchId || null;
       if (launchSettings.endTime) {
         const endMs = new Date(launchSettings.endTime).getTime();
         if (!Number.isNaN(endMs) && Date.now() > endMs) {
@@ -575,11 +577,21 @@ router.post('/join', async (req, res) => {
       const trimmedName = name.trim();
 
       if (launchSettings.oneAttempt) {
-        const subsSnap = await db.ref(`quiz_submissions/${effectiveSession.sessionId}`).get();
+        const launchScoped = currentLaunchId
+          ? await db.ref(`quiz_launch_submissions/${effectiveSession.sessionId}/${currentLaunchId}`).get()
+          : null;
+        const subsSnap =
+          launchScoped && launchScoped.exists()
+            ? launchScoped
+            : await db.ref(`quiz_submissions/${effectiveSession.sessionId}`).get();
         if (subsSnap.exists()) {
           const subs = subsSnap.val() || {};
           const alreadySubmitted = Object.values(subs).some((row) => {
             if (!row || typeof row !== 'object') return false;
+            if (!currentLaunchId && row.launchId) return false;
+            if (currentLaunchId && row.launchId && String(row.launchId) !== String(currentLaunchId)) {
+              return false;
+            }
             if (studentUid && row.studentUid && String(row.studentUid) === String(studentUid)) {
               return true;
             }
@@ -607,11 +619,20 @@ router.post('/join', async (req, res) => {
         joinedAt: new Date().toISOString(),
         score: 0,
         quizId: effectiveSession.sessionId,
+        ...(currentLaunchId ? { launchId: currentLaunchId } : {}),
         ...(studentUid ? { studentUid } : {}),
         ...(studentEmail ? { studentEmail } : {}),
       };
 
       await quizParticipantsRef(effectiveSession.sessionId).child(participantId).set(participant);
+      if (currentLaunchId) {
+        await writeLaunchParticipant(
+          effectiveSession.sessionId,
+          currentLaunchId,
+          participantId,
+          participant
+        );
+      }
 
       if (standaloneSessionId) {
         await incrementStandaloneSessionParticipants(standaloneSessionId);
@@ -821,11 +842,15 @@ router.post('/finish', async (req, res) => {
     if (activeSession.type === 'quiz') {
       // Finish quiz
       const qSnap = await quizRef(activeSession.sessionId).get();
-      const code = qSnap.exists() ? qSnap.val()?.launchSettings?.accessCode : null;
+      const quizData = qSnap.exists() ? qSnap.val() || {} : {};
+      const code = quizData?.launchSettings?.accessCode || null;
+      const now = new Date().toISOString();
+      await closeActiveQuizLaunch(activeSession.sessionId, quizData, now);
       await quizRef(activeSession.sessionId).update({
         status: 'ready',
         launched: false,
         launchSettings: null,
+        currentLaunchId: null,
         finishedAt: new Date().toISOString(),
         updatedAt: new Date().toISOString()
       });

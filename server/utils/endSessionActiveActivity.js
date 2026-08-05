@@ -4,6 +4,7 @@ const {
   isCurrentActivityEmpty,
   SESSION_ACTIVITY_TYPES,
 } = require('./teacherSessionGuard');
+const { closeActiveQuizLaunch } = require('./quizLaunches');
 
 const quizRef = (id) => db.ref(`quizzes/${id}`);
 const quizCodeRef = (code) => db.ref(`quiz_codes/${String(code).toUpperCase()}`);
@@ -40,11 +41,13 @@ async function endQuizForSession(sessionCode, now) {
   }
 
   const existing = snap.val() || {};
+  await closeActiveQuizLaunch(quizId, existing, now);
   await quizRef(quizId).update({
     status: 'ready',
     launched: false,
     launchSettings: null,
     sessionCode: null,
+    currentLaunchId: null,
     finishedAt: now,
     updatedAt: now,
   });
