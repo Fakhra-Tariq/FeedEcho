@@ -194,7 +194,7 @@ router.put('/:id', async (req, res) => {
     // guard used by /start (single source of truth: sessions/{id}.currentActivity).
     let resumeLaunchPrep = null;
     if (req.body.status === 'active' && existing.status !== 'active') {
-      resumeLaunchPrep = await prepareActivityLaunch('exitTicket');
+      resumeLaunchPrep = await prepareActivityLaunch('exitTicket', id);
       if (!resumeLaunchPrep.ok) {
         return res.status(400).json({ success: false, error: resumeLaunchPrep.error });
       }
@@ -210,7 +210,15 @@ router.put('/:id', async (req, res) => {
       if (joinCode) {
         await ticketJoinCodeRef(joinCode).set(id);
       }
-      await setSessionCurrentActivity(resumeLaunchPrep.sessionId, 'exitTicket', id);
+      const claim = await setSessionCurrentActivity(resumeLaunchPrep.sessionId, 'exitTicket', id);
+      if (!claim.ok) {
+        await ticketRef(id).update({
+          status: existing.status,
+          updatedAt: new Date().toISOString(),
+        });
+        if (joinCode) await ticketJoinCodeRef(joinCode).remove();
+        return res.status(400).json({ success: false, error: claim.error });
+      }
     }
     if (updates.status) {
       await assertTicketPersisted(id, { status: updates.status });
@@ -269,13 +277,14 @@ router.post('/:id/start', async (req, res) => {
     if (existing.createdBy !== uid && req.userRole !== 'admin')
       return res.status(403).json({ success: false, error: 'Access denied' });
 
-    const launchPrep = await prepareActivityLaunch('exitTicket');
+    const launchPrep = await prepareActivityLaunch('exitTicket', id);
     if (!launchPrep.ok) {
       return res.status(400).json({ success: false, error: launchPrep.error });
     }
 
     const now = new Date().toISOString();
     const joinCode = launchPrep.sessionCode;
+    const previousStatus = existing.status;
 
     const ticketData = {
       status: 'active',
@@ -290,7 +299,19 @@ router.post('/:id/start', async (req, res) => {
     await ticketRef(id).update(ticketData);
     await ticketJoinCodeRef(joinCode).set(id);
     await assertTicketPersisted(id, { status: 'active' });
-    await setSessionCurrentActivity(launchPrep.sessionId, 'exitTicket', id);
+
+    const claim = await setSessionCurrentActivity(launchPrep.sessionId, 'exitTicket', id);
+    if (!claim.ok) {
+      await ticketRef(id).update({
+        status: previousStatus || 'ready',
+        joinCode: existing.joinCode || null,
+        sessionCode: existing.sessionCode || null,
+        updatedAt: now,
+      });
+      await ticketJoinCodeRef(joinCode).remove();
+      return res.status(400).json({ success: false, error: claim.error });
+    }
+
     await appendSessionActivityHistory(launchPrep.sessionId, {
       type: 'exitTicket',
       name: existing.title || 'Exit Ticket',
@@ -366,7 +387,7 @@ router.post('/:id/end', async (req, res) => {
       await ticketJoinCodeRef(joinCode).remove();
     }
     await assertTicketPersisted(id, { status: 'ended' });
-    await clearActivityFromActiveSession();
+    await clearActivityFromActiveSession('exitTicket', id);
     const updated = await loadTicket(id);
 
     console.log('Exit ticket ended:', req.params.id);

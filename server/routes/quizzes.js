@@ -7,7 +7,7 @@ const {
   prepareActivityLaunch,
   setSessionCurrentActivity,
   clearActivityFromActiveSession,
-  clearSessionCurrentActivity,
+  releaseSessionActivityClaim,
   appendSessionActivityHistory,
 } = require('../utils/teacherSessionGuard');
 const { normalizeQuestionsForScoring } = require('../utils/scoringUtils');
@@ -279,6 +279,17 @@ router.put('/:id', async (req, res) => {
     allowed.forEach((key) => {
       if (req.body[key] !== undefined) updates[key] = req.body[key];
     });
+    // Launch/finish must go through /launch and /finish so session.currentActivity stays authoritative.
+    const launchingViaPut =
+      updates.launched === true ||
+      String(updates.status || '').toLowerCase() === 'launched' ||
+      String(updates.status || '').toLowerCase() === 'active';
+    if (launchingViaPut && existing.launched !== true) {
+      return res.status(400).json({
+        success: false,
+        error: 'Use the quiz launch endpoint to start a quiz. Another activity may already be active.',
+      });
+    }
     if (Array.isArray(updates.questions)) {
       const quizType = updates.type || existing.type || 'Multiple Choice';
       updates.questions = normalizeQuestionsForScoring(updates.questions, quizType);
@@ -358,7 +369,7 @@ router.post('/:id/launch', async (req, res) => {
     if (existing.createdBy !== uid && req.userRole !== 'admin')
       return res.status(403).json({ success: false, error: 'Access denied' });
 
-    const launchPrep = await prepareActivityLaunch('quiz');
+    const launchPrep = await prepareActivityLaunch('quiz', id);
     if (!launchPrep.ok) {
       return res.status(400).json({ success: false, error: launchPrep.error });
     }
@@ -416,7 +427,22 @@ router.post('/:id/launch', async (req, res) => {
       updatedAt: now,
     });
     await quizCodeRef(joinCode).set(id);
-    await setSessionCurrentActivity(launchPrep.sessionId, 'quiz', id);
+
+    const claim = await setSessionCurrentActivity(launchPrep.sessionId, 'quiz', id);
+    if (!claim.ok) {
+      await closeActiveQuizLaunch(id, { ...existing, currentLaunchId: launchRecord.id }, now);
+      await quizRef(id).update({
+        status: 'ready',
+        launched: false,
+        launchSettings: null,
+        sessionCode: null,
+        currentLaunchId: null,
+        updatedAt: now,
+      });
+      await quizCodeRef(joinCode).remove();
+      return res.status(400).json({ success: false, error: claim.error });
+    }
+
     await appendSessionActivityHistory(launchPrep.sessionId, {
       type: 'quiz',
       name: existing.title || 'Quiz',
@@ -459,11 +485,10 @@ router.post('/:id/finish', async (req, res) => {
     if (sessionCode.length === 6) {
       const sessionIdSnap = await db.ref(`session_codes/${sessionCode}`).get();
       if (sessionIdSnap.exists()) {
-        await clearSessionCurrentActivity(sessionIdSnap.val());
+        await releaseSessionActivityClaim(sessionIdSnap.val(), 'quiz', id);
       }
     }
-
-    await clearActivityFromActiveSession();
+    await clearActivityFromActiveSession('quiz', id);
     await closeActiveQuizLaunch(id, existing, now);
 
     await quizRef(id).update({

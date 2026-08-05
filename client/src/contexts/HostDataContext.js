@@ -428,15 +428,7 @@ export const HostDataProvider = ({ children }) => {
 
     const attachQuizListeners = (quizId) => {
       cleanupNested();
-      unsubQuiz = onValue(dbRef(db, `quizzes/${quizId}`), (qSnap) => {
-        if (!qSnap.exists()) return;
-        const quiz = qSnap.val() || {};
-        const status = String(quiz.status || '').toLowerCase();
-        const isLive = quiz.launched === true && (status === 'launched' || status === 'active');
-        if (isLive) {
-          applyLiveStats({ currentActivity: 'quiz' });
-        }
-      });
+      // Participant counts only — Active Activity label must come from sessions.currentActivity.
       unsubParticipants = onValue(dbRef(db, `quiz_participants/${quizId}`), (pSnap) => {
         const count = pSnap.exists() ? Object.keys(pSnap.val() || {}).length : 0;
         applyLiveStats({ participants: count });
@@ -445,15 +437,7 @@ export const HostDataProvider = ({ children }) => {
 
     const attachRaceListeners = (raceId) => {
       cleanupNested();
-      unsubRace = onValue(dbRef(db, `spaceRaces/${raceId}`), (rSnap) => {
-        if (!rSnap.exists()) return;
-        const race = rSnap.val() || {};
-        const status = String(race.status || '').toLowerCase();
-        const isLive = ['active', 'running', 'started', 'live'].includes(status);
-        if (isLive) {
-          applyLiveStats({ currentActivity: 'spacerace' });
-        }
-      });
+      // Participant counts only — Active Activity label must come from sessions.currentActivity.
       unsubRaceParticipants = onValue(dbRef(db, `space_race_participants/${raceId}`), (pSnap) => {
         const count = pSnap.exists() ? Object.keys(pSnap.val() || {}).length : 0;
         applyLiveStats({ participants: count });

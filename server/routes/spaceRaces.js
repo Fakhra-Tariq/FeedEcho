@@ -882,12 +882,12 @@ router.post('/start', async (req, res) => {
 
     // Single source of truth: sessions/{id}.currentActivity, checked fresh and
     // self-healing (auto-clears stale flags) on every launch request.
-    const launchPrep = await prepareActivityLaunch('spaceRace');
+    const raceId = racesRef().push().key;
+
+    const launchPrep = await prepareActivityLaunch('spaceRace', raceId);
     if (!launchPrep.ok) {
       return res.status(400).json({ success: false, error: launchPrep.error });
     }
-
-    const raceId = racesRef().push().key;
 
     const joinCode = launchPrep.sessionCode;
 
@@ -912,7 +912,10 @@ router.post('/start', async (req, res) => {
             updates[`spaceRaces/${rid}/endedAt`] = new Date().toISOString();
             updates[`spaceRaces/${rid}/previousStatus`] = 'active';
             const code = raw[rid]?.joinCode || raw[rid]?.accessCode;
-            if (code) updates[`space_race_codes/${String(code).toUpperCase()}`] = null;
+            // Never wipe the live session code — it belongs to the newly claimed race.
+            if (code && String(code).toUpperCase() !== String(joinCode).toUpperCase()) {
+              updates[`space_race_codes/${String(code).toUpperCase()}`] = null;
+            }
           });
           return db.ref().update(updates);
         }
@@ -1016,7 +1019,13 @@ router.post('/start', async (req, res) => {
     await raceCodeRef(normalizedCode).set(raceId);
     console.log('✅ Code mapping stored successfully');
     
-    await setSessionCurrentActivity(launchPrep.sessionId, 'spaceRace', raceId);
+    const claim = await setSessionCurrentActivity(launchPrep.sessionId, 'spaceRace', raceId);
+    if (!claim.ok) {
+      await raceRef(raceId).remove();
+      await raceCodeRef(normalizedCode).remove();
+      return res.status(400).json({ success: false, error: claim.error });
+    }
+
     await appendSessionActivityHistory(launchPrep.sessionId, {
       type: 'spaceRace',
       name: quizTitle || 'Space Race',
@@ -1052,7 +1061,7 @@ router.post('/start', async (req, res) => {
         });
         await raceCodeRef(joinCode).remove();
         
-        await clearActivityFromActiveSession();
+        await clearActivityFromActiveSession('spaceRace', raceId);
 
         console.log('✅ Space Race auto-ended successfully:', raceId);
       } catch (error) {
@@ -1901,7 +1910,7 @@ router.post('/:id/resume', async (req, res) => {
         const code = race.joinCode || race.accessCode;
         if (code) await raceCodeRef(code).remove();
         
-        await clearActivityFromActiveSession();
+        await clearActivityFromActiveSession('spaceRace', id);
 
         // Clear timer reference
         if (global.activeRaceTimers && global.activeRaceTimers[id]) {
@@ -1922,12 +1931,31 @@ router.post('/:id/resume', async (req, res) => {
       console.log('Auto-end disabled on resume; Space Race will remain active until manually ended.');
     }
     
+    // Resume must not create a second live activity — reclaim this race's session slot only.
+    const launchPrep = await prepareActivityLaunch('spaceRace', id);
+    if (!launchPrep.ok) {
+      return res.status(400).json({ success: false, error: launchPrep.error });
+    }
+
+    const claim = await setSessionCurrentActivity(launchPrep.sessionId, 'spaceRace', id);
+    if (!claim.ok) {
+      return res.status(400).json({ success: false, error: claim.error });
+    }
+
+    const joinCode = launchPrep.sessionCode;
+    if (joinCode) {
+      await raceCodeRef(joinCode).set(id);
+    }
+
     await raceRef(id).update({
       status: 'active',
       isPaused: false,
       resumedAt: new Date().toISOString(),
       endTime: newEndTime.toISOString(),
-      remainingTime: null // Clear remaining time
+      remainingTime: null, // Clear remaining time
+      joinCode: joinCode || race.joinCode || race.accessCode || null,
+      accessCode: joinCode || race.accessCode || race.joinCode || null,
+      sessionCode: joinCode || race.sessionCode || null,
     });
     
     return res.json({ success: true, message: 'Space race resumed', newEndTime });
@@ -1959,7 +1987,7 @@ router.post('/:id/end', async (req, res) => {
       delete global.activeRaceTimers[raceId];
     }
 
-    await clearActivityFromActiveSession();
+    await clearActivityFromActiveSession('spaceRace', raceId);
 
     await raceRef(raceId).update({
       status: 'completed',
@@ -2130,7 +2158,7 @@ router.put('/status/:id', async (req, res) => {
     
     // Add specific timestamps based on status
     if (status === 'active') {
-      const launchPrep = await prepareActivityLaunch('spaceRace');
+      const launchPrep = await prepareActivityLaunch('spaceRace', raceId);
       if (!launchPrep.ok) {
         return res.status(400).json({ success: false, error: launchPrep.error });
       }
@@ -2145,13 +2173,20 @@ router.put('/status/:id', async (req, res) => {
       // The join duration timer is calculated from startedAt + joinDuration in the frontend
 
       await raceCodeRef(launchPrep.sessionCode).set(raceId);
-      
-      await setSessionCurrentActivity(launchPrep.sessionId, 'spaceRace', raceId);
-      await appendSessionActivityHistory(launchPrep.sessionId, {
-        type: 'spaceRace',
-        name: race.title || 'Space Race',
-        activityId: raceId,
-      });
+
+      const claim = await setSessionCurrentActivity(launchPrep.sessionId, 'spaceRace', raceId);
+      if (!claim.ok) {
+        await raceCodeRef(launchPrep.sessionCode).remove();
+        return res.status(400).json({ success: false, error: claim.error });
+      }
+
+      if (!launchPrep.alreadyClaimed) {
+        await appendSessionActivityHistory(launchPrep.sessionId, {
+          type: 'spaceRace',
+          name: race.title || 'Space Race',
+          activityId: raceId,
+        });
+      }
     } else if (status === 'paused') {
       updateData.pausedAt = new Date().toISOString();
       updateData.isPaused = true;
@@ -2161,7 +2196,7 @@ router.put('/status/:id', async (req, res) => {
       updateData.endTime = new Date().toISOString();
       const code = race.joinCode || race.accessCode;
       if (code) await raceCodeRef(code).remove();
-      await clearActivityFromActiveSession();
+      await clearActivityFromActiveSession('spaceRace', raceId);
     }
 
     await raceRef(raceId).update(updateData);
@@ -2207,9 +2242,25 @@ router.patch('/:id/visibility', async (req, res) => {
     };
     
     if (isVisible) {
+      // Unhiding must not activate a second session activity.
+      const launchPrep = await prepareActivityLaunch('spaceRace', id);
+      if (!launchPrep.ok) {
+        return res.status(400).json({ success: false, error: launchPrep.error });
+      }
+      const claim = await setSessionCurrentActivity(launchPrep.sessionId, 'spaceRace', id);
+      if (!claim.ok) {
+        return res.status(400).json({ success: false, error: claim.error });
+      }
+      if (launchPrep.sessionCode) {
+        await raceCodeRef(launchPrep.sessionCode).set(id);
+        updateData.joinCode = launchPrep.sessionCode;
+        updateData.accessCode = launchPrep.sessionCode;
+        updateData.sessionCode = launchPrep.sessionCode;
+      }
       updateData.status = 'active';
       updateData.unhiddenAt = new Date().toISOString();
     } else {
+      // Hidden races still occupy the session slot until Finish.
       updateData.status = 'hidden';
       updateData.hiddenAt = new Date().toISOString();
     }
@@ -2257,8 +2308,8 @@ router.delete('/:id', async (req, res) => {
     if (code) updates[`space_race_codes/${String(code).toUpperCase()}`] = null;
     await db.ref().update(updates);
 
-    if (String(race.status || '').toLowerCase() === 'active') {
-      await clearActivityFromActiveSession();
+    if (['active', 'paused', 'hidden', 'running', 'started', 'live'].includes(String(race.status || '').toLowerCase())) {
+      await clearActivityFromActiveSession('spaceRace', raceId);
     }
 
     console.log('✅ Space Race deleted successfully:', raceId);

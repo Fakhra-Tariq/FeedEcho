@@ -170,7 +170,14 @@ router.post('/create', optionalAuth, async (req, res) => {
     };
     await chatSessionRef(id).set(newChat);
     await chatJoinCodeRef(joinCode).set(id);
-    await setSessionCurrentActivity(launchPrep.sessionId, 'anonymousChat', id);
+
+    const claim = await setSessionCurrentActivity(launchPrep.sessionId, 'anonymousChat', id);
+    if (!claim.ok) {
+      await chatSessionRef(id).remove();
+      await chatJoinCodeRef(joinCode).remove();
+      return res.status(400).json({ success: false, error: claim.error });
+    }
+
     await appendSessionActivityHistory(launchPrep.sessionId, {
       type: 'anonymousChat',
       name: newChat.title,
@@ -307,6 +314,17 @@ router.put('/:id', verifyFirebaseToken, async (req, res) => {
     delete updates.id;
     delete updates.createdBy;
     delete updates.createdAt;
+    // Creating/activating a chat must go through /create so session.currentActivity is claimed.
+    const activating =
+      updates.isActive === true || String(updates.status || '').toLowerCase() === 'active';
+    const wasInactive =
+      existing.isActive === false || String(existing.status || '').toLowerCase() === 'ended';
+    if (activating && wasInactive) {
+      return res.status(400).json({
+        success: false,
+        error: 'Use the chat create endpoint to start a live chat. Another activity may already be active.',
+      });
+    }
     await ref.update(updates);
     const updated = await ref.get();
     const msgsSnap = await chatMessagesRef(id).get();
@@ -527,7 +545,11 @@ router.put('/:id/end', verifyFirebaseToken, async (req, res) => {
       lastActivity: now,
       updatedAt: now,
     });
-    await clearActivityFromActiveSession();
+    const joinCode = String(existing.joinCode || existing.sessionCode || '').trim().toUpperCase();
+    if (joinCode) {
+      await chatJoinCodeRef(joinCode).remove();
+    }
+    await clearActivityFromActiveSession('anonymousChat', id);
     const updated = await ref.get();
     const msgsSnap = await chatMessagesRef(id).get();
     const msgs = msgsSnap.exists() ? Object.values(msgsSnap.val() || {}) : [];
