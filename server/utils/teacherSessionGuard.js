@@ -1,6 +1,9 @@
 const { db } = require('../config/firebase');
 const sessionManager = require('./sessionManager');
-const { repairActiveSessionSingleton } = require('./sessionStatusReconcile');
+const {
+  findActiveStandaloneSessionForTeacher,
+  repairActiveSessionSingleton,
+} = require('./sessionStatusReconcile');
 
 const NO_ACTIVE_SESSION_MESSAGE =
   'Please create a session first before launching an activity.';
@@ -98,29 +101,40 @@ async function clearActivityCodeIndex(sessionCode, activityKind) {
 }
 
 /**
- * Ensures the teacher has an active session (can be standalone session or activity session).
- * Made more flexible to support different session types.
+ * Ensures THIS teacher has an active standalone session.
+ * Resolves only from sessions owned by teacherId — never a global/other-teacher pointer.
  */
-async function requireActiveTeacherSession() {
-  let activeSession = await sessionManager.getActiveSession();
-
-  if (!activeSession || String(activeSession.status || '').toLowerCase() !== 'active') {
-    const repair = await repairActiveSessionSingleton();
-    activeSession = repair.singleton;
-  }
-
-  if (!activeSession || String(activeSession.status || '').toLowerCase() !== 'active') {
-    console.log('❌ requireActiveTeacherSession: No active session or not active');
+async function requireActiveTeacherSession(teacherId) {
+  if (!teacherId) {
+    console.log('❌ requireActiveTeacherSession: teacherId required');
     return { ok: false, error: NO_ACTIVE_SESSION_MESSAGE };
   }
 
-  const sessionId = activeSession.sessionId || activeSession.quizId || activeSession.raceId;
-  if (!sessionId) {
-    console.log('❌ requireActiveTeacherSession: No sessionId found');
+  let session = await findActiveStandaloneSessionForTeacher(teacherId);
+
+  if (!session) {
+    const repair = await repairActiveSessionSingleton(teacherId);
+    if (repair.sessionId) {
+      const snap = await db.ref(`sessions/${repair.sessionId}`).get();
+      if (snap.exists()) {
+        const row = snap.val() || {};
+        if (
+          row.teacherId === teacherId &&
+          String(row.status || '').toLowerCase() === 'active'
+        ) {
+          session = { ...row, id: row.id || repair.sessionId };
+        }
+      }
+    }
+  }
+
+  if (!session) {
+    console.log('❌ requireActiveTeacherSession: No active session for teacher', teacherId);
     return { ok: false, error: NO_ACTIVE_SESSION_MESSAGE };
   }
 
-  const sessionCode = String(activeSession.accessCode || activeSession.joinCode || '')
+  const sessionId = session.id;
+  const sessionCode = String(session.sessionCode || '')
     .trim()
     .toUpperCase();
 
@@ -129,29 +143,21 @@ async function requireActiveTeacherSession() {
     return { ok: false, error: NO_ACTIVE_SESSION_MESSAGE };
   }
 
-  console.log('✅ requireActiveTeacherSession: Valid session', { sessionId, sessionCode, type: activeSession.type });
-
-  if (activeSession.type === 'session') {
-    const sessionSnap = await db.ref(`sessions/${sessionId}`).get();
-    if (!sessionSnap.exists()) {
-      console.log('❌ requireActiveTeacherSession: Session document not found');
-      return { ok: false, error: NO_ACTIVE_SESSION_MESSAGE };
-    }
-
-    const session = sessionSnap.val() || {};
-    if (String(session.status || '').toLowerCase() !== 'active') {
-      console.log('❌ requireActiveTeacherSession: Session not active', session.status);
-      return { ok: false, error: NO_ACTIVE_SESSION_MESSAGE };
-    }
-
-    const docCode = String(session.sessionCode || sessionCode || '')
-      .trim()
-      .toUpperCase();
-
-    return { ok: true, sessionCode: docCode, sessionId, session };
+  if (session.teacherId && session.teacherId !== teacherId) {
+    console.log('❌ requireActiveTeacherSession: teacher mismatch', {
+      teacherId,
+      sessionTeacherId: session.teacherId,
+    });
+    return { ok: false, error: NO_ACTIVE_SESSION_MESSAGE };
   }
 
-  return { ok: true, sessionCode, sessionId, session: activeSession };
+  console.log('✅ requireActiveTeacherSession: Valid session', {
+    teacherId,
+    sessionId,
+    sessionCode,
+  });
+
+  return { ok: true, sessionCode, sessionId, session, teacherId };
 }
 
 async function loadActivityByKind(kind, sessionCode, preferredActivityId = null) {
@@ -169,6 +175,13 @@ async function loadActivityByKind(kind, sessionCode, preferredActivityId = null)
  * Returns true when sessions/{id}.currentActivity still maps to a non-finished activity.
  * Paused/hidden activities still occupy the slot until Finish.
  */
+function activityOwnedBySessionTeacher(activity, sessionTeacherId) {
+  if (!sessionTeacherId || !activity) return true;
+  const owner = activity.createdBy || activity.teacherId || activity.ownerId || null;
+  if (!owner) return true;
+  return owner === sessionTeacherId;
+}
+
 async function isSessionActivityStillLive(session) {
   if (!session || isCurrentActivityEmpty(session.currentActivity)) {
     return false;
@@ -181,6 +194,7 @@ async function isSessionActivityStillLive(session) {
 
   const kind = resolveActivityKind(session.currentActivity);
   const preferredId = resolveActivityId(session.currentActivity);
+  const sessionTeacherId = session.teacherId || null;
 
   if (kind === SESSION_ACTIVITY_TYPES.quiz) {
     const quizId = await loadActivityByKind(kind, sessionCode, preferredId);
@@ -188,6 +202,8 @@ async function isSessionActivityStillLive(session) {
     const quizSnap = await db.ref(`quizzes/${quizId}`).get();
     if (!quizSnap.exists()) return false;
     const quiz = quizSnap.val() || {};
+    // Cross-teacher pollution must not block this teacher's session.
+    if (!activityOwnedBySessionTeacher(quiz, sessionTeacherId)) return false;
     const status = String(quiz.status || '').toLowerCase();
     if (status === 'ready' || status === 'ended' || status === 'finished' || status === 'archived') {
       return false;
@@ -201,6 +217,7 @@ async function isSessionActivityStillLive(session) {
     const raceSnap = await db.ref(`spaceRaces/${raceId}`).get();
     if (!raceSnap.exists()) return false;
     const race = raceSnap.val() || {};
+    if (!activityOwnedBySessionTeacher(race, sessionTeacherId)) return false;
     const status = String(race.status || '').toLowerCase();
     if (status === 'ended' || status === 'completed' || status === 'archived') {
       return false;
@@ -215,6 +232,7 @@ async function isSessionActivityStillLive(session) {
     const ticketSnap = await db.ref(`exit_tickets/${ticketId}`).get();
     if (!ticketSnap.exists()) return false;
     const ticket = ticketSnap.val() || {};
+    if (!activityOwnedBySessionTeacher(ticket, sessionTeacherId)) return false;
     const status = String(ticket.status || '').toLowerCase();
     if (status === 'ended' || status === 'archived') return false;
     return status === 'active' || status === 'live' || status === 'started' || status === 'paused';
@@ -226,6 +244,7 @@ async function isSessionActivityStillLive(session) {
     const chatSnap = await db.ref(`chat_sessions/${chatId}`).get();
     if (!chatSnap.exists()) return false;
     const chat = chatSnap.val() || {};
+    if (!activityOwnedBySessionTeacher(chat, sessionTeacherId)) return false;
     if (String(chat.status || '').toLowerCase() === 'ended' || chat.isActive === false) {
       return false;
     }
@@ -301,22 +320,16 @@ async function assertSessionCanLaunchActivity(sessionId, activityType = null, ac
 }
 
 /**
- * Validates session + empty currentActivity, for use at activity launch.
+ * Validates THIS teacher's session + empty currentActivity, for use at activity launch.
  * Pass activityId when reclaiming/resuming the same activity.
+ * teacherId is required — launch must never bind to another teacher's session.
  */
-async function prepareActivityLaunch(activityType, activityId = null) {
-  let activeSession = await sessionManager.getActiveSession();
-
-  if (
-    !activeSession ||
-    String(activeSession.status || '').toLowerCase() !== 'active' ||
-    activeSession.type !== 'session'
-  ) {
-    const repair = await repairActiveSessionSingleton();
-    activeSession = repair.singleton;
+async function prepareActivityLaunch(activityType, activityId = null, teacherId = null) {
+  if (!teacherId) {
+    return { ok: false, error: NO_ACTIVE_SESSION_MESSAGE };
   }
 
-  const teacherSession = await requireActiveTeacherSession();
+  const teacherSession = await requireActiveTeacherSession(teacherId);
   if (!teacherSession.ok) {
     return teacherSession;
   }
@@ -331,6 +344,10 @@ async function prepareActivityLaunch(activityType, activityId = null) {
     return { ok: false, error: NO_ACTIVE_SESSION_MESSAGE };
   }
 
+  if (session.teacherId && session.teacherId !== teacherId) {
+    return { ok: false, error: NO_ACTIVE_SESSION_MESSAGE };
+  }
+
   const sessionCode = String(session.sessionCode || teacherSession.sessionCode || '')
     .trim()
     .toUpperCase();
@@ -338,6 +355,9 @@ async function prepareActivityLaunch(activityType, activityId = null) {
   if (!sessionCode || sessionCode.length !== 6) {
     return { ok: false, error: NO_ACTIVE_SESSION_MESSAGE };
   }
+
+  // Keep this teacher's pointer in sync (never touches other teachers).
+  await repairActiveSessionSingleton(teacherId, teacherSession.sessionId);
 
   const canLaunch = await assertSessionCanLaunchActivity(
     teacherSession.sessionId,
@@ -352,6 +372,7 @@ async function prepareActivityLaunch(activityType, activityId = null) {
     ok: true,
     sessionId: teacherSession.sessionId,
     sessionCode,
+    teacherId,
     activityType: normalizeSessionActivityType(activityType),
     alreadyClaimed: Boolean(canLaunch.alreadyClaimed),
   };
@@ -485,16 +506,25 @@ async function releaseSessionActivityClaim(sessionId, activityType = null, activ
 }
 
 /**
- * Ends an activity's claim on the teacher's active session.
+ * Ends an activity's claim on THIS teacher's active session only.
  * When activityType/activityId are provided, only clears if that activity owns currentActivity.
  */
-async function clearActivityFromActiveSession(activityType = null, activityId = null) {
-  const activeSession = await sessionManager.getActiveSession();
-  if (!activeSession || activeSession.type !== 'session' || !activeSession.sessionId) {
+async function clearActivityFromActiveSession(
+  activityType = null,
+  activityId = null,
+  teacherId = null
+) {
+  if (!teacherId) {
+    console.warn('clearActivityFromActiveSession: teacherId required; refusing global clear');
     return { cleared: false };
   }
 
-  return releaseSessionActivityClaim(activeSession.sessionId, activityType, activityId);
+  const session = await findActiveStandaloneSessionForTeacher(teacherId);
+  if (!session?.id) {
+    return { cleared: false };
+  }
+
+  return releaseSessionActivityClaim(session.id, activityType, activityId);
 }
 
 module.exports = {
@@ -518,4 +548,5 @@ module.exports = {
   appendSessionActivityHistory,
   reconcileSessionCurrentActivity,
   isSessionActivityStillLive,
+  findActiveStandaloneSessionForTeacher,
 };

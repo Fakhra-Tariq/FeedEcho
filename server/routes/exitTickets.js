@@ -194,7 +194,7 @@ router.put('/:id', async (req, res) => {
     // guard used by /start (single source of truth: sessions/{id}.currentActivity).
     let resumeLaunchPrep = null;
     if (req.body.status === 'active' && existing.status !== 'active') {
-      resumeLaunchPrep = await prepareActivityLaunch('exitTicket', id);
+      resumeLaunchPrep = await prepareActivityLaunch('exitTicket', id, uid);
       if (!resumeLaunchPrep.ok) {
         return res.status(400).json({ success: false, error: resumeLaunchPrep.error });
       }
@@ -277,7 +277,7 @@ router.post('/:id/start', async (req, res) => {
     if (existing.createdBy !== uid && req.userRole !== 'admin')
       return res.status(403).json({ success: false, error: 'Access denied' });
 
-    const launchPrep = await prepareActivityLaunch('exitTicket', id);
+    const launchPrep = await prepareActivityLaunch('exitTicket', id, uid);
     if (!launchPrep.ok) {
       return res.status(400).json({ success: false, error: launchPrep.error });
     }
@@ -387,7 +387,7 @@ router.post('/:id/end', async (req, res) => {
       await ticketJoinCodeRef(joinCode).remove();
     }
     await assertTicketPersisted(id, { status: 'ended' });
-    await clearActivityFromActiveSession('exitTicket', id);
+    await clearActivityFromActiveSession('exitTicket', id, uid);
     const updated = await loadTicket(id);
 
     console.log('Exit ticket ended:', req.params.id);

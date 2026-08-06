@@ -3,7 +3,11 @@ const { db, admin } = require('../config/firebase');
 const ActiveSessionManager = require('../utils/ActiveSessionManager');
 const sessionManager = require('../utils/sessionManager');
 const { endActiveActivityForSession } = require('../utils/endSessionActiveActivity');
-const { reconcileTeacherActiveSessions, repairActiveSessionSingleton } = require('../utils/sessionStatusReconcile');
+const {
+  reconcileTeacherActiveSessions,
+  repairActiveSessionSingleton,
+  findActiveStandaloneSessionForTeacher,
+} = require('../utils/sessionStatusReconcile');
 const { saveStudentParticipation } = require('../utils/spaceRaceResourceArchive');
 const { normalizeQuizRecord } = require('../utils/quizNormalization');
 const {
@@ -46,6 +50,24 @@ function normalizeTeamAssignment(value) {
   const normalized = String(value || 'auto-assign').toLowerCase().replace(/_/g, '-');
   if (normalized === 'student-choice') return 'student-choice';
   return 'auto-assign';
+}
+
+/** Reject activities that do not belong to the session's teacher / session code. */
+function activityBelongsToSession(activity, teacherId, sessionCode) {
+  if (!activity || typeof activity !== 'object') return false;
+  const owner = activity.createdBy || activity.teacherId || activity.ownerId || null;
+  if (teacherId && owner && owner !== teacherId) return false;
+  const code = String(
+    activity.sessionCode ||
+      activity.joinCode ||
+      activity.accessCode ||
+      activity.launchSettings?.accessCode ||
+      ''
+  )
+    .trim()
+    .toUpperCase();
+  if (sessionCode && code && code !== String(sessionCode).toUpperCase()) return false;
+  return true;
 }
 
 // POST /api/sessions/join - Unified join session for both quizzes and space races
@@ -163,6 +185,8 @@ router.post('/join', async (req, res) => {
         });
       }
 
+      const sessionTeacherId = standalone.teacherId || activeSession.teacherId || null;
+
       if (kind === 'quiz') {
         let quizId = preferredActivityId;
         if (!quizId) {
@@ -174,6 +198,28 @@ router.post('/join', async (req, res) => {
             success: false,
             error: 'Quiz not found',
             message: 'Quiz is not active for this session code'
+          });
+        }
+        const quizSnap = await quizRef(quizId).get();
+        if (!quizSnap.exists()) {
+          return res.status(404).json({
+            success: false,
+            error: 'Quiz not found',
+            message: 'Quiz is not active for this session code',
+          });
+        }
+        const quiz = quizSnap.val() || {};
+        if (!activityBelongsToSession(quiz, sessionTeacherId, activeCode)) {
+          console.error('Join rejected: quiz does not belong to this session', {
+            quizId,
+            sessionTeacherId,
+            activeCode,
+            quizOwner: quiz.createdBy,
+          });
+          return res.status(404).json({
+            success: false,
+            error: 'Quiz not found',
+            message: 'Quiz is not active for this session code',
           });
         }
         effectiveSession = {
@@ -193,6 +239,28 @@ router.post('/join', async (req, res) => {
             success: false,
             error: 'Space race not found',
             message: 'Space race is not active for this session code'
+          });
+        }
+        const raceSnap = await raceRef(raceId).get();
+        if (!raceSnap.exists()) {
+          return res.status(404).json({
+            success: false,
+            error: 'Space race not found',
+            message: 'Space race is not active for this session code',
+          });
+        }
+        const race = raceSnap.val() || {};
+        if (!activityBelongsToSession(race, sessionTeacherId, activeCode)) {
+          console.error('Join rejected: space race does not belong to this session', {
+            raceId,
+            sessionTeacherId,
+            activeCode,
+            raceOwner: race.createdBy,
+          });
+          return res.status(404).json({
+            success: false,
+            error: 'Space race not found',
+            message: 'Space race is not active for this session code',
           });
         }
         effectiveSession = {
@@ -223,6 +291,19 @@ router.post('/join', async (req, res) => {
           });
         }
         const ticket = ticketSnap.val() || {};
+        if (!activityBelongsToSession(ticket, sessionTeacherId, activeCode)) {
+          console.error('Join rejected: exit ticket does not belong to this session', {
+            ticketId,
+            sessionTeacherId,
+            activeCode,
+            ticketOwner: ticket.createdBy,
+          });
+          return res.status(404).json({
+            success: false,
+            error: 'Exit ticket not found',
+            message: 'Exit ticket is not active for this session code',
+          });
+        }
         const ticketStatus = String(ticket.status || '').toLowerCase();
         if (!['active', 'live', 'started'].includes(ticketStatus)) {
           return res.status(404).json({
@@ -264,6 +345,19 @@ router.post('/join', async (req, res) => {
           });
         }
         const chat = chatSnap.val() || {};
+        if (!activityBelongsToSession(chat, sessionTeacherId, activeCode)) {
+          console.error('Join rejected: live chat does not belong to this session', {
+            chatId,
+            sessionTeacherId,
+            activeCode,
+            chatOwner: chat.createdBy,
+          });
+          return res.status(404).json({
+            success: false,
+            error: 'Live chat not found',
+            message: 'Live chat is not active for this session code',
+          });
+        }
         const chatLive =
           chat.isActive === true || String(chat.status || '').toLowerCase() === 'active';
         if (!chatLive) {
@@ -825,24 +919,34 @@ router.get('/debug', async (req, res) => {
   }
 });
 
-// POST /api/sessions/finish - Unified finish session endpoint
+// POST /api/sessions/finish - Finish THIS teacher's legacy quiz/spaceRace pointer only
 router.post('/finish', async (req, res) => {
   try {
-    const activeSession = await ActiveSessionManager.getActiveSession();
-    
-    if (!activeSession) {
-      return res.status(404).json({ 
-        success: false, 
-        error: 'No active session found' 
+    const teacherId = req.body?.teacherId || req.query?.teacherId || req.user?.uid || null;
+    if (!teacherId) {
+      return res.status(400).json({
+        success: false,
+        error: 'teacherId is required',
       });
     }
-    
-    console.log('Finishing active session:', activeSession);
-    
+
+    const activeSession = await ActiveSessionManager.getActiveSession(teacherId);
+
+    if (!activeSession) {
+      return res.status(404).json({
+        success: false,
+        error: 'No active session found',
+      });
+    }
+
+    console.log('Finishing active session for teacher:', teacherId, activeSession);
+
     if (activeSession.type === 'quiz') {
-      // Finish quiz
       const qSnap = await quizRef(activeSession.sessionId).get();
       const quizData = qSnap.exists() ? qSnap.val() || {} : {};
+      if (quizData.createdBy && quizData.createdBy !== teacherId) {
+        return res.status(403).json({ success: false, error: 'Access denied' });
+      }
       const code = quizData?.launchSettings?.accessCode || null;
       const now = new Date().toISOString();
       await closeActiveQuizLaunch(activeSession.sessionId, quizData, now);
@@ -851,36 +955,37 @@ router.post('/finish', async (req, res) => {
         launched: false,
         launchSettings: null,
         currentLaunchId: null,
-        finishedAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString()
+        finishedAt: now,
+        updatedAt: now,
       });
       if (code) await quizCodeRef(code).remove();
     } else if (activeSession.type === 'spaceRace') {
-      // Finish space race
       const rSnap = await raceRef(activeSession.sessionId).get();
-      const code = rSnap.exists() ? (rSnap.val()?.joinCode || rSnap.val()?.accessCode) : null;
+      const raceData = rSnap.exists() ? rSnap.val() || {} : {};
+      if (raceData.createdBy && raceData.createdBy !== teacherId) {
+        return res.status(403).json({ success: false, error: 'Access denied' });
+      }
+      const code = raceData.joinCode || raceData.accessCode || null;
       await raceRef(activeSession.sessionId).update({
         status: 'draft',
         isPaused: false,
         endedAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString()
+        updatedAt: new Date().toISOString(),
       });
       if (code) await raceCodeRef(code).remove();
     }
-    
-    // Delete global active session
-    await ActiveSessionManager.deleteActiveSession();
-    
+
+    await ActiveSessionManager.deleteActiveSession(teacherId, activeSession.sessionId);
+
     return res.json({
       success: true,
-      message: `${activeSession.type} finished successfully`
+      message: `${activeSession.type} finished successfully`,
     });
-    
   } catch (error) {
     console.error('Error finishing session:', error);
-    return res.status(500).json({ 
-      success: false, 
-      error: error.message 
+    return res.status(500).json({
+      success: false,
+      error: error.message,
     });
   }
 });
@@ -1126,10 +1231,9 @@ router.post('/:sessionId/end', async (req, res) => {
       await db.ref(`session_codes/${session.sessionCode}`).remove();
     }
     
-    // Clear active session singleton
-    await sessionManager.clearActiveSession();
-
+    // Clear only THIS teacher's active-session pointer (never a global singleton).
     if (session.teacherId) {
+      await sessionManager.clearActiveSession(session.teacherId, sessionId);
       await reconcileTeacherActiveSessions(session.teacherId);
     }
     
@@ -1149,85 +1253,34 @@ router.post('/:sessionId/end', async (req, res) => {
   }
 });
 
-// GET /api/sessions/active - Get current active session (repairs singleton if needed)
+// GET /api/sessions/active - Get THIS teacher's active session only
 router.get('/active', async (req, res) => {
   try {
     const { teacherId } = req.query;
-    await repairActiveSessionSingleton(teacherId || null);
-
-    const activeSession = await sessionManager.getActiveSession();
-    
-    if (!activeSession || String(activeSession.status || '').toLowerCase() !== 'active') {
-      return res.json({ 
-        success: true, 
-        data: null 
-      });
-    }
-    
-    if (activeSession.type === 'session') {
-      const sessionSnap = await db.ref(`sessions/${activeSession.sessionId}`).get();
-      if (sessionSnap.exists()) {
-        const session = sessionSnap.val();
-        if (teacherId && session.teacherId && session.teacherId !== teacherId) {
-          const repair = await repairActiveSessionSingleton(teacherId);
-          if (repair.sessionId) {
-            const repairedSnap = await db.ref(`sessions/${repair.sessionId}`).get();
-            if (repairedSnap.exists()) {
-              const repairedSession = repairedSnap.val();
-              return res.json({
-                success: true,
-                data: {
-                  ...repairedSession,
-                  id: repairedSession.id || repair.sessionId,
-                  sessionCode: repairedSession.sessionCode,
-                },
-              });
-            }
-          }
-          return res.json({ success: true, data: null });
-        }
-        return res.json({ 
-          success: true, 
-          data: {
-            ...session,
-            id: session.id || activeSession.sessionId,
-            sessionCode: session.sessionCode || activeSession.accessCode,
-          }
-        });
-      }
+    if (!teacherId) {
+      return res.json({ success: true, data: null });
     }
 
-    // Quiz or space race singleton — scope to requesting teacher when possible
-    if (teacherId && activeSession.type === 'quiz') {
-      const quizSnap = await quizRef(activeSession.sessionId).get();
-      if (quizSnap.exists()) {
-        const quiz = quizSnap.val() || {};
-        if (quiz.createdBy && quiz.createdBy !== teacherId) {
-          return res.json({ success: true, data: null });
-        }
-      }
+    await repairActiveSessionSingleton(teacherId);
+    const session = await findActiveStandaloneSessionForTeacher(teacherId);
+
+    if (!session) {
+      return res.json({ success: true, data: null });
     }
 
-    if (teacherId && activeSession.type === 'spaceRace') {
-      const raceSnap = await raceRef(activeSession.sessionId).get();
-      if (raceSnap.exists()) {
-        const race = raceSnap.val() || {};
-        if (race.createdBy && race.createdBy !== teacherId) {
-          return res.json({ success: true, data: null });
-        }
-      }
-    }
-    
-    return res.json({ 
-      success: true, 
-      data: activeSession 
+    return res.json({
+      success: true,
+      data: {
+        ...session,
+        id: session.id,
+        sessionCode: session.sessionCode,
+      },
     });
-    
   } catch (error) {
     console.error('Error getting active session:', error);
-    return res.status(500).json({ 
-      success: false, 
-      error: error.message 
+    return res.status(500).json({
+      success: false,
+      error: error.message,
     });
   }
 });

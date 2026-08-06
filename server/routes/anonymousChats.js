@@ -130,7 +130,7 @@ router.post('/create', optionalAuth, async (req, res) => {
       }
     }
 
-    const launchPrep = await prepareActivityLaunch('anonymousChat');
+    const launchPrep = await prepareActivityLaunch('anonymousChat', null, ownerId);
     if (!launchPrep.ok) {
       return res.status(400).json({ success: false, error: launchPrep.error });
     }
@@ -549,7 +549,7 @@ router.put('/:id/end', verifyFirebaseToken, async (req, res) => {
     if (joinCode) {
       await chatJoinCodeRef(joinCode).remove();
     }
-    await clearActivityFromActiveSession('anonymousChat', id);
+    await clearActivityFromActiveSession('anonymousChat', id, req.user.uid);
     const updated = await ref.get();
     const msgsSnap = await chatMessagesRef(id).get();
     const msgs = msgsSnap.exists() ? Object.values(msgsSnap.val() || {}) : [];

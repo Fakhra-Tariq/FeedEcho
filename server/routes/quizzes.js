@@ -369,7 +369,7 @@ router.post('/:id/launch', async (req, res) => {
     if (existing.createdBy !== uid && req.userRole !== 'admin')
       return res.status(403).json({ success: false, error: 'Access denied' });
 
-    const launchPrep = await prepareActivityLaunch('quiz', id);
+    const launchPrep = await prepareActivityLaunch('quiz', id, uid);
     if (!launchPrep.ok) {
       return res.status(400).json({ success: false, error: launchPrep.error });
     }
@@ -403,9 +403,8 @@ router.post('/:id/launch', async (req, res) => {
       launchedAt: now,
     };
     
-    // Same quiz already launched? Return existing data (no duplicate launch)
-    const activeSession = await ActiveSessionManager.getActiveSession();
-    if (activeSession?.status === 'active' && activeSession.type === 'quiz' && activeSession.sessionId === req.params.id) {
+    // Same quiz already owns this teacher's session slot — return existing data.
+    if (launchPrep.alreadyClaimed) {
       const quizSnap = await quizRef(id).get();
       if (quizSnap.exists()) {
         const quizData = quizSnap.val();
@@ -488,7 +487,7 @@ router.post('/:id/finish', async (req, res) => {
         await releaseSessionActivityClaim(sessionIdSnap.val(), 'quiz', id);
       }
     }
-    await clearActivityFromActiveSession('quiz', id);
+    await clearActivityFromActiveSession('quiz', id, uid);
     await closeActiveQuizLaunch(id, existing, now);
 
     await quizRef(id).update({

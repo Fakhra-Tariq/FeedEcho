@@ -1,34 +1,40 @@
 const { db } = require('../config/firebase');
 
-const PATH = 'activeSession/singleton';
+/** Legacy global pointer — never authoritative for multi-teacher launches. */
+const LEGACY_SINGLETON_PATH = 'activeSession/singleton';
+
+/** Per-teacher active session pointer. */
+const teacherPath = (teacherId) => `activeSession/byTeacher/${String(teacherId)}`;
+
+function normalizeSession(data) {
+  if (!data || typeof data !== 'object') return null;
+  return {
+    ...data,
+    type: data.type,
+    sessionId: data.sessionId || data.quizId || data.raceId || null,
+    accessCode:
+      typeof data.accessCode === 'string' ? data.accessCode.toUpperCase() : data.accessCode,
+    status: typeof data.status === 'string' ? data.status.toLowerCase() : data.status,
+    teacherId: data.teacherId || null,
+  };
+}
 
 /**
- * Get the current active session document.
- * Returns the document data or null if none exists.
+ * Get the active session pointer for a specific teacher.
+ * When teacherId is omitted, returns null (never a global cross-teacher session).
  */
-async function getActiveSession() {
+async function getActiveSession(teacherId = null) {
   try {
-    const snap = await db.ref(PATH).get();
-    if (!snap.exists()) {
+    if (!teacherId) {
       return null;
     }
 
-    const data = snap.val() || {};
+    const snap = await db.ref(teacherPath(teacherId)).get();
+    if (snap.exists()) {
+      return normalizeSession(snap.val() || {});
+    }
 
-    // Normalize common fields for safer downstream comparisons
-    const normalized = {
-      ...data,
-      type: typeof data.type === 'string' ? data.type : data.type,
-      sessionId: data.sessionId || data.quizId || data.raceId || null,
-      accessCode: typeof data.accessCode === 'string'
-        ? data.accessCode.toUpperCase()
-        : data.accessCode,
-      status: typeof data.status === 'string'
-        ? data.status.toLowerCase()
-        : data.status
-    };
-
-    return normalized;
+    return null;
   } catch (error) {
     console.error('sessionManager.getActiveSession error:', error);
     return null;
@@ -36,14 +42,17 @@ async function getActiveSession() {
 }
 
 /**
- * Create or overwrite the singleton active session document.
- * Data should at minimum include: type, sessionId, accessCode.
+ * Create or overwrite the per-teacher active session pointer.
+ * Requires teacherId so teachers never overwrite each other.
  */
 async function createActiveSession(data) {
-  const { type, sessionId, accessCode } = data || {};
+  const { type, sessionId, accessCode, teacherId } = data || {};
 
   if (!type || !sessionId || !accessCode) {
     throw new Error('createActiveSession requires type, sessionId, and accessCode');
+  }
+  if (!teacherId) {
+    throw new Error('createActiveSession requires teacherId for session isolation');
   }
 
   const payload = {
@@ -52,21 +61,57 @@ async function createActiveSession(data) {
     accessCode: String(accessCode).toUpperCase(),
     status: 'active',
     createdAt: data.createdAt || new Date().toISOString(),
-    ...(data.teacherId ? { teacherId: data.teacherId } : {}),
+    teacherId,
   };
 
-  await db.ref(PATH).set(payload);
+  await db.ref(teacherPath(teacherId)).set(payload);
+
+  // Best-effort: remove legacy global singleton if it still points at this teacher,
+  // so old clients cannot keep reading a stolen global pointer.
+  try {
+    const legacySnap = await db.ref(LEGACY_SINGLETON_PATH).get();
+    if (legacySnap.exists()) {
+      const legacy = legacySnap.val() || {};
+      if (
+        !legacy.teacherId ||
+        legacy.teacherId === teacherId ||
+        String(legacy.sessionId || '') === String(sessionId)
+      ) {
+        await db.ref(LEGACY_SINGLETON_PATH).remove();
+      }
+    }
+  } catch (error) {
+    console.warn('sessionManager.createActiveSession: legacy singleton cleanup skipped', error.message);
+  }
+
   console.log('sessionManager.createActiveSession:', payload);
   return payload;
 }
 
 /**
- * Clear the active session singleton document.
+ * Clear the active session pointer for one teacher only.
+ * If sessionId is provided, only clears when the pointer matches that session.
  */
-async function clearActiveSession() {
+async function clearActiveSession(teacherId = null, sessionId = null) {
   try {
-    await db.ref(PATH).remove();
-    console.log('sessionManager.clearActiveSession: active session cleared');
+    if (!teacherId) {
+      console.warn('sessionManager.clearActiveSession: teacherId required; refusing global clear');
+      return false;
+    }
+
+    if (sessionId) {
+      const current = await getActiveSession(teacherId);
+      if (
+        current &&
+        String(current.sessionId || '') !== String(sessionId) &&
+        String(current.id || '') !== String(sessionId)
+      ) {
+        return false;
+      }
+    }
+
+    await db.ref(teacherPath(teacherId)).remove();
+    console.log('sessionManager.clearActiveSession: cleared for teacher', teacherId);
     return true;
   } catch (error) {
     console.error('sessionManager.clearActiveSession error:', error);
@@ -75,24 +120,18 @@ async function clearActiveSession() {
 }
 
 /**
- * Returns true if there is an active session with status "active"
- * (case-insensitive); otherwise false.
+ * Returns true if this teacher has an active session pointer.
  */
-async function isSessionActive() {
-  const session = await getActiveSession();
+async function isSessionActive(teacherId = null) {
+  const session = await getActiveSession(teacherId);
   if (!session) return false;
-
-  const status = typeof session.status === 'string'
-    ? session.status.toLowerCase()
-    : session.status;
-
-  return status === 'active';
+  return String(session.status || '').toLowerCase() === 'active';
 }
 
 module.exports = {
   getActiveSession,
   createActiveSession,
   clearActiveSession,
-  isSessionActive
+  isSessionActive,
+  teacherPath,
 };
-
