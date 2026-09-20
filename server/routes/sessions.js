@@ -13,6 +13,7 @@ const { normalizeQuizRecord } = require('../utils/quizNormalization');
 const {
   resolveActivityKind,
   resolveActivityId,
+  reconcileSessionCurrentActivity,
 } = require('../utils/teacherSessionGuard');
 const { writeLaunchParticipant, closeActiveQuizLaunch } = require('../utils/quizLaunches');
 const router = express.Router();
@@ -1268,12 +1269,17 @@ router.get('/active', async (req, res) => {
       return res.json({ success: true, data: null });
     }
 
+    const reconciled = await reconcileSessionCurrentActivity(session.id);
+    const liveSession = reconciled.session
+      ? { ...session, ...reconciled.session, id: session.id }
+      : session;
+
     return res.json({
       success: true,
       data: {
-        ...session,
+        ...liveSession,
         id: session.id,
-        sessionCode: session.sessionCode,
+        sessionCode: liveSession.sessionCode || session.sessionCode,
       },
     });
   } catch (error) {

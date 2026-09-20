@@ -38,7 +38,7 @@ const AudienceJoinSession = () => {
     if (state.teamSelectionOnly && state.raceData) {
       setRaceData(state.raceData);
       setPendingJoin({
-        trimmedName: state.studentName || loggedInAudience?.name || 'Student',
+        trimmedName: state.studentName || loggedInAudience?.name || 'Audience',
         trimmedCode: String(state.sessionCode || '').toUpperCase(),
         studentUid: loggedInAudience?.uid || null,
         studentEmail: loggedInAudience?.email || null,
@@ -115,7 +115,7 @@ const AudienceJoinSession = () => {
       return;
     }
 
-    const name = studentName.trim() || loggedInAudience?.name || 'Student';
+    const name = studentName.trim() || loggedInAudience?.name || 'Audience';
     if (!name.trim()) {
       alert.toast.error('Please enter your name');
       return;
@@ -177,7 +177,7 @@ const AudienceJoinSession = () => {
                 >
                   <div className="text-lg">Team {teamNum}</div>
                   <div className="text-xs mt-1">
-                    {currentTeamMembers.length}/{maxStudentsPerTeam} students
+                    {currentTeamMembers.length}/{maxStudentsPerTeam} audience members
                   </div>
                   {isFull && (
                     <div className="text-xs text-error-600 mt-1">Full</div>
@@ -225,7 +225,7 @@ const AudienceJoinSession = () => {
             Join Session
           </h1>
           <p className="text-lg text-text-light max-w-2xl mx-auto">
-            Enter your name and session code provided by your teacher to join quiz, space race, or exit ticket
+            Enter your name and session code provided by your host to join quiz, space race, or exit ticket
           </p>
         </div>
 
@@ -279,7 +279,7 @@ const AudienceJoinSession = () => {
                 }}
               />
               <p className="text-xs text-text-light mt-2">
-                Enter the 6-character code provided by your teacher
+                Enter the 6-character code provided by your host
               </p>
             </div>
 
@@ -307,7 +307,7 @@ const AudienceJoinSession = () => {
                 <div>
                   <p className="text-sm font-medium text-text">Need help?</p>
                   <p className="text-xs text-text-light mt-1">
-                    Make sure you have the correct session code from your teacher. The code is case-insensitive and should be exactly 6 characters long.
+                    Make sure you have the correct session code from your host. The code is case-insensitive and should be exactly 6 characters long.
                   </p>
                 </div>
               </div>
@@ -322,7 +322,7 @@ const AudienceJoinSession = () => {
             </div>
             <h3 className="font-semibold text-text mb-2">Timed Sessions</h3>
             <p className="text-sm text-text-light">
-              Complete your quiz within time limit set by your teacher
+              Complete your quiz within time limit set by your host
             </p>
           </div>
 

@@ -3,6 +3,9 @@ import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, Plus, Trash2, Save, Rocket } from 'lucide-react';
 import { useHybridAlert } from '../contexts/HybridAlertContext';
 import LaunchQuizModal from '../components/LaunchQuizModal';
+import NoActiveSessionLaunchModal, {
+  LaunchRequiresSessionHint,
+} from '../components/Host/NoActiveSessionLaunchModal';
 import { quizzesAPI, handleAPIError } from '../services/api';
 import { useHostData } from '../contexts/HostDataContext';
 import {
@@ -22,6 +25,7 @@ const CreateLongAnswerQuiz = () => {
   const [isEditMode, setIsEditMode] = useState(false);
   const [editingQuizId, setEditingQuizId] = useState(null);
   const [showLaunchModal, setShowLaunchModal] = useState(false);
+  const [showNoSessionModal, setShowNoSessionModal] = useState(false);
   const [savedQuizId, setSavedQuizId] = useState(null);
 
   // Load editing quiz if exists
@@ -119,7 +123,7 @@ const CreateLongAnswerQuiz = () => {
       }
     } catch (err) {
       const apiErr = handleAPIError(err);
-      alert.toast.error(apiErr.message || 'Failed to save quiz. Are you logged in as a teacher?');
+      alert.toast.error(apiErr.message || 'Failed to save quiz. Are you logged in as a host?');
       const quiz = { id: isActuallyEditMode ? editingQuizId : Date.now(), ...payload, createdDate: existingQuiz?.createdDate || new Date().toISOString() };
       if (isActuallyEditMode) { const idx = savedQuizzes.findIndex(q => q.id === editingQuizId); if (idx !== -1) savedQuizzes[idx] = quiz; } else savedQuizzes.push(quiz);
       localStorage.setItem('savedQuizzes', JSON.stringify(savedQuizzes));
@@ -131,7 +135,7 @@ const CreateLongAnswerQuiz = () => {
   const launchQuiz = () => {
     const sessionCheck = requireActiveHostSession(teacherData.activeSession);
     if (!sessionCheck.ok) {
-      alert.toast.error(NO_ACTIVE_SESSION_MESSAGE);
+      setShowNoSessionModal(true);
       return;
     }
 
@@ -190,13 +194,16 @@ const CreateLongAnswerQuiz = () => {
 
               {/* Launch Quiz Button - Secondary, appears after saving */}
               {isQuizSaved && (
-                <button
-                  onClick={launchQuiz}
-                  className="flex items-center space-x-2 px-4 sm:px-6 py-2 sm:py-3 bg-[#6D415F] text-white rounded-xl hover:bg-[#5A344D] transition-colors font-medium text-sm sm:text-base shadow-sm hover:shadow-md"
-                >
-                  <Rocket className="w-4 h-4 sm:w-5 sm:h-5" />
-                  <span>Launch Quiz</span>
-                </button>
+                <div className="flex flex-col items-end">
+                  <button
+                    onClick={launchQuiz}
+                    className="flex items-center space-x-2 px-4 sm:px-6 py-2 sm:py-3 bg-[#6D415F] text-white rounded-xl hover:bg-[#5A344D] transition-colors font-medium text-sm sm:text-base shadow-sm hover:shadow-md"
+                  >
+                    <Rocket className="w-4 h-4 sm:w-5 sm:h-5" />
+                    <span>Launch Quiz</span>
+                  </button>
+                  <LaunchRequiresSessionHint />
+                </div>
               )}
             </div>
           </div>
@@ -270,7 +277,7 @@ const CreateLongAnswerQuiz = () => {
                 <textarea
                   value={question.modelAnswer}
                   onChange={(e) => updateModelAnswer(question.id, e.target.value)}
-                  placeholder="Enter model answer or grading notes (for teacher reference only)..."
+                  placeholder="Enter model answer or grading notes (for host reference only)..."
                   rows={6}
                   className="w-full px-4 py-3 text-sm sm:text-base border border-gray-200 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all duration-200 bg-orange-50/50 hover:bg-orange-50/70 resize-none"
                 />
@@ -299,7 +306,7 @@ const CreateLongAnswerQuiz = () => {
                   </div>
                   <div className="flex-1">
                     <h4 className="text-sm font-semibold text-blue-900 mb-1">Manual Grading Required</h4>
-                    <p className="text-sm text-blue-700">Long Answer questions are manually graded by the teacher. Model answers and grading notes are for reference only and will not be shown to students.</p>
+                    <p className="text-sm text-blue-700">Long Answer questions are manually graded by the host. Model answers and grading notes are for reference only and will not be shown to the audience.</p>
                   </div>
                 </div>
               </div>
@@ -355,6 +362,18 @@ const CreateLongAnswerQuiz = () => {
           questions: questions
         }}
         existingAccessCode={getActiveTeacherSession(teacherData.activeSession)?.joinCode || ''}
+      />
+
+      <NoActiveSessionLaunchModal
+        isOpen={showNoSessionModal}
+        onClose={() => setShowNoSessionModal(false)}
+        onSaveAsDraft={async () => {
+          if (!isQuizSaved) {
+            await saveQuiz();
+          } else {
+            alert.toast.success('Quiz is already saved as a draft');
+          }
+        }}
       />
     </div>
   );

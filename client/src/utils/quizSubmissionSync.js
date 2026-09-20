@@ -124,7 +124,7 @@ export const syncPendingQuizSubmissions = async ({ limit = 20 } = {}) => {
   for (const row of pending) {
     const payload = {
       participantId: row.participantId,
-      studentName: row.studentName || row.name || 'Student',
+      studentName: row.studentName || row.name || 'Audience',
       sessionCode: row.sessionCode || '',
       answers: normalizeAnswersForSubmit(row.answers),
       timeTaken: row.timeTaken ?? 1,

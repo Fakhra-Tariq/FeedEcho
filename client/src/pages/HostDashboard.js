@@ -23,7 +23,9 @@ import clsx from 'clsx';
 import { useHostData } from '../contexts/HostDataContext';
 import { getSessionActivityLabel, normalizeSessionCurrentActivity } from '../utils/sessionActivityLabel';
 import { useHybridAlert } from '../contexts/HybridAlertContext';
+import { toParticipantCount } from '../utils/toParticipantCount';
 import { copyToClipboard } from '../utils/copyToClipboard';
+import PageHeaderCard from '../components/Host/PageHeaderCard';
 
 const HostDashboard = () => {
   const navigate = useNavigate();
@@ -166,37 +168,27 @@ const HostDashboard = () => {
   return (
     <div className="space-y-8 animate-fade-in">
       {/* Header Section */}
-      <div className="bg-gradient-to-br from-[#6D415F] via-[#6D415F]/90 to-[#3A2E2A] rounded-3xl p-8 shadow-xl border border-[#6D415F]/30">
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-4xl md:text-5xl font-bold text-white mb-3">Welcome back </h1>
-            <p className="text-lg text-white/90 max-w-3xl">
-              Monitor your classroom's progress and engage with students through interactive activities.
-            </p>
-          </div>
-          <div className="flex items-center gap-4">
-            <button
-              onClick={() => setShowCreateModal(true)}
-              disabled={isSessionActive}
-              className={clsx(
-                'flex items-center gap-2 px-6 py-3 rounded-xl font-semibold transition-all duration-300',
-                'bg-white text-[#6D415F] hover:bg-white/90',
-                'shadow-lg hover:shadow-xl',
-                isSessionActive && 'opacity-50 cursor-not-allowed'
-              )}
-              title={isSessionActive ? 'A session is already active' : 'Create a new session'}
-            >
-              <Plus className="w-5 h-5" />
-              <span className="hidden sm:inline">Create Session</span>
-            </button>
-            <div className="hidden md:block">
-              <div className="w-16 h-16 bg-gradient-to-br from-[#6D415F] to-[#8B5A7C] rounded-full flex items-center justify-center shadow-lg">
-                <Rocket className="w-8 h-8 text-white" />
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
+      <PageHeaderCard
+        icon={Rocket}
+        title="Welcome back "
+        subtitle="Monitor your classroom's progress and engage with the audience through interactive activities."
+        actions={
+          <button
+            onClick={() => setShowCreateModal(true)}
+            disabled={isSessionActive}
+            className={clsx(
+              'flex items-center gap-2 px-6 py-3 rounded-xl font-semibold transition-all duration-300',
+              'bg-white text-[#6D415F] hover:bg-white/90',
+              'shadow-lg hover:shadow-xl',
+              isSessionActive && 'opacity-50 cursor-not-allowed'
+            )}
+            title={isSessionActive ? 'A session is already active' : 'Create a new session'}
+          >
+            <Plus className="w-5 h-5" />
+            <span className="hidden sm:inline">Create Session</span>
+          </button>
+        }
+      />
 
       {/* Session Bar - shown when any session is active */}
       {activeSession && (
@@ -240,7 +232,7 @@ const HostDashboard = () => {
                 )}
                 <div className="flex items-center gap-2">
                   <Users className="w-4 h-4 text-[#6D415F]" />
-                  <span className="text-sm text-[#5A4A55] dark:text-white/70">{activeSession.participants || 0} participants</span>
+                  <span className="text-sm text-[#5A4A55] dark:text-white/70">{toParticipantCount(activeSession.participants)} participants</span>
                 </div>
               </div>
             </div>

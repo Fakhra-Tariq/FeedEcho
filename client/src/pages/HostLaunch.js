@@ -11,6 +11,10 @@ import clsx from 'clsx';
 import CopyPasteQuizModal from '../components/CopyPasteQuizModal';
 import ImportQuizModal from '../components/ImportQuizModal';
 import QuizStructureModal from '../components/QuizStructureModal';
+import InfoRecap from '../components/Host/InfoRecap';
+import SessionLaunchBanner from '../components/Host/SessionLaunchBanner';
+import PageHeaderCard from '../components/Host/PageHeaderCard';
+import { SurfaceCard } from '../components/marketing/SurfaceCard';
 
 const launchOptions = [
   {
@@ -19,12 +23,7 @@ const launchOptions = [
     description: 'Draft questions from a topic in seconds.',
     icon: Sparkles,
     tone: {
-      surface: 'from-primary/14 via-white to-white',
-      glow: 'bg-primary/25',
-      iconWrap: 'bg-primary/20 ring-1 ring-primary/25',
-      icon: 'text-primary',
       cta: 'bg-primary text-white shadow-soft',
-      kicker: 'AI assisted',
     },
   },
   {
@@ -33,12 +32,7 @@ const launchOptions = [
     description: 'Start fresh with your own structure and settings.',
     icon: ClipboardList,
     tone: {
-      surface: 'from-primary/14 via-white to-white',
-      glow: 'bg-primary/25',
-      iconWrap: 'bg-primary/20 ring-1 ring-primary/25',
-      icon: 'text-primary',
       cta: 'bg-primary text-white shadow-soft',
-      kicker: 'Build from scratch',
     },
   },
   {
@@ -47,12 +41,7 @@ const launchOptions = [
     description: 'Upload docs or spreadsheets to convert content.',
     icon: Upload,
     tone: {
-      surface: 'from-primary/14 via-white to-white',
-      glow: 'bg-primary/25',
-      iconWrap: 'bg-primary/20 ring-1 ring-primary/25',
-      icon: 'text-primary',
       cta: 'bg-primary text-white shadow-soft',
-      kicker: 'Bring your files',
     },
   },
   {
@@ -61,12 +50,7 @@ const launchOptions = [
     description: 'Paste raw questions and we\'ll organize them.',
     icon: Pencil,
     tone: {
-      surface: 'from-primary/14 via-white to-white',
-      glow: 'bg-primary/25',
-      iconWrap: 'bg-primary/20 ring-1 ring-primary/25',
-      icon: 'text-primary',
       cta: 'bg-primary text-white shadow-soft',
-      kicker: 'Quick input',
     },
   },
 ];
@@ -118,96 +102,65 @@ const HostLaunch = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-primary/5 animate-fade-in">
-      <div className="container mx-auto px-4 pt-0 pb-4">
-        {/* Centered Quiz Creation Section */}
-        <div className="max-w-4xl mx-auto">
-          <div className="text-center mb-2 pt-3">
-            <div className="inline-flex items-center gap-2 text-primary mb-2">
-              <Sparkles className="h-5 w-5" />
-              <span className="text-sm font-semibold uppercase tracking-wider">Quiz Creation</span>
-            </div>
-            <h1 className="text-4xl font-bold text-text mb-2 bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">
-              Create a New Quiz
-            </h1>
-            <p className="text-base text-text-light max-w-2xl mx-auto leading-relaxed">
-              Choose how you want to build your assessment. Start from scratch, use AI assistance, or import existing content.
-            </p>
-          </div>
+    <div className="px-6 pb-6 space-y-4 animate-fade-in">
+      <SessionLaunchBanner />
 
-          <div className="space-y-3">
-            {/* Primary Creation Options */}
-            <div>
-              <h2 className="text-xl font-semibold text-text mb-3 text-center">Create a new quiz</h2>
-              <div className="grid gap-4 md:grid-cols-2">
-                {launchOptions.slice(0, 2).map((option) => (
-                  <LaunchOptionCard
-                    key={option.key}
-                    icon={option.icon}
-                    title={option.title}
-                    description={option.description}
-                    tone={option.tone}
-                    selected={selectedOption === option.key}
-                    dimmed={Boolean(selectedOption) && selectedOption !== option.key}
-                    onSelect={() =>
-                      setSelectedOption((prev) => (prev === option.key ? null : option.key))
-                    }
-                    onBlankQuizClick={handleBlankQuizClick}
-                    onCopyPasteClick={handleCopyPasteClick}
-                    onImportClick={handleImportClick}
-                    onAiClick={handleAiClick}
-                  />
-                ))}
-              </div>
-            </div>
+      <PageHeaderCard
+        compact
+        title="Create a New Quiz"
+        subtitle="Choose how you'd like to build your next quiz"
+        titleAccessory={
+          <InfoRecap
+            variant="onDark"
+            steps={[
+              'Build your quiz (AI, blank, import, or copy-paste)',
+              'Choose Save as Draft (to launch later) or Launch (to send it live now)',
+              'Launching requires an active session — create one first if you don\'t have one.',
+            ]}
+          />
+        }
+      />
 
-            {/* Secondary Creation Options */}
-            <div>
-              <h2 className="text-xl font-semibold text-text mb-3 text-center">Other ways to start</h2>
-              <div className="grid gap-4 md:grid-cols-2">
-                {launchOptions.slice(2, 4).map((option) => (
-                  <LaunchOptionCard
-                    key={option.key}
-                    icon={option.icon}
-                    title={option.title}
-                    description={option.description}
-                    tone={option.tone}
-                    selected={selectedOption === option.key}
-                    dimmed={Boolean(selectedOption) && selectedOption !== option.key}
-                    onSelect={() =>
-                      setSelectedOption((prev) => (prev === option.key ? null : option.key))
-                    }
-                    onBlankQuizClick={handleBlankQuizClick}
-                    onCopyPasteClick={handleCopyPasteClick}
-                    onImportClick={handleImportClick}
-                    onAiClick={handleAiClick}
-                  />
-                ))}
-              </div>
-            </div>
-          </div>
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
+        {launchOptions.map((option) => (
+          <LaunchOptionCard
+            key={option.key}
+            icon={option.icon}
+            title={option.title}
+            description={option.description}
+            tone={option.tone}
+            selected={selectedOption === option.key}
+            dimmed={Boolean(selectedOption) && selectedOption !== option.key}
+            onSelect={() =>
+              setSelectedOption((prev) => (prev === option.key ? null : option.key))
+            }
+            onBlankQuizClick={handleBlankQuizClick}
+            onCopyPasteClick={handleCopyPasteClick}
+            onImportClick={handleImportClick}
+            onAiClick={handleAiClick}
+          />
+        ))}
+      </div>
 
-          {/* Quiz Creation Panel */}
-          <div
-            ref={panelRef}
-            className={clsx(
-              'rounded-2xl border bg-white shadow-soft overflow-hidden transition-all duration-500',
-              selectedOption
-                ? 'opacity-100 translate-y-0 scale-100 max-h-[1400px] border-gray-200'
-                : 'opacity-0 -translate-y-2 scale-[0.99] max-h-0 border-transparent shadow-none'
-            )}
-          >
-            <div
-              className={clsx(
-                'p-6 transition-all duration-500',
-                selectedOption ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-2'
-              )}
-            >
-              {/* Quiz creation forms would go here */}
-              <div className="text-center py-8">
-                <p className="text-text-light">Select a quiz creation option to get started</p>
-              </div>
-            </div>
+      {/* Quiz Creation Panel */}
+      <div
+        ref={panelRef}
+        className={clsx(
+          'rounded-2xl border bg-white shadow-soft overflow-hidden transition-all duration-500',
+          selectedOption
+            ? 'opacity-100 translate-y-0 scale-100 max-h-[1400px] border-gray-200'
+            : 'opacity-0 -translate-y-2 scale-[0.99] max-h-0 border-transparent shadow-none'
+        )}
+      >
+        <div
+          className={clsx(
+            'p-6 transition-all duration-500',
+            selectedOption ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-2'
+          )}
+        >
+          {/* Quiz creation forms would go here */}
+          <div className="text-center py-8">
+            <p className="text-text-light">Select a quiz creation option to get started</p>
           </div>
         </div>
       </div>
@@ -355,11 +308,9 @@ const QuestionTypeModal = ({ isOpen, onClose, onSelect, selectedTypes }) => {
   );
 };
 
-const LaunchOptionCard = ({ icon: Icon, title, description, tone, selected, dimmed, onSelect, onBlankQuizClick, onCopyPasteClick, onImportClick, onAiClick }) => {
-  const isPrimary = title === 'AI Quiz Generator';
-  
-  return (
-  <button
+const LaunchOptionCard = ({ icon: Icon, title, description, tone, selected, dimmed, onSelect, onBlankQuizClick, onCopyPasteClick, onImportClick, onAiClick }) => (
+  <SurfaceCard
+    as="button"
     type="button"
     onClick={() => {
       if (title === 'AI Quiz Generator') {
@@ -375,86 +326,37 @@ const LaunchOptionCard = ({ icon: Icon, title, description, tone, selected, dimm
       }
     }}
     className={clsx(
-      'group relative text-left w-full rounded-2xl border bg-gradient-to-br p-5 transition-all duration-300 focus:outline-none overflow-hidden',
-      'shadow-md hover:shadow-xl hover:-translate-y-1',
-      'shadow-[inset_0_1px_0_rgba(255,255,255,0.9)]',
-      selected
-        ? 'border-primary/40 ring-2 ring-primary/25 scale-[1.02] shadow-xl'
-        : isPrimary
-          ? 'border-primary/30 bg-gradient-to-br from-primary/8 via-white to-primary/5 hover:border-primary/40'
-          : 'border-gray-200 bg-white hover:border-gray-300 hover:bg-gray-50',
-      'active:scale-[0.98] active:translate-y-0',
+      'flex flex-col w-full text-left focus:outline-none',
       'focus-visible:ring-2 focus-visible:ring-primary/25 focus-visible:ring-offset-2 focus-visible:ring-offset-background',
-      dimmed && 'opacity-50 scale-[0.98]'
+      selected && 'border-primary/30 ring-2 ring-primary/25',
+      dimmed && 'opacity-50'
     )}
   >
-    <div
-      className={clsx(
-        'pointer-events-none absolute inset-0 opacity-100 transition-opacity duration-300',
-        selected ? 'opacity-100' : 'opacity-100'
-      )}
-    >
-      <div className={clsx('absolute -top-32 -right-32 h-96 w-96 rounded-full blur-3xl', tone?.glow || 'bg-primary/20')} />
-      <div className="absolute -bottom-32 -left-32 h-96 w-96 rounded-full bg-secondary/15 blur-3xl" />
+    <div className="w-14 h-14 rounded-full bg-primary flex items-center justify-center shrink-0 mb-4 shadow-sm">
+      <Icon className="w-7 h-7 text-white" />
     </div>
 
-    <div
-      className={clsx(
-        'absolute inset-0 -z-10 bg-gradient-to-br',
-        tone?.surface || 'from-white via-white to-white'
-      )}
-    />
+    <h3 className="text-base sm:text-lg font-semibold text-text mb-1.5 leading-snug">{title}</h3>
+    <p className="text-sm text-text-light leading-relaxed">{description}</p>
 
-    <div className="pointer-events-none absolute inset-0 rounded-2xl ring-1 ring-black/5" />
-
-    <div className="pointer-events-none absolute inset-0 rounded-2xl opacity-100 bg-gradient-to-br from-white/0 via-white/0 to-primary/5" />
-
-    <div className="flex items-start gap-6">
-      <div
+    <div className="mt-auto pt-4">
+      <span
         className={clsx(
-          'relative h-16 w-16 rounded-2xl flex items-center justify-center shrink-0 transition-all duration-300',
-          tone?.iconWrap || 'bg-primary/12 ring-2 ring-primary/20',
-          'shadow-lg shadow-[inset_0_-2px_4px_rgba(0,0,0,0.06)]',
-          selected ? 'scale-110 ring-primary/40' : 'group-hover:scale-105 group-hover:ring-primary/30'
+          'inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-semibold transition-all',
+          tone?.cta || 'bg-primary text-white',
+          selected ? 'ring-2 ring-primary/30' : 'hover:shadow-md'
         )}
       >
-        <Icon
+        {selected ? 'Selected' : 'Create'}
+        <ArrowRight
           className={clsx(
-            'h-8 w-8 transition-transform duration-300',
-            tone?.icon || 'text-primary',
-            selected ? 'rotate-0 scale-110' : 'group-hover:-rotate-6 group-hover:scale-105'
+            'h-4 w-4 transition-all',
+            selected ? 'rotate-90 translate-x-1' : 'opacity-90 group-hover:translate-x-1'
           )}
         />
-      </div>
-      <div className="min-w-0 flex-1">
-        {tone?.kicker && (
-          <p className="text-xs font-bold uppercase tracking-wider text-primary/70 mb-2">{tone.kicker}</p>
-        )}
-        <h3 className="text-xl font-bold text-text tracking-tight mb-3">{title}</h3>
-        <p className="text-base text-text-light leading-relaxed mb-5">{description}</p>
-        <div className="inline-flex items-center">
-          <span
-            className={clsx(
-              'inline-flex items-center gap-2 rounded-full px-5 py-2.5 text-sm font-bold transition-all',
-              selected
-                ? clsx(tone?.cta || 'bg-primary text-white', 'shadow-lg ring-2 ring-primary/30')
-                : clsx(tone?.cta || 'bg-primary text-white', 'shadow-md hover:shadow-lg hover:ring-2 hover:ring-primary/20'),
-              'group-hover:scale-105'
-            )}
-          >
-            {selected ? 'Selected' : 'Create'}
-            <ArrowRight
-              className={clsx(
-                'h-4 w-4 transition-all',
-                selected ? 'rotate-90 translate-x-1' : 'opacity-90 group-hover:translate-x-1'
-              )}
-            />
-          </span>
-        </div>
-      </div>
+      </span>
     </div>
-  </button>
-  );
-};
+  </SurfaceCard>
+);
 
 export default HostLaunch;

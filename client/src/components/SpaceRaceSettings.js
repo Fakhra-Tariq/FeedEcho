@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { X, Trash2, Users, Clock, Trophy, Star, Check } from 'lucide-react';
 import { copyToClipboard } from '../utils/copyToClipboard';
+import { toParticipantCount } from '../utils/toParticipantCount';
 
 const SpaceRaceSettings = ({ race, onClose, onDelete, onUpdate }) => {
   const [settings, setSettings] = useState({
@@ -88,7 +89,7 @@ const SpaceRaceSettings = ({ race, onClose, onDelete, onUpdate }) => {
               <div className="flex items-center space-x-4 mt-3 text-sm text-gray-500">
                 <div className="flex items-center space-x-1">
                   <Users className="w-4 h-4" />
-                  <span>{race.participantsCount || race.participants || 0} participants</span>
+                  <span>{toParticipantCount(race.participantsCount, race.participants)} participants</span>
                 </div>
                 <div className="flex items-center space-x-1">
                   <Clock className="w-4 h-4" />
@@ -172,7 +173,7 @@ const SpaceRaceSettings = ({ race, onClose, onDelete, onUpdate }) => {
                       placeholder="Enter max participants per team"
                     />
                     <p className="text-xs text-gray-500 mt-1">
-                      Maximum number of students allowed in each team
+                      Maximum number of audience members allowed in each team
                     </p>
                   </div>
                 ) : null}
@@ -215,7 +216,7 @@ const SpaceRaceSettings = ({ race, onClose, onDelete, onUpdate }) => {
                       placeholder="Enter join duration in minutes"
                     />
                     <p className="text-xs text-gray-500 mt-1">
-                      Time students can join
+                      Time the audience can join
                     </p>
                   </div>
                 </div>
@@ -230,7 +231,7 @@ const SpaceRaceSettings = ({ race, onClose, onDelete, onUpdate }) => {
                     <span className="text-sm text-gray-700">Shuffle questions</span>
                   </label>
                   <p className="text-xs text-gray-500 mt-1 ml-6">
-                    Randomize question order for each student
+                    Randomize question order for each audience member
                   </p>
                 </div>
                 <div>

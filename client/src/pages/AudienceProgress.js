@@ -316,7 +316,7 @@ export default function AudienceProgress() {
       return;
     }
     setStudent(loggedInAudience);
-    setUserName(loggedInAudience.name || localStorage.getItem('feedecho_name') || 'Student');
+    setUserName(loggedInAudience.name || localStorage.getItem('feedecho_name') || 'Audience');
     refreshLocalSubmissions();
   }, [navigate, refreshLocalSubmissions]);
 
@@ -857,8 +857,8 @@ export default function AudienceProgress() {
                   onClick={() => setShowProfileDropdown(!showProfileDropdown)}
                   className="flex items-center space-x-2 p-2 rounded-lg hover:bg-gray-100 transition-colors"
                 >
-                  <AudienceAvatar name={userName || 'Student'} />
-                  <span className="font-medium text-text">{userName || 'Student'}</span>
+                  <AudienceAvatar name={userName || 'Audience'} />
+                  <span className="font-medium text-text">{userName || 'Audience'}</span>
                   <ChevronDown className="w-4 h-4 text-gray-500" />
                 </button>
                 
@@ -866,8 +866,8 @@ export default function AudienceProgress() {
                 {showProfileDropdown && (
                   <div className="absolute right-0 mt-2 w-56 bg-white rounded-lg shadow-lg border border-gray-200 z-50">
                     <div className="p-3 border-b border-gray-200">
-                      <p className="font-medium text-text">{userName || 'Student'}</p>
-                      <p className="text-sm text-gray-600">student@example.com</p>
+                      <p className="font-medium text-text">{userName || 'Audience'}</p>
+                      <p className="text-sm text-gray-600">audience@example.com</p>
                     </div>
                     <div className="py-2">
                       <Link to="/audience/profile" className="block px-4 py-2 text-gray-700 hover:bg-gray-100">

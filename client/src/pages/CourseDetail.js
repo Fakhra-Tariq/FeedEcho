@@ -99,7 +99,7 @@ const CourseDetail = () => {
                 <p className="text-gray-800">{course.duration || 'Self-paced'}</p>
               </div>
               <div>
-                <h3 className="font-medium text-gray-600">Students Enrolled</h3>
+                <h3 className="font-medium text-gray-600">Audience Enrolled</h3>
                 <p className="text-gray-800">{course.enrolledCount || 0}</p>
               </div>
               <div>

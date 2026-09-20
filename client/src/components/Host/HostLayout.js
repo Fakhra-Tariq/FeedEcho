@@ -4,6 +4,7 @@ import { User, LogOut } from 'lucide-react';
 import clsx from 'clsx';
 import { useAuth } from '../../contexts/AuthContext';
 import { useClickOutside } from '../../hooks/useClickOutside';
+import SessionStatusBadge from './SessionStatusBadge';
 
 const navItems = [
   { label: 'Explore', to: '/host/explore' },
@@ -39,7 +40,7 @@ const HostLayout = () => {
     <div className={clsx('min-h-screen bg-background', 'text-text')}>
       <header className="fixed inset-x-0 top-0 z-40 bg-white/80 backdrop-blur-md border-b border-gray-200">
         <div className={TEACHER_PAGE_GUTTER}>
-          <div className="relative flex items-center h-16 w-full gap-8 lg:gap-12">
+          <div className="relative flex items-center h-16 w-full gap-4 lg:gap-8 xl:gap-12">
             <div className="relative z-10 flex h-16 shrink-0 items-center">
               <img
                 src="/FeedEcho-logo.png.png"
@@ -65,7 +66,9 @@ const HostLayout = () => {
               ))}
             </nav>
 
-            <div className="flex shrink-0 items-center">
+            <div className="flex shrink-0 items-center gap-2 sm:gap-3 ml-auto lg:ml-0">
+              <SessionStatusBadge />
+
               <div className="relative" ref={profileDropdownRef}>
                 <button
                   type="button"
@@ -74,11 +77,11 @@ const HostLayout = () => {
                 >
                   <div className="w-8 h-8 bg-gradient-to-br from-primary to-secondary rounded-full flex items-center justify-center">
                     <span className="text-white font-semibold text-sm">
-                      {userProfile?.firstName?.[0] || userProfile?.displayName?.[0] || 'T'}
+                      {userProfile?.firstName?.[0] || userProfile?.displayName?.[0] || 'H'}
                     </span>
                   </div>
-                  <span className="text-sm font-medium text-gray-700">
-                    {userProfile?.firstName || userProfile?.displayName || 'Teacher'}
+                  <span className="hidden sm:inline text-sm font-medium text-gray-700">
+                    {userProfile?.firstName || userProfile?.displayName || 'Host'}
                   </span>
                 </button>
 
@@ -86,7 +89,7 @@ const HostLayout = () => {
                   <div className="absolute right-0 mt-2 w-56 bg-white border border-gray-200 rounded-xl shadow-soft-lg overflow-hidden z-50">
                     <div className="px-4 py-3 border-b border-gray-200">
                       <p className="text-sm font-semibold text-gray-700">
-                        {userProfile?.firstName || userProfile?.displayName || 'Teacher'}
+                        {userProfile?.firstName || userProfile?.displayName || 'Host'}
                       </p>
                       <p className="text-xs text-gray-500">{userProfile?.email}</p>
                     </div>
@@ -143,7 +146,8 @@ const HostLayout = () => {
         </div>
       </nav>
 
-      <main className="pt-32 lg:pt-28 pb-12">
+      {/* Single source for the navbar -> page content gap; mobile also clears the second nav row */}
+      <main className="pt-32 lg:pt-24 pb-12">
         <div className={TEACHER_PAGE_GUTTER}>
           <Outlet />
         </div>

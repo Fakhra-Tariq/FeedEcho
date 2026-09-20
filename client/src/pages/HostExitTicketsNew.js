@@ -261,7 +261,7 @@ const HostExitTickets = () => {
                   Ready to create your exit ticket?
                 </h3>
                 <p className="text-text-light mb-6 max-w-md mx-auto">
-                  Collect anonymous student feedback and automatically track attendance. 
+                  Collect anonymous audience feedback and automatically track attendance. 
                   Design multi-question exit tickets with different question types including short text, multiple choice, Likert scales, and true/false questions.
                 </p>
                 
@@ -354,7 +354,7 @@ const HostExitTickets = () => {
                     Feedback Summary
                   </h2>
                   <p className="text-sm text-text-light mt-1">
-                    Anonymous responses from {responses.length} students
+                    Anonymous responses from {responses.length} audience members
                   </p>
                 </div>
                 <button
@@ -594,7 +594,7 @@ const FeedbackView = ({ responses, showAttendanceNames, setShowAttendanceNames }
                       Audience Privacy Protected
                     </h3>
                     <p className="text-text-light">
-                      Responses will appear once at least 2 students submit feedback to ensure privacy.
+                      Responses will appear once at least 2 audience members submit feedback to ensure privacy.
                     </p>
                     <div className="bg-primary/5 rounded-lg p-3 mt-4">
                       <p className="text-sm text-primary">
@@ -640,7 +640,7 @@ const FeedbackView = ({ responses, showAttendanceNames, setShowAttendanceNames }
                   <p className="text-sm font-medium text-text">Attendance Marked</p>
                   <div className="flex items-center gap-2 mt-1">
                     <CheckCircle className="w-4 h-4 text-primary" />
-                    <span className="text-sm text-text">{responses.length} students</span>
+                    <span className="text-sm text-text">{responses.length} audience members</span>
                     <button
                       onClick={() => setShowAttendanceNames(!showAttendanceNames)}
                       className="text-xs bg-primary/10 text-primary px-2 py-1 rounded hover:bg-primary/20 transition-colors"

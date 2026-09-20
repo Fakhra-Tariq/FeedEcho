@@ -206,7 +206,7 @@ const AudienceJoin = () => {
                 >
                   <div className="text-lg">Team {teamNum}</div>
                   <div className="text-xs mt-1">
-                    {currentTeamMembers.length}/{maxStudentsPerTeam} students
+                    {currentTeamMembers.length}/{maxStudentsPerTeam} audience members
                   </div>
                   {isFull && (
                     <div className="text-xs text-error-600 mt-1">Full</div>

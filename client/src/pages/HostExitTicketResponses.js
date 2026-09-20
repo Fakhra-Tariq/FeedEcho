@@ -169,7 +169,7 @@ export default function HostExitTicketResponses() {
               </div>
               <div>
                 <p className="text-text-light text-sm">Attendance Count</p>
-                <p className="text-2xl font-bold text-text">{responses.length} students</p>
+                <p className="text-2xl font-bold text-text">{responses.length} audience members</p>
               </div>
             </div>
           </div>
@@ -297,7 +297,7 @@ export default function HostExitTicketResponses() {
                             Audience Privacy Protected
                           </h3>
                           <p className="text-text-light mb-4">
-                            Responses will appear once at least 2 students submit feedback to ensure privacy.
+                            Responses will appear once at least 2 audience members submit feedback to ensure privacy.
                           </p>
                           <div className="bg-primary/5 rounded-lg p-3">
                             <p className="text-sm text-primary">
@@ -327,10 +327,10 @@ export default function HostExitTicketResponses() {
             <h3 className="text-lg font-semibold text-yellow-800 mb-2">No Responses Submitted Yet</h3>
             <p className="text-yellow-700">
               Audience members haven't submitted any responses to this exit ticket yet. 
-              Share the join code <span className="font-mono font-bold">{exitTicket.joinCode}</span> with your students.
+              Share the join code <span className="font-mono font-bold">{exitTicket.joinCode}</span> with your audience.
               <br />
               <span className="text-sm mt-2 block">
-                Responses will appear once at least 2 students submit feedback to maintain anonymity.
+                Responses will appear once at least 2 audience members submit feedback to maintain anonymity.
               </span>
             </p>
           </div>
@@ -348,7 +348,7 @@ export default function HostExitTicketResponses() {
               Audience Privacy Protected
             </h3>
             <p className="text-text-light mb-4">
-              Responses will appear once at least 2 students submit feedback to ensure privacy.
+              Responses will appear once at least 2 audience members submit feedback to ensure privacy.
             </p>
             <div className="bg-primary/5 rounded-lg p-3">
               <p className="text-sm text-primary">

@@ -6,6 +6,14 @@ import { exitTicketsAPI } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
 import { useRtdbList, useRtdbValue } from '../hooks/useRtdb';
 import { useHostData } from '../contexts/HostDataContext';
+import InfoRecap from '../components/Host/InfoRecap';
+import SessionLaunchBanner from '../components/Host/SessionLaunchBanner';
+import PageHeaderCard from '../components/Host/PageHeaderCard';
+import HeaderCardStats from '../components/Host/HeaderCardStats';
+import ListFilterBar from '../components/Host/ListFilterBar';
+import NoActiveSessionLaunchModal, {
+  LaunchRequiresSessionHint,
+} from '../components/Host/NoActiveSessionLaunchModal';
 import {
   NO_ACTIVE_SESSION_MESSAGE,
   resolveActiveTeacherSession,
@@ -40,6 +48,8 @@ function attachQuestionsToTickets(ticketList, questionsTree, existingById = {}) 
   });
 }
 
+const TICKETS_PAGE_SIZE = 5;
+
 function ticketListSignature(list) {
   return (list || [])
     .map((t) => `${t.id}:${t.status}:${t.responsesCount ?? 0}:${t.updatedAt || ''}`)
@@ -56,6 +66,8 @@ export default function ExitTicketDashboard() {
   const { data: teacherData } = useHostData();
   const [tickets, setTickets] = useState([]);
   const [filter, setFilter] = useState('all');
+  const [searchTerm, setSearchTerm] = useState('');
+  const [visibleCount, setVisibleCount] = useState(TICKETS_PAGE_SIZE);
   const [isLoading, setIsLoading] = useState(true);
   const fallbackRequestedRef = useRef(false);
   const rtdbSignatureRef = useRef('');
@@ -69,6 +81,7 @@ export default function ExitTicketDashboard() {
   const [showAttendanceNames, setShowAttendanceNames] = useState(false);
   const [showClearConfirm, setShowClearConfirm] = useState(false);
   const [clearingTicketId, setClearingTicketId] = useState(null);
+  const [showNoSessionModal, setShowNoSessionModal] = useState(false);
 
   const { list: liveTickets, loading: liveTicketsLoading, error: liveTicketsError } = useRtdbList(
     uid ? 'exit_tickets' : null,
@@ -287,13 +300,30 @@ export default function ExitTicketDashboard() {
     archived: tickets.filter(t => t.status === 'archived').length,
   };
 
-  // Filter tickets
+  // Filter tickets — search runs over the full set, not just the visible page
+  const normalizedSearch = searchTerm.trim().toLowerCase();
+  const isSearching = normalizedSearch.length > 0;
+
   const filteredTickets = useMemo(() => {
     return tickets.filter((ticket) => {
+      if (normalizedSearch && !String(ticket.title || '').toLowerCase().includes(normalizedSearch)) {
+        return false;
+      }
       if (filter === 'all') return true;
       return ticket.status === filter;
     });
-  }, [tickets, filter]);
+  }, [tickets, filter, normalizedSearch]);
+
+  // Default view shows the 5 most recent; "Show more" reveals further batches
+  const visibleTickets = useMemo(
+    () => (isSearching ? filteredTickets : filteredTickets.slice(0, visibleCount)),
+    [filteredTickets, isSearching, visibleCount]
+  );
+  const hasMoreTickets = !isSearching && filteredTickets.length > visibleTickets.length;
+
+  useEffect(() => {
+    setVisibleCount(TICKETS_PAGE_SIZE);
+  }, [filter]);
 
   // Fetch responses for feedback viewing
   const fetchResponses = async (ticketId) => {
@@ -430,7 +460,7 @@ export default function ExitTicketDashboard() {
     const teacherId = uid;
     const sessionCheck = await resolveActiveTeacherSession(teacherData.activeSession, teacherId);
     if (!sessionCheck.ok) {
-      alert.toast.error(NO_ACTIVE_SESSION_MESSAGE);
+      setShowNoSessionModal(true);
       return;
     }
 
@@ -490,39 +520,27 @@ export default function ExitTicketDashboard() {
   }, [activeTicket?.id, questionsTree]);
 
   return (
-    <div className="p-6 space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-text">Exit Ticket</h1>
-          <p className="text-text-light mt-1">Collect anonymous student feedback and track attendance</p>
-        </div>
-        <button
-          onClick={() => navigate('/host/exit-tickets/create')}
-          className="flex items-center gap-2 px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors"
-        >
-          <Plus className="w-4 h-4" />
-          Create Exit Ticket
-        </button>
-      </div>
+    <div className="px-6 pb-6 space-y-4">
+      <SessionLaunchBanner />
 
-      {/* Exit Ticket Summary Card - Always Visible */}
-      <div className="bg-primary rounded-xl p-6 text-white">
-        <div className="flex items-center justify-between mb-4">
-          <div className="flex items-center space-x-3">
-            <div className="p-2 bg-white/20 rounded-lg">
-              <FileText className="w-6 h-6" />
-            </div>
-            <div>
-              <h3 className="font-semibold text-lg">
-                {activeTicket ? 'Exit Ticket in Progress' : 'No Exit Ticket Active'}
-              </h3>
-              <p className="text-white/80">
-                {activeTicket ? activeTicket.title : 'Create or launch an exit ticket to begin'}
-              </p>
-            </div>
-          </div>
-          <div className="flex items-center space-x-2">
+      {/* Header */}
+      <PageHeaderCard
+        compact
+        title="Exit Ticket"
+        titleAccessory={
+          <InfoRecap
+            variant="onDark"
+            steps={[
+              'Create your exit ticket questions',
+              'Choose Save as Draft or Launch',
+              'Launching requires an active session',
+              'Responses are collected anonymously, but attendance is tracked separately.',
+            ]}
+          />
+        }
+        subtitle="Collect anonymous audience feedback and track attendance"
+        actions={
+          <>
             {activeTicket && (
               <>
                 <button
@@ -541,95 +559,35 @@ export default function ExitTicketDashboard() {
                 </button>
               </>
             )}
-          </div>
-        </div>
-        <div className="grid grid-cols-4 gap-4">
-          <div>
-            <p className="text-white/80 text-sm">Questions</p>
-            <p className="text-2xl font-bold">{activeTicket?.questions?.length || 0}</p>
-          </div>
-          <div>
-            <p className="text-white/80 text-sm">Responses</p>
-            <p className="text-2xl font-bold">{activeTicket?.responsesCount || 0}</p>
-          </div>
-          <div>
-            <p className="text-white/80 text-sm">Attendance</p>
-            <p className="text-2xl font-bold">{activeTicket?.responsesCount || 0} students</p>
-          </div>
-          <div>
-            <p className="text-white/80 text-sm">Join Code</p>
-            <p className="text-2xl font-bold font-mono">{activeTicket?.joinCode || '----'}</p>
-          </div>
-        </div>
-      </div>
-
-      {/* Stats Cards */}
-      <div className="grid grid-cols-4 gap-4">
-        <div className="bg-white rounded-lg border border-gray-200 p-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-text-light text-sm">Draft</p>
-              <p className="text-2xl font-bold text-text">{ticketsByStatus.draft}</p>
-            </div>
-            <div className="p-2 bg-gray-100 rounded-lg">
-              <FileText className="w-5 h-5 text-gray-600" />
-            </div>
-          </div>
-        </div>
-        
-        <div className="bg-white rounded-lg border border-gray-200 p-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-text-light text-sm">Active</p>
-              <p className="text-2xl font-bold text-text">{ticketsByStatus.active}</p>
-            </div>
-            <div className="p-2 bg-primary/10 rounded-lg">
-              <Play className="w-5 h-5 text-primary" />
-            </div>
-          </div>
-        </div>
-        
-        <div className="bg-white rounded-lg border border-gray-200 p-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-text-light text-sm">Ended</p>
-              <p className="text-2xl font-bold text-text">{ticketsByStatus.ended}</p>
-            </div>
-            <div className="p-2 bg-primary/10 rounded-lg">
-              <Square className="w-5 h-5 text-primary" />
-            </div>
-          </div>
-        </div>
-        
-        <div className="bg-white rounded-lg border border-gray-200 p-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-text-light text-sm">Archived</p>
-              <p className="text-2xl font-bold text-text">{ticketsByStatus.archived}</p>
-            </div>
-            <div className="p-2 bg-primary/10 rounded-lg">
-              <BarChart3 className="w-5 h-5 text-primary" />
-            </div>
-          </div>
-        </div>
-      </div>
+            <button
+              onClick={() => navigate('/host/exit-tickets/create')}
+              className="flex items-center gap-2 px-4 py-2 bg-white text-primary rounded-lg font-semibold hover:bg-white/90 shadow-lg transition-colors"
+            >
+              <Plus className="w-4 h-4" />
+              Create Exit Ticket
+            </button>
+          </>
+        }
+      >
+        <HeaderCardStats
+          stats={[
+            { label: 'Drafts', value: ticketsByStatus.draft },
+            { label: 'Active', value: ticketsByStatus.active },
+            { label: 'Ended', value: ticketsByStatus.ended },
+            { label: 'Archived', value: ticketsByStatus.archived },
+          ]}
+        />
+      </PageHeaderCard>
 
       {/* Filter Tabs */}
-      <div className="flex items-center space-x-4 border-b border-gray-200">
-        {['all', 'draft', 'active', 'ended', 'archived'].map(status => (
-          <button
-            key={status}
-            onClick={() => setFilter(status)}
-            className={`pb-3 px-1 capitalize transition-colors border-b-2 ${
-              filter === status
-                ? 'border-primary text-primary'
-                : 'border-transparent text-text-light hover:text-text'
-            }`}
-          >
-            {status === 'all' ? 'All' : status.charAt(0).toUpperCase() + status.slice(1)}
-          </button>
-        ))}
-      </div>
+      <ListFilterBar
+        tabs={['all', 'draft', 'active', 'ended', 'archived']}
+        activeTab={filter}
+        onTabChange={setFilter}
+        searchTerm={searchTerm}
+        onSearchChange={setSearchTerm}
+        searchPlaceholder="Search exit tickets..."
+      />
 
       {/* Exit Tickets List */}
       <div className="grid gap-4">
@@ -642,7 +600,7 @@ export default function ExitTicketDashboard() {
           <div className="bg-white rounded-lg border border-gray-200 p-12 text-center">
             <FileText className="w-16 h-16 mx-auto text-gray-300 mb-4" />
             <h3 className="text-lg font-semibold text-text mb-2">No {filter === 'all' ? 'exit tickets' : `${filter} exit tickets`}</h3>
-            <p className="text-text-light mb-6">Create your first exit ticket to start collecting student feedback</p>
+            <p className="text-text-light mb-6">Create your first exit ticket to start collecting audience feedback</p>
             <button
               onClick={() => navigate('/host/exit-tickets/create')}
               className="inline-flex items-center gap-2 px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors"
@@ -652,7 +610,7 @@ export default function ExitTicketDashboard() {
             </button>
           </div>
         ) : (
-          filteredTickets.map(ticket => (
+          visibleTickets.map(ticket => (
             <div key={ticket.id} className="bg-white rounded-lg border border-gray-200 p-6">
               <div className="flex items-start justify-between">
                 <div className="flex-1">
@@ -754,14 +712,17 @@ export default function ExitTicketDashboard() {
                         <RotateCcw className="w-4 h-4 mr-1" />
                         Edit
                       </button>
-                      <button
-                        onClick={() => handleLaunchTicket(ticket.id)}
-                        className="p-2 text-primary rounded-lg border border-primary/50 hover:bg-primary/10 transition-colors text-sm flex items-center"
-                        title="Launch Exit Ticket"
-                      >
-                        <Play className="w-4 h-4 mr-1" />
-                        Launch
-                      </button>
+                      <div className="inline-flex flex-col items-start">
+                        <button
+                          onClick={() => handleLaunchTicket(ticket.id)}
+                          className="p-2 text-primary rounded-lg border border-primary/50 hover:bg-primary/10 transition-colors text-sm flex items-center"
+                          title="Launch Exit Ticket"
+                        >
+                          <Play className="w-4 h-4 mr-1" />
+                          Launch
+                        </button>
+                        <LaunchRequiresSessionHint className="ml-1" />
+                      </div>
                       <button
                         onClick={() => handleArchiveTicket(ticket.id)}
                         className="p-2 text-primary rounded-lg border border-primary/50 hover:bg-primary/10 transition-colors text-sm flex items-center"
@@ -800,6 +761,18 @@ export default function ExitTicketDashboard() {
         )}
       </div>
 
+      {hasMoreTickets && (
+        <div className="flex justify-center">
+          <button
+            type="button"
+            onClick={() => setVisibleCount((prev) => prev + TICKETS_PAGE_SIZE)}
+            className="px-4 py-2 rounded-lg border border-primary/40 text-primary font-medium hover:bg-primary/10 transition-colors"
+          >
+            Show more
+          </button>
+        </div>
+      )}
+
       {/* Feedback Viewing Modal */}
       {viewingResponses && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
@@ -812,7 +785,7 @@ export default function ExitTicketDashboard() {
                     Feedback Summary
                   </h2>
                   <p className="text-sm text-text-light mt-1">
-                    Anonymous responses from {responses.length} students
+                    Anonymous responses from {responses.length} audience members
                   </p>
                 </div>
                 <div className="flex gap-2">
@@ -907,7 +880,7 @@ export default function ExitTicketDashboard() {
 
               {/* Title and subtitle */}
               <h2 className="text-2xl font-bold text-gray-900 mb-2">Exit Ticket Launched</h2>
-              <p className="text-sm text-gray-600 mb-8">Share this code with students</p>
+              <p className="text-sm text-gray-600 mb-8">Share this code with audience</p>
 
               {/* Audience Access Code box */}
               <div className="mb-8">
@@ -954,6 +927,14 @@ export default function ExitTicketDashboard() {
           </div>
         </div>
       )}
+
+      <NoActiveSessionLaunchModal
+        isOpen={showNoSessionModal}
+        onClose={() => setShowNoSessionModal(false)}
+        onSaveAsDraft={async () => {
+          alert.toast.success('Exit ticket is already saved as a draft');
+        }}
+      />
     </div>
   );
 }
@@ -1017,7 +998,7 @@ const FeedbackView = ({ responses, showAttendanceNames, setShowAttendanceNames }
                       Audience Privacy Protected
                     </h3>
                     <p className="text-text-light">
-                      Responses will appear once at least 2 students submit feedback to ensure privacy.
+                      Responses will appear once at least 2 audience members submit feedback to ensure privacy.
                     </p>
                     <div className="bg-primary/5 rounded-lg p-3 mt-4">
                       <p className="text-sm text-primary">
@@ -1060,7 +1041,7 @@ const FeedbackView = ({ responses, showAttendanceNames, setShowAttendanceNames }
                   <p className="text-sm font-medium text-text">Attendance Marked</p>
                   <div className="flex items-center gap-2 mt-1">
                     <CheckCircle className="w-4 h-4 text-primary" />
-                    <span className="text-sm text-text">{responses.length} students</span>
+                    <span className="text-sm text-text">{responses.length} audience members</span>
                     <button
                       onClick={() => setShowAttendanceNames(!showAttendanceNames)}
                       className="text-xs bg-primary/10 text-primary px-2 py-1 rounded hover:bg-primary/20 transition-colors"

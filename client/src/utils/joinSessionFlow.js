@@ -11,7 +11,7 @@ export function normalizeTeamAssignment(value) {
 function buildJoinContext(studentName, loggedInAudience) {
   const loggedIn = loggedInAudience || getStoredAudienceSession();
   return {
-    trimmedName: String(studentName || loggedIn?.name || 'Student').trim(),
+    trimmedName: String(studentName || loggedIn?.name || 'Audience').trim(),
     studentUid: loggedIn?.uid || null,
     studentEmail: loggedIn?.email || null,
     loggedInAudience: loggedIn,

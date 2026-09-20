@@ -23,7 +23,7 @@ const CreateQuiz = () => {
     <div className="min-h-screen bg-background">
       <div className="max-w-xl mx-auto px-4 py-10">
         <h1 className="text-2xl font-bold text-text mb-2">Create Quiz</h1>
-        <p className="text-text-light mb-6">For now, just set a title and the session code to share with students.</p>
+        <p className="text-text-light mb-6">For now, just set a title and the session code to share with the audience.</p>
 
         <div className="bg-white rounded-2xl shadow-lg p-6">
           <form onSubmit={handleSubmit} className="space-y-4">

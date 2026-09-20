@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Rocket, Edit, Trash2, Calendar, AlertTriangle, Library, Copy, Flag, Clock, Lock, Search } from 'lucide-react';
+import { Rocket, Edit, Trash2, Calendar, AlertTriangle, Library, Copy, Flag, Clock, Lock } from 'lucide-react';
 import { useHybridAlert } from '../contexts/HybridAlertContext';
 import LaunchQuizModal from '../components/LaunchQuizModal';
 import { quizzesAPI, handleAPIError } from '../services/api';
@@ -10,6 +10,13 @@ import {
   NO_ACTIVE_SESSION_MESSAGE,
   resolveActiveTeacherSession,
 } from '../utils/requireActiveHostSession';
+import NoActiveSessionLaunchModal, {
+  LaunchRequiresSessionHint,
+} from '../components/Host/NoActiveSessionLaunchModal';
+import PageHeaderCard from '../components/Host/PageHeaderCard';
+import HeaderCardStats from '../components/Host/HeaderCardStats';
+import ListFilterBar from '../components/Host/ListFilterBar';
+import SessionLaunchBanner from '../components/Host/SessionLaunchBanner';
 import { persistLaunchedQuizInLocalStorage } from '../utils/quizLaunchSettings';
 import {
   getEditorRouteForQuizType,
@@ -28,6 +35,7 @@ const QuizLibrary = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [activeFilter, setActiveFilter] = useState('all');
   const [showLaunchModal, setShowLaunchModal] = useState(false);
+  const [showNoSessionModal, setShowNoSessionModal] = useState(false);
   const [selectedQuiz, setSelectedQuiz] = useState(null);
   const [accessCode, setAccessCode] = useState('');
 
@@ -160,7 +168,7 @@ const QuizLibrary = () => {
   const launchQuiz = async (quizId) => {
     const sessionCheck = await resolveActiveTeacherSession(teacherData.activeSession, teacherUid);
     if (!sessionCheck.ok) {
-      alert.toast.error(NO_ACTIVE_SESSION_MESSAGE);
+      setShowNoSessionModal(true);
       return;
     }
 
@@ -222,7 +230,7 @@ const QuizLibrary = () => {
         const response = await quizzesAPI.delete(deleteConfirmQuiz);
         
         if (response.data.success) {
-          alert.toast.success('Quiz removed from library. Student reports are preserved.');
+          alert.toast.success('Quiz removed from library. Audience reports are preserved.');
           await refreshQuizzes();
         } else {
           throw new Error(response.data.error || 'Delete failed');
@@ -307,85 +315,36 @@ const QuizLibrary = () => {
 
   return (
     <div className="min-h-screen bg-[#F4F1EC]">
-      <div className="container mx-auto px-3 sm:px-4 lg:px-6 py-0 sm:py-1 lg:py-2">
+      <div className="container mx-auto px-3 sm:px-4 lg:px-6 py-0">
         {/* Library Dashboard Header */}
-        <div className="mb-4">
-          <button
-            onClick={() => navigate('/host/launch')}
-            className="flex items-center space-x-2 text-gray-600 hover:text-gray-900 transition-colors mb-4"
+        <div className="mb-4 space-y-4">
+          <SessionLaunchBanner />
+
+          <PageHeaderCard
+            compact
+            icon={Library}
+            title="Quiz Library"
+            subtitle="Manage and organize your quizzes"
           >
-            <ArrowLeft className="w-4 h-4 sm:w-5 sm:h-5" />
-            <span className="text-sm sm:text-base font-medium">Back to Launch</span>
-          </button>
-          
-          <div className="bg-[#F4F1EC]/50 backdrop-blur-sm rounded-3xl p-6 sm:p-8 border border-[#8E7CC3]/10 shadow-lg">
-            {/* Header Row */}
-            <div className="flex items-center justify-between mb-6">
-              <div className="flex items-center space-x-4">
-                <div className="flex items-center justify-center w-16 h-16 bg-[#6D415F] rounded-2xl shadow-lg">
-                  <Library className="w-8 h-8 text-white" />
-                </div>
-                <div>
-                  <h1 className="text-3xl sm:text-4xl font-bold text-gray-900">Quiz Library</h1>
-                  <p className="text-sm text-gray-600 mt-1">Manage and organize your quizzes</p>
-                </div>
-              </div>
-            </div>
+            <HeaderCardStats
+              stats={[
+                { label: 'Total', value: getQuizStats().total },
+                { label: 'Ready', value: getQuizStats().ready },
+                { label: 'Active', value: getQuizStats().active },
+                { label: 'Finished', value: getQuizStats().finished },
+              ]}
+            />
+          </PageHeaderCard>
 
-            {/* Filter and Search Row */}
-            <div className="mb-6">
-              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-                {/* Filter Tabs - Left Side */}
-                <div className="flex flex-wrap gap-2">
-                  {['all', 'ready', 'launched', 'finished'].map((filter) => (
-                    <button
-                      key={filter}
-                      onClick={() => setActiveFilter(filter)}
-                      className={`px-4 py-2 rounded-xl font-medium text-sm transition-all duration-200 ${
-                        activeFilter === filter
-                          ? 'bg-[#6D415F] text-white shadow-md'
-                          : 'bg-white/60 text-gray-600 hover:bg-white/80 border border-[#8E7CC3]/20'
-                      }`}
-                    >
-                      {filter.charAt(0).toUpperCase() + filter.slice(1)}
-                    </button>
-                  ))}
-                </div>
-
-                {/* Search Bar - Right Side */}
-                <div className="relative max-w-xs sm:max-w-sm">
-                  <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
-                  <input
-                    type="text"
-                    placeholder="Search quizzes..."
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                    className="w-full pl-12 pr-4 py-3 bg-white/80 border border-[#8E7CC3]/20 rounded-2xl focus:outline-none focus:ring-2 focus:ring-[#8E7CC3]/30 focus:border-[#8E7CC3]/40 transition-all duration-200 text-gray-900 placeholder-gray-500"
-                  />
-                </div>
-              </div>
-            </div>
-
-            {/* Stats Row */}
-            <div className="flex flex-wrap gap-6 text-sm">
-              <div className="flex items-center space-x-2">
-                <div className="w-3 h-3 bg-[#8E7CC3] rounded-full"></div>
-                <span className="text-gray-600">Total: <span className="font-semibold text-gray-900">{getQuizStats().total}</span></span>
-              </div>
-              <div className="flex items-center space-x-2">
-                <div className="w-3 h-3 bg-green-500 rounded-full"></div>
-                <span className="text-gray-600">Ready: <span className="font-semibold text-gray-900">{getQuizStats().ready}</span></span>
-              </div>
-              <div className="flex items-center space-x-2">
-                <div className="w-3 h-3 bg-blue-500 rounded-full"></div>
-                <span className="text-gray-600">Active: <span className="font-semibold text-gray-900">{getQuizStats().active}</span></span>
-              </div>
-              <div className="flex items-center space-x-2">
-                <div className="w-3 h-3 bg-gray-400 rounded-full"></div>
-                <span className="text-gray-600">Finished: <span className="font-semibold text-gray-900">{getQuizStats().finished}</span></span>
-              </div>
-            </div>
-          </div>
+          {/* Filter and Search Row */}
+          <ListFilterBar
+            tabs={['all', 'ready', 'launched', 'finished']}
+            activeTab={activeFilter}
+            onTabChange={setActiveFilter}
+            searchTerm={searchTerm}
+            onSearchChange={setSearchTerm}
+            searchPlaceholder="Search quizzes..."
+          />
         </div>
 
         {/* Quiz Cards */}
@@ -535,13 +494,16 @@ const QuizLibrary = () => {
                       <span>Quiz Active - Cannot Launch</span>
                     </button>
                   ) : (
-                    <button
-                      onClick={() => launchQuiz(quiz.id)}
-                      className="flex items-center justify-center space-x-2 px-4 py-3 bg-[#6D415F] text-white rounded-xl hover:bg-[#5A344D] transition-all duration-300 font-medium shadow-md hover:shadow-lg w-full group-hover:scale-105"
-                    >
-                      <Rocket className="w-4 h-4 sm:w-5 sm:h-5" />
-                      <span>Launch Quiz</span>
-                    </button>
+                    <div className="w-full flex flex-col items-stretch">
+                      <button
+                        onClick={() => launchQuiz(quiz.id)}
+                        className="flex items-center justify-center space-x-2 px-4 py-3 bg-[#6D415F] text-white rounded-xl hover:bg-[#5A344D] transition-all duration-300 font-medium shadow-md hover:shadow-lg w-full group-hover:scale-105"
+                      >
+                        <Rocket className="w-4 h-4 sm:w-5 sm:h-5" />
+                        <span>Launch Quiz</span>
+                      </button>
+                      <LaunchRequiresSessionHint className="text-center" />
+                    </div>
                   )}
 
                   {/* Secondary Actions */}
@@ -601,7 +563,7 @@ const QuizLibrary = () => {
             </div>
             
             <p className="text-gray-600 mb-6">
-              Remove this quiz from your library? Students will not be able to attempt it
+              Remove this quiz from your library? The audience will not be able to attempt it
               again, but existing scores and reports will be kept.
             </p>
             
@@ -630,6 +592,14 @@ const QuizLibrary = () => {
         onLaunch={handleLaunchQuiz}
         quiz={selectedQuiz}
         existingAccessCode={accessCode}
+      />
+
+      <NoActiveSessionLaunchModal
+        isOpen={showNoSessionModal}
+        onClose={() => setShowNoSessionModal(false)}
+        onSaveAsDraft={async () => {
+          alert.toast.success('Quiz is already saved in your library');
+        }}
       />
     </div>
   );

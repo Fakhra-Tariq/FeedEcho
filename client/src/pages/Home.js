@@ -51,7 +51,7 @@ const Home = () => {
       icon: TrendingUp,
       title: 'Participation Insights',
       description:
-        'See engagement at a glance to support better pacing and student outcomes.',
+        'See engagement at a glance to support better pacing and audience outcomes.',
     },
   ];
 

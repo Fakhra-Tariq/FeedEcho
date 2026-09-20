@@ -18,6 +18,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { useHostData } from '../contexts/HostDataContext';
 import { useHybridAlert } from '../contexts/HybridAlertContext';
 import { sessionsAPI } from '../services/api';
+import PageHeaderCard from '../components/Host/PageHeaderCard';
 import {
   formatSessionActivityHistoryLine,
   parseSessionActivities,
@@ -150,29 +151,28 @@ const SessionsPage = () => {
 
   return (
     <div className="w-full space-y-8 animate-fade-in">
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div>
-          <h1 className="text-3xl md:text-4xl font-bold text-[#2E1F2A] dark:text-white">Sessions</h1>
-          <p className="mt-2 text-[#5A4A55] dark:text-white/70 max-w-2xl">
-            View all your classroom sessions and the activities launched within each one.
-          </p>
-        </div>
-        <button
-          type="button"
-          onClick={() => setShowCreateModal(true)}
-          disabled={isSessionActive}
-          className={clsx(
-            'flex items-center justify-center gap-2 px-6 py-3 rounded-xl font-semibold transition-all duration-300 shrink-0',
-            'bg-white text-[#6D415F] hover:bg-white/90',
-            'shadow-lg hover:shadow-xl',
-            isSessionActive && 'opacity-50 cursor-not-allowed'
-          )}
-          title={isSessionActive ? 'A session is already active' : 'Create a new session'}
-        >
-          <Plus className="w-5 h-5" />
-          <span>Create Session</span>
-        </button>
-      </div>
+      <PageHeaderCard
+        icon={ClipboardList}
+        title="Sessions"
+        subtitle="View all your classroom sessions and the activities launched within each one."
+        actions={
+          <button
+            type="button"
+            onClick={() => setShowCreateModal(true)}
+            disabled={isSessionActive}
+            className={clsx(
+              'flex items-center justify-center gap-2 px-6 py-3 rounded-xl font-semibold transition-all duration-300 shrink-0',
+              'bg-white text-[#6D415F] hover:bg-white/90',
+              'shadow-lg hover:shadow-xl',
+              isSessionActive && 'opacity-50 cursor-not-allowed'
+            )}
+            title={isSessionActive ? 'A session is already active' : 'Create a new session'}
+          >
+            <Plus className="w-5 h-5" />
+            <span>Create Session</span>
+          </button>
+        }
+      />
 
       {loading ? (
         <div className="flex items-center justify-center py-24 text-[#6D415F]">

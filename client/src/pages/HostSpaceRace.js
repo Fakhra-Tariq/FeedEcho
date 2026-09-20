@@ -10,7 +10,18 @@ import {
   NO_ACTIVE_SESSION_MESSAGE,
   resolveActiveTeacherSession,
 } from '../utils/requireActiveHostSession';
+import NoActiveSessionLaunchModal, {
+  LaunchRequiresSessionHint,
+} from '../components/Host/NoActiveSessionLaunchModal';
 import { useHybridAlert } from '../contexts/HybridAlertContext';
+import InfoRecap from '../components/Host/InfoRecap';
+import SessionLaunchBanner from '../components/Host/SessionLaunchBanner';
+import PageHeaderCard from '../components/Host/PageHeaderCard';
+import HeaderCardStats from '../components/Host/HeaderCardStats';
+import ListFilterBar from '../components/Host/ListFilterBar';
+import { toParticipantCount } from '../utils/toParticipantCount';
+
+const RACES_PAGE_SIZE = 5;
 
 // Timer display component for active races
 const RaceTimer = ({ raceData, className = '' }) => {
@@ -95,6 +106,8 @@ export default function HostSpaceRace() {
   const [showJoinCodeModal, setShowJoinCodeModal] = useState(false);
   const [currentJoinCode, setCurrentJoinCode] = useState('');
   const [filter, setFilter] = useState('all');
+  const [raceSearchTerm, setRaceSearchTerm] = useState('');
+  const [visibleRaceCount, setVisibleRaceCount] = useState(RACES_PAGE_SIZE);
   const [isCreating, setIsCreating] = useState(false);
   const [quizzes, setQuizzes] = useState([]);
   const [fetchingQuizzes, setFetchingQuizzes] = useState(false);
@@ -104,6 +117,8 @@ export default function HostSpaceRace() {
   const [showCopyNotification, setShowCopyNotification] = useState(false);
   const [showActiveRaceAlert, setShowActiveRaceAlert] = useState(false);
   const [skipRtdbUpdate, setSkipRtdbUpdate] = useState(false);
+  const [showNoSessionModal, setShowNoSessionModal] = useState(false);
+  const [pendingDraftLaunchId, setPendingDraftLaunchId] = useState(null);
   
     
   // Fetch only when modal opens — only teacher's quizzes
@@ -264,8 +279,30 @@ export default function HostSpaceRace() {
     }
   };
 
+  useEffect(() => {
+    setVisibleRaceCount(RACES_PAGE_SIZE);
+  }, [filter]);
+
+  // Counts by status — same status resolution the filter tabs use
+  const racesByStatus = (races || []).reduce(
+    (counts, race) => {
+      const status = getRaceStatus(race);
+      if (counts[status] !== undefined) counts[status] += 1;
+      return counts;
+    },
+    { draft: 0, active: 0, completed: 0 }
+  );
+
   // Calculate filtered races
+  const normalizedRaceSearch = raceSearchTerm.trim().toLowerCase();
   const filteredRaces = (races || []).filter((race) => {
+    if (
+      normalizedRaceSearch &&
+      !String(race.title || '').toLowerCase().includes(normalizedRaceSearch)
+    ) {
+      return false;
+    }
+
     const status = getRaceStatus(race);
     const normalizedFilter = filter.toLowerCase();
 
@@ -275,6 +312,13 @@ export default function HostSpaceRace() {
 
     return status === normalizedFilter;
   });
+
+  // Default view shows the 5 most recent; "Show more" reveals further batches
+  const isSearchingRaces = normalizedRaceSearch.length > 0;
+  const visibleRaces = isSearchingRaces
+    ? filteredRaces
+    : filteredRaces.slice(0, visibleRaceCount);
+  const hasMoreRaces = !isSearchingRaces && filteredRaces.length > visibleRaces.length;
 
   const activeRace = (races || []).find((r) => getRaceStatus(r) === 'active');
 
@@ -467,7 +511,7 @@ export default function HostSpaceRace() {
     let sessionCheck = await resolveActiveTeacherSession(teacherData.activeSession, teacherId);
 
     if (!sessionCheck.ok) {
-      hybridAlert.toast.error(NO_ACTIVE_SESSION_MESSAGE);
+      setShowNoSessionModal(true);
       return;
     }
 
@@ -627,7 +671,8 @@ export default function HostSpaceRace() {
     let sessionCheck = await resolveActiveTeacherSession(teacherData.activeSession, teacherId);
 
     if (!sessionCheck.ok) {
-      hybridAlert.toast.error(NO_ACTIVE_SESSION_MESSAGE);
+      setPendingDraftLaunchId(raceId);
+      setShowNoSessionModal(true);
       return;
     }
 
@@ -860,91 +905,66 @@ export default function HostSpaceRace() {
   };
 
 return (
-  <div className="p-6 space-y-6">
-    <div className="flex items-center justify-between">
-      <div>
-        <h1 className="text-2xl font-bold text-text">Space Race</h1>
-        <p className="text-text-light mt-1">Gamified quiz competitions with team leaderboards</p>
-      </div>
-      <button
-              onClick={handleOpenCreateModal}
-              className="flex items-center gap-2 px-4 py-2 bg-[#6D415F] text-white rounded-lg hover:bg-[#6D415F]/90 transition-colors"
-            >
-              <Plus className="w-4 h-4" />
-              Create Race
-            </button>
-    </div>
+  <div className="px-6 pb-6 space-y-4">
+    <SessionLaunchBanner />
 
-    <div className="bg-[#6D415F] rounded-xl p-6 text-white">
-      <div className="flex items-center justify-between mb-4">
-        <div className="flex items-center space-x-3">
-          <div className="p-2 bg-white/20 rounded-lg">
-            <Trophy className="w-6 h-6" />
-          </div>
-          <div>
-            <h3 className="font-semibold text-lg">Race in Progress</h3>
-            <p className="text-white/80">{activeRace?.title || 'No active race'}</p>
-          </div>
-        </div>
-        {activeRace && (
-          <div className="flex items-center space-x-2">
+    <PageHeaderCard
+      compact
+      title="Space Race"
+      titleAccessory={
+        <InfoRecap
+          variant="onDark"
+          steps={[
+            'Pick an existing quiz from your library to turn into a race',
+            'Set team settings (auto-assign or audience choice)',
+            'Launching requires an active session',
+            'Teams compete live and can chat within their team.',
+          ]}
+        />
+      }
+      subtitle="Gamified quiz competitions with team leaderboards"
+      actions={
+        <>
+          {activeRace && (
             <button
               onClick={() => handleEnd(resolveRaceId(activeRace))}
-              className="inline-flex items-center px-3 py-1.5 bg-[#6D415F] text-white text-sm rounded-lg hover:bg-[#5a364d] transition-colors"
+              className="inline-flex items-center px-3 py-2 bg-white/20 text-white text-sm rounded-lg hover:bg-white/30 transition-colors"
               title="End Race"
             >
               <Square className="w-4 h-4 mr-1" />
               End Race
             </button>
-          </div>
-        )}
-      </div>
-      <div className="grid grid-cols-4 gap-4">
-        <div>
-          <p className="text-white/80 text-sm">Teams</p>
-          <p className="text-2xl font-bold">{activeRace?.teamsCount || activeRace?.settings?.numberOfTeams || 0}</p>
-        </div>
-        <div>
-          <p className="text-white/80 text-sm">Participants</p>
-          <p className="text-2xl font-bold">{activeRace?.participantsCount || 0}</p>
-        </div>
-        <div>
-          <p className="text-white/80 text-sm">Questions</p>
-          <p className="text-2xl font-bold">{activeRace?.questionsCount || 0}</p>
-        </div>
-        <div>
-          <p className="text-white/80 text-sm">Time Left</p>
-          <p className="text-2xl font-bold text-green-400">
-            {activeRace ? <RaceTimer raceData={activeRace} /> : '--:--'}
-          </p>
-          {activeRace?.settings?.joinDuration && (
-            <p className="text-xs text-white/60 mt-1">Join Timer</p>
           )}
-          {!activeRace?.settings?.joinDuration && activeRace?.endTime && (
-            <p className="text-xs text-white/60 mt-1">Quiz Timer</p>
-          )}
-        </div>
-      </div>
-    </div>
-
-    <div className="flex items-center space-x-4 border-b border-gray-200">
-        {['all', 'draft', 'active', 'completed'].map(status => (
           <button
-            key={status}
-            onClick={() => setFilter(status)}
-            className={`pb-3 px-1 capitalize transition-colors border-b-2 ${
-              filter === status
-                ? 'border-[#6D415F] text-[#6D415F]'
-                : 'border-transparent text-text-light hover:text-text'
-            }`}
+            onClick={handleOpenCreateModal}
+            className="flex items-center gap-2 px-4 py-2 bg-white text-[#6D415F] rounded-lg font-semibold hover:bg-white/90 shadow-lg transition-colors"
           >
-            {status === 'all' ? 'All' : status.charAt(0).toUpperCase() + status.slice(1)}
+            <Plus className="w-4 h-4" />
+            Create Race
           </button>
-        ))}
-      </div>
+        </>
+      }
+    >
+      <HeaderCardStats
+        stats={[
+          { label: 'Draft', value: racesByStatus.draft },
+          { label: 'Active', value: racesByStatus.active },
+          { label: 'Completed', value: racesByStatus.completed },
+        ]}
+      />
+    </PageHeaderCard>
+
+    <ListFilterBar
+      tabs={['all', 'draft', 'active', 'completed']}
+      activeTab={filter}
+      onTabChange={setFilter}
+      searchTerm={raceSearchTerm}
+      onSearchChange={setRaceSearchTerm}
+      searchPlaceholder="Search races..."
+    />
 
       <div className="grid gap-4">
-        {filteredRaces.map(race => (
+        {visibleRaces.map(race => (
           <div key={race.id} className="bg-white rounded-lg border border-gray-200 p-6">
             <div className="flex items-start justify-between">
               <div className="flex-1">
@@ -977,7 +997,7 @@ return (
                 <div className="flex items-center space-x-6 text-sm text-text-light">
                   <div className="flex items-center space-x-1">
                     <Users className="w-4 h-4" />
-                    <span>{race.participantsCount || race.participants || 0} participants</span>
+                    <span>{toParticipantCount(race.participantsCount, race.participants)} participants</span>
                   </div>
                   <div className="flex items-center space-x-1">
                     <Trophy className="w-4 h-4" />
@@ -1087,6 +1107,18 @@ return (
           </div>
         )}
       </div>
+
+      {hasMoreRaces && (
+        <div className="flex justify-center">
+          <button
+            type="button"
+            onClick={() => setVisibleRaceCount((prev) => prev + RACES_PAGE_SIZE)}
+            className="px-4 py-2 rounded-lg border border-primary/40 text-primary font-medium hover:bg-primary/10 transition-colors"
+          >
+            Show more
+          </button>
+        </div>
+      )}
 
       {showCreate && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
@@ -1217,7 +1249,7 @@ return (
                             <option key={num} value={num}>{num}</option>
                           ))}
                         </select>
-                        <p className="text-xs text-gray-500 mt-1">Maximum students allowed per team</p>
+                        <p className="text-xs text-gray-500 mt-1">Maximum audience members allowed per team</p>
                       </div>
                     )}
 
@@ -1359,14 +1391,17 @@ return (
                     >
                       {isCreating ? 'Saving...' : 'Save as Draft'}
                     </button>
-                    <button
-                      type="button"
-                      onClick={handleStartRace}
-                      disabled={isCreating}
-                      className="px-4 py-2 bg-[#6D415F] text-white rounded-lg hover:bg-[#6D415F]/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                    >
-                      {isCreating ? 'Launching...' : 'Launch'}
-                    </button>
+                    <div className="inline-flex flex-col items-end">
+                      <button
+                        type="button"
+                        onClick={handleStartRace}
+                        disabled={isCreating}
+                        className="px-4 py-2 bg-[#6D415F] text-white rounded-lg hover:bg-[#6D415F]/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                      >
+                        {isCreating ? 'Launching...' : 'Launch'}
+                      </button>
+                      <LaunchRequiresSessionHint />
+                    </div>
                   </>
                 )}
               </div>
@@ -1376,6 +1411,21 @@ return (
       )}
       
       {/* Settings Modal */}
+      <NoActiveSessionLaunchModal
+        isOpen={showNoSessionModal}
+        onClose={() => {
+          setShowNoSessionModal(false);
+          setPendingDraftLaunchId(null);
+        }}
+        onSaveAsDraft={async () => {
+          if (pendingDraftLaunchId) {
+            hybridAlert.toast.success('Space Race is already saved as a draft');
+            return;
+          }
+          await handleSaveRace();
+        }}
+      />
+
       {settingsRace && (
         <SpaceRaceSettings
           key={`${settingsRace.id}-${settingsRace.updatedAt}`}
@@ -1404,7 +1454,7 @@ return (
 
               {/* Title and subtitle */}
               <h2 className="text-2xl font-bold text-gray-900 mb-2">Space Race Launched</h2>
-              <p className="text-sm text-gray-600 mb-8">Share this code with students</p>
+              <p className="text-sm text-gray-600 mb-8">Share this code with audience</p>
 
               {/* Audience Access Code box */}
               <div className="mb-8">

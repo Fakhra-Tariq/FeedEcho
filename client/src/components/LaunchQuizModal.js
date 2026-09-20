@@ -114,8 +114,8 @@ const LaunchQuizModal = ({ isOpen, onClose, onLaunch, quiz, existingAccessCode }
             />
 
             <MinuteStepperField
-              label="Each student gets up to"
-              description="Time each student has to attempt the quiz after joining"
+              label="Each audience member gets up to"
+              description="Time each audience member has to attempt the quiz after joining"
               value={timePerStudent}
               onChange={setTimePerStudent}
               presets={QUIZ_TIME_PRESETS}

@@ -1,7 +1,20 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useHostData } from '../contexts/HostDataContext';
 import { useHybridAlert } from '../contexts/HybridAlertContext';
-import { MessageSquare, Users, Settings, Trash2, Clock, CheckCircle, Copy, Check, AlertTriangle } from 'lucide-react';
+import {
+  MessageSquare,
+  Users,
+  Settings,
+  Trash2,
+  Clock,
+  CheckCircle,
+  Copy,
+  Check,
+  AlertTriangle,
+  Send,
+  ArrowDown,
+} from 'lucide-react';
+import clsx from 'clsx';
 import ChatCreatedModal from '../components/ChatCreatedModal';
 import { useAuth } from '../contexts/AuthContext';
 import { useRtdbList, useRtdbValue } from '../hooks/useRtdb';
@@ -10,6 +23,11 @@ import {
   NO_ACTIVE_SESSION_MESSAGE,
   requireActiveHostSession,
 } from '../utils/requireActiveHostSession';
+import InfoRecap from '../components/Host/InfoRecap';
+import SessionLaunchBanner from '../components/Host/SessionLaunchBanner';
+import PageHeaderCard from '../components/Host/PageHeaderCard';
+import ChatMessageBubble from '../components/Chat/ChatMessageBubble';
+import { toParticipantCount } from '../utils/toParticipantCount';
 
 export default function HostAnonymousChat() {
   const { user, userProfile } = useAuth();
@@ -34,6 +52,11 @@ export default function HostAnonymousChat() {
   const [moderationMode, setModerationMode] = useState(false);
   const [copiedCode, setCopiedCode] = useState(null);
   const [apiChats, setApiChats] = useState([]);
+  const [isCreating, setIsCreating] = useState(false);
+  const [messageDraft, setMessageDraft] = useState('');
+  const [isSendingMessage, setIsSendingMessage] = useState(false);
+  const [hasUnseenIncoming, setHasUnseenIncoming] = useState(false);
+  const [readCounts, setReadCounts] = useState({});
   const messagesContainerRef = useRef(null);
   const shouldAutoScrollRef = useRef(true);
   const lastMessageCountRef = useRef(0);
@@ -71,12 +94,12 @@ export default function HostAnonymousChat() {
 
   const getParticipantCount = (chat) => {
     if (chat.id === selectedChatId) {
-      return selectedChatLive?.participants ?? 0;
+      return toParticipantCount(selectedChatLive?.participants);
     }
-    return chat.participants ?? 0;
+    return toParticipantCount(chat.participants);
   };
 
-  const selectedParticipantCount = selectedChatLive?.participants ?? 0;
+  const selectedParticipantCount = toParticipantCount(selectedChatLive?.participants);
 
   useEffect(() => {
     if (!selectedChatId) return;
@@ -126,6 +149,7 @@ export default function HostAnonymousChat() {
     const onScroll = () => {
       const nearBottom = el.scrollHeight - (el.scrollTop + el.clientHeight) < 120;
       shouldAutoScrollRef.current = nearBottom;
+      if (nearBottom) setHasUnseenIncoming(false);
     };
 
     el.addEventListener('scroll', onScroll, { passive: true });
@@ -139,9 +163,94 @@ export default function HostAnonymousChat() {
     lastMessageCountRef.current = messageCount;
 
     if (!isNewMessage) return;
-    if (!shouldAutoScrollRef.current) return;
+    if (!shouldAutoScrollRef.current) {
+      // Teacher is reading earlier messages — offer a jump instead of yanking the view down.
+      setHasUnseenIncoming(true);
+      return;
+    }
     scrollToBottom('auto');
   }, [selectedChat?.messages]);
+
+  // Switching chats starts a fresh thread view
+  useEffect(() => {
+    lastMessageCountRef.current = 0;
+    shouldAutoScrollRef.current = true;
+    setHasUnseenIncoming(false);
+    setMessageDraft('');
+  }, [selectedChatId]);
+
+  // Unread tracking: chats already listed when the page loads start as read,
+  // so only messages that arrive while the teacher is here light up.
+  useEffect(() => {
+    const list = sidebarChats || [];
+    if (list.length === 0) return;
+    setReadCounts((prev) => {
+      let changed = false;
+      const next = { ...prev };
+      list.forEach((chat) => {
+        if (!chat?.id || next[chat.id] !== undefined) return;
+        next[chat.id] = chat.messageCount ?? 0;
+        changed = true;
+      });
+      return changed ? next : prev;
+    });
+  }, [sidebarChats]);
+
+  // Whatever is open is being read
+  useEffect(() => {
+    if (!selectedChatId) return;
+    const count = selectedChatMessages.length;
+    setReadCounts((prev) =>
+      prev[selectedChatId] === count ? prev : { ...prev, [selectedChatId]: count }
+    );
+  }, [selectedChatId, selectedChatMessages.length]);
+
+  const getUnreadCount = (chat) => {
+    const read = readCounts[chat.id];
+    if (read === undefined) return 0;
+    return Math.max(0, getMessageCount(chat) - read);
+  };
+
+  const getChatPreview = (chat) => {
+    if (chat.id === selectedChatId && selectedChatMessages.length > 0) {
+      const last = selectedChatMessages[selectedChatMessages.length - 1];
+      const text = (last?.content || last?.message || '').trim();
+      if (text) return last?.isTeacher ? `You: ${text}` : text;
+    }
+    return chat.description || '';
+  };
+
+  const handleSendMessage = async (event) => {
+    event?.preventDefault?.();
+    const trimmed = messageDraft.trim();
+    if (!trimmed || !selectedChat?.id || isSendingMessage) return;
+
+    try {
+      setIsSendingMessage(true);
+      const response = await anonymousChatAPI.addTeacherMessage(selectedChat.id, {
+        message: trimmed,
+      });
+      if (!response.data?.success) {
+        alert.toast.error(response.data?.error || 'Failed to send message');
+        return;
+      }
+      // RTDB listeners append the message; just keep the view pinned to the bottom.
+      setMessageDraft('');
+      shouldAutoScrollRef.current = true;
+      setHasUnseenIncoming(false);
+    } catch (error) {
+      console.error('Error sending message:', error);
+      alert.toast.error(error?.response?.data?.error || 'Failed to send message');
+    } finally {
+      setIsSendingMessage(false);
+    }
+  };
+
+  const jumpToLatest = () => {
+    shouldAutoScrollRef.current = true;
+    setHasUnseenIncoming(false);
+    scrollToBottom('smooth');
+  };
 
   // Real-time updates are handled by RTDB listeners (no simulation / polling)
   const loadChatsFromApi = async () => {
@@ -162,7 +271,7 @@ export default function HostAnonymousChat() {
   }, [uid]);
 
   const handleCreate = async () => {
-    if (!createForm.title) return;
+    if (!createForm.title || isCreating) return;
 
     const sessionCheck = requireActiveHostSession(data.activeSession);
     if (!sessionCheck.ok) {
@@ -179,6 +288,7 @@ export default function HostAnonymousChat() {
     }
     
     try {
+      setIsCreating(true);
       // Create chat with default settings
       const chatPayload = {
         title: createForm.title,
@@ -209,6 +319,8 @@ export default function HostAnonymousChat() {
       console.error('Error creating chat:', error);
       const errorMessage = error?.response?.data?.error || 'Failed to create chat. Please try again.';
       alert.toast.error(errorMessage);
+    } finally {
+      setIsCreating(false);
     }
   };
 
@@ -297,245 +409,308 @@ export default function HostAnonymousChat() {
     setDeleteConfirmChat(null);
   };
 
-  return (
-    <div className="p-6 space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-text">Anonymous Chat</h1>
-          <p className="text-text-light mt-1">Anonymous Q&A and feedback sessions</p>
+  const renderChatItem = (chat) => {
+    const isSelected = selectedChat?.id === chat.id;
+    const ended = !isChatActive(chat);
+    const unread = getUnreadCount(chat);
+    const preview = getChatPreview(chat);
+
+    return (
+      <div
+        key={chat.id}
+        onClick={() => setSelectedChat(chat)}
+        className={clsx(
+          'px-3 py-3 rounded-xl border cursor-pointer transition-colors',
+          isSelected
+            ? 'bg-primary/10 border-primary/30'
+            : 'bg-white border-primary/10 hover:bg-background'
+        )}
+      >
+        <div className="flex items-start justify-between gap-2">
+          <div className="flex items-center gap-2 min-w-0">
+            <span
+              className={clsx(
+                'w-2 h-2 rounded-full shrink-0',
+                ended ? 'bg-text-light/40' : 'bg-emerald-500'
+              )}
+            />
+            <h4 className="font-medium text-text text-sm truncate">{chat.title}</h4>
+          </div>
+          <div className="flex items-center gap-1 shrink-0">
+            {unread > 0 && (
+              <span className="min-w-[20px] h-5 px-1.5 rounded-full bg-primary text-white text-[11px] font-semibold flex items-center justify-center">
+                {unread > 9 ? '9+' : unread}
+              </span>
+            )}
+            {ended && (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleDeleteChat(chat.id);
+                }}
+                className="p-1 text-text-light hover:text-red-600 hover:bg-red-50 rounded transition-colors"
+                title="Delete chat"
+              >
+                <Trash2 className="w-4 h-4" />
+              </button>
+            )}
+          </div>
         </div>
-        <div className="flex items-center space-x-3">
-          <button
-            onClick={toggleModeration}
-            className={`inline-flex items-center px-4 py-2 rounded-lg transition-colors ${
-              moderationMode 
-                ? 'bg-[#6D415F] text-white hover:bg-[#5A344D]' 
-                : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-            }`}
-          >
-            <Settings className="w-4 h-4 mr-2" />
-            {moderationMode ? 'Moderation ON' : 'Moderation OFF'}
-          </button>
-          <button
-            onClick={() => setShowCreate(true)}
-            className="inline-flex items-center px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors"
-          >
-            <MessageSquare className="w-4 h-4 mr-2" />
-            New Chat
-          </button>
+
+        {preview && <p className="text-xs text-text-light mt-1.5 truncate">{preview}</p>}
+
+        <div className="flex items-center justify-between gap-2 mt-2">
+          <span className="inline-flex items-center gap-2 text-[11px] text-text-light">
+            <span className="inline-flex items-center gap-1">
+              <MessageSquare className="w-3 h-3" />
+              {getMessageCount(chat)}
+            </span>
+            {ended ? (
+              <span>Ended {chat.endedAt ? new Date(chat.endedAt).toLocaleDateString() : ''}</span>
+            ) : (
+              <span className="inline-flex items-center gap-1">
+                <Users className="w-3 h-3" />
+                {getParticipantCount(chat)}
+              </span>
+            )}
+          </span>
+
+          {!ended && (
+            <span className="inline-flex items-center gap-1">
+              <span className="text-[11px] font-mono bg-background px-1.5 py-0.5 rounded text-text">
+                Code: {chat.joinCode}
+              </span>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  copyJoinCode(chat.joinCode);
+                }}
+                className="p-1 text-text-light hover:text-primary transition-colors"
+                title="Copy join code"
+              >
+                {copiedCode === chat.joinCode ? (
+                  <Check className="w-3.5 h-3.5 text-emerald-600" />
+                ) : (
+                  <Copy className="w-3.5 h-3.5" />
+                )}
+              </button>
+            </span>
+          )}
         </div>
       </div>
+    );
+  };
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-1 space-y-4">
+  const selectedMessages = selectedChat?.messages || [];
+
+  return (
+    <div className="px-6 pb-6 space-y-4">
+      <SessionLaunchBanner />
+
+      <PageHeaderCard
+        compact
+        title="Anonymous Chat"
+        titleAccessory={
+          <InfoRecap
+            variant="onDark"
+            steps={[
+              'Create a new chat with a title and description',
+              'Launching requires an active session',
+              'The audience sends anonymous messages/questions',
+              'You respond verbally in class; there\'s no written reply sent back through the app. Use Moderation ON/OFF to control the chat.',
+            ]}
+          />
+        }
+        subtitle="Anonymous Q&A and feedback sessions"
+        actions={
+          <>
+            <button
+              onClick={toggleModeration}
+              className={clsx(
+                'inline-flex items-center px-4 py-2 rounded-lg text-sm font-medium border transition-colors',
+                moderationMode
+                  ? 'bg-white/25 border-white/60 text-white hover:bg-white/35'
+                  : 'bg-white/10 border-white/30 text-white/90 hover:bg-white/20'
+              )}
+            >
+              <Settings className="w-4 h-4 mr-2" />
+              {moderationMode ? 'Moderation ON' : 'Moderation OFF'}
+            </button>
+            <button
+              onClick={() => setShowCreate(true)}
+              className="inline-flex items-center px-4 py-2 bg-white text-primary text-sm font-medium rounded-lg hover:bg-white/90 transition-colors shadow-sm"
+            >
+              <MessageSquare className="w-4 h-4 mr-2" />
+              New Chat
+            </button>
+          </>
+        }
+      />
+
+      <div className="flex flex-col lg:flex-row gap-4 lg:h-[calc(100vh-22rem)] lg:min-h-[480px]">
+        <aside className="w-full lg:w-[300px] shrink-0 bg-white rounded-2xl border border-primary/15 shadow-sm p-3 space-y-5 overflow-y-auto max-h-[360px] lg:max-h-none">
           <div>
-            <h3 className="text-lg font-semibold text-text mb-4">Active Chats</h3>
+            <h3 className="px-1 text-xs font-semibold uppercase tracking-wide text-text-light mb-2">Active Chats</h3>
             <div className="space-y-2">
-              {activeChats.map(chat => (
-                <div
-                  key={chat.id}
-                  onClick={() => setSelectedChat(chat)}
-                  className={`p-4 rounded-lg border cursor-pointer transition-colors ${
-                    selectedChat?.id === chat.id
-                      ? 'border-primary bg-primary/10'
-                      : 'border-gray-200 hover:bg-gray-50'
-                  }`}
-                >
-                  <div className="flex items-center justify-between mb-2">
-                    <h4 className="font-medium text-text">{chat.title}</h4>
-                    <span className="w-2 h-2 bg-green-500 rounded-full"></span>
-                  </div>
-                  <p className="text-sm text-text-light mb-2">{chat.description}</p>
-                  <div className="flex items-center justify-between text-xs text-text-light mb-2">
-                    <span>{getMessageCount(chat)} messages</span>
-                    <span>{getParticipantCount(chat)} participants</span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center space-x-2">
-                      <span className="text-xs font-mono bg-gray-100 px-2 py-1 rounded text-text">
-                        Code: {chat.joinCode}
-                      </span>
-                    </div>
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        copyJoinCode(chat.joinCode);
-                      }}
-                      className="p-1 text-gray-400 hover:text-primary transition-colors"
-                      title="Copy join code"
-                    >
-                      {copiedCode === chat.joinCode ? (
-                        <Check className="w-4 h-4 text-green-500" />
-                      ) : (
-                        <Copy className="w-4 h-4" />
-                      )}
-                    </button>
-                  </div>
-                </div>
-              ))}
+              {activeChats.map((chat) => renderChatItem(chat))}
               {activeChats.length === 0 && (
-                <div className="text-center py-8 text-gray-400">
-                  <MessageSquare className="w-8 h-8 mx-auto mb-2 opacity-50" />
-                  <p>No active chats</p>
+                <div className="flex flex-col items-center text-center py-6 px-3">
+                  <MessageSquare className="w-6 h-6 text-primary/30 mb-2" />
+                  <p className="text-xs text-text-light">No active chats</p>
                 </div>
               )}
             </div>
           </div>
 
           <div>
-            <h3 className="text-lg font-semibold text-text mb-4">Past Chats</h3>
+            <h3 className="px-1 text-xs font-semibold uppercase tracking-wide text-text-light mb-2">Past Chats</h3>
             <div className="space-y-2">
-              {endedChats.map(chat => (
-                <div
-                  key={chat.id}
-                  onClick={() => setSelectedChat(chat)}
-                  className={`p-4 rounded-lg border cursor-pointer transition-colors ${
-                    selectedChat?.id === chat.id
-                      ? 'border-primary bg-primary/10'
-                      : 'border-gray-200 hover:bg-gray-50'
-                  }`}
-                >
-                  <div className="flex items-center justify-between mb-2">
-                    <h4 className="font-medium text-text">{chat.title}</h4>
-                    <div className="flex items-center space-x-2">
-                      <span className="w-2 h-2 bg-gray-400 rounded-full"></span>
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleDeleteChat(chat.id);
-                        }}
-                        className="p-1 text-red-500 hover:text-red-700 hover:bg-red-50 rounded transition-colors"
-                        title="Delete chat"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    </div>
-                  </div>
-                  <div className="flex items-center justify-between text-xs text-text-light">
-                    <span>{getMessageCount(chat)} messages</span>
-                    <span>Ended {new Date(chat.endedAt).toLocaleDateString()}</span>
-                  </div>
-                </div>
-              ))}
+              {endedChats.map((chat) => renderChatItem(chat))}
               {endedChats.length === 0 && (
-                <div className="text-center py-8 text-gray-400">
-                  <Clock className="w-8 h-8 mx-auto mb-2 opacity-50" />
-                  <p>No past chats</p>
+                <div className="flex flex-col items-center text-center py-6 px-3">
+                  <Clock className="w-6 h-6 text-primary/30 mb-2" />
+                  <p className="text-xs text-text-light">No past chats</p>
                 </div>
               )}
             </div>
           </div>
-        </div>
+        </aside>
 
-        <div className="lg:col-span-2">
+        <section className="flex-1 min-w-0 flex flex-col overflow-hidden bg-white rounded-2xl border border-primary/15 shadow-sm h-[520px] lg:h-auto">
           {selectedChat ? (
-            <div className="bg-white rounded-lg border border-gray-200 h-[600px] flex flex-col">
-              <div className="p-4 border-b border-gray-200">
-                <div className="flex items-center justify-between mb-3">
-                  <div>
-                    <h3 className="font-semibold text-text">{selectedChat.title}</h3>
-                    <p className="text-sm text-text-light">
+            <>
+              <div className="px-5 py-3 border-b border-primary/10">
+                <div className="flex items-start justify-between gap-3 flex-wrap">
+                  <div className="min-w-0">
+                    <h3 className="font-semibold text-text truncate">{selectedChat.title}</h3>
+                    <p className="text-sm text-text-light mt-0.5">
                       {selectedChat.status === 'active' ? (
                         <span className="flex items-center">
-                          <CheckCircle className="w-4 h-4 text-green-500 mr-1" />
+                          <CheckCircle className="w-4 h-4 text-emerald-500 mr-1" />
                           Active • {selectedParticipantCount} participants
                         </span>
                       ) : (
                         <span className="flex items-center">
-                          <Clock className="w-4 h-4 text-gray-400 mr-1" />
+                          <Clock className="w-4 h-4 text-text-light mr-1" />
                           Ended • {new Date(selectedChat.endedAt).toLocaleDateString()}
                         </span>
                       )}
                     </p>
                   </div>
+
                   {selectedChat.status === 'active' && (
-                    <button
-                      onClick={handleEndChat}
-                      className="px-3 py-1 bg-red-500 text-white text-sm rounded-lg hover:bg-red-600 transition-colors"
-                    >
-                      End Chat
-                    </button>
-                  )}
-                </div>
-                
-                {/* Audience Access Code - Prominently Displayed */}
-                {selectedChat.status === 'active' && (
-                  <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-lg p-3">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <p className="text-xs font-medium text-blue-700 mb-1">Audience Access Code</p>
-                        <div className="flex items-center space-x-2">
-                          <span className="text-lg font-mono font-bold text-blue-900">
-                            {selectedChat.joinCode}
-                          </span>
-                          <span className="text-xs text-blue-600 bg-blue-100 px-2 py-1 rounded">
-                            Share with students
-                          </span>
+                    <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2 bg-background border border-primary/15 rounded-xl pl-3 pr-1.5 py-1.5">
+                        <div className="leading-tight">
+                          <p className="text-[11px] font-medium text-text-light">Audience Access Code</p>
+                          <div className="flex items-center gap-2">
+                            <span className="text-sm font-mono font-bold text-primary">
+                              {selectedChat.joinCode}
+                            </span>
+                            <span className="text-[11px] text-text-light">Share with audience</span>
+                          </div>
                         </div>
+                        <button
+                          onClick={() => copyJoinCode(selectedChat.joinCode)}
+                          className="p-1.5 text-text-light hover:text-primary hover:bg-primary/10 rounded-lg transition-colors"
+                          title="Copy access code"
+                        >
+                          {copiedCode === selectedChat.joinCode ? (
+                            <Check className="w-4 h-4 text-emerald-600" />
+                          ) : (
+                            <Copy className="w-4 h-4" />
+                          )}
+                        </button>
                       </div>
+
                       <button
-                        onClick={() => copyJoinCode(selectedChat.joinCode)}
-                        className="p-2 text-blue-600 hover:text-blue-800 hover:bg-blue-100 rounded-lg transition-colors"
-                        title="Copy access code"
+                        onClick={handleEndChat}
+                        className="px-3 py-2 bg-red-500 text-white text-sm rounded-lg hover:bg-red-600 transition-colors"
                       >
-                        {copiedCode === selectedChat.joinCode ? (
-                          <Check className="w-5 h-5 text-green-600" />
-                        ) : (
-                          <Copy className="w-5 h-5" />
-                        )}
+                        End Chat
                       </button>
                     </div>
-                  </div>
+                  )}
+                </div>
+              </div>
+
+              <div className="relative flex-1 min-h-0">
+                <div
+                  ref={messagesContainerRef}
+                  className="absolute inset-0 overflow-y-auto px-5 py-4 space-y-3"
+                >
+                  {selectedMessages.length === 0 ? (
+                    <div className="h-full flex flex-col items-center justify-center text-center px-8">
+                      <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center mb-3">
+                        <MessageSquare className="w-6 h-6 text-primary/60" />
+                      </div>
+                      <p className="text-sm text-text-light max-w-sm">
+                        No messages yet. Share the access code with the audience to start receiving questions.
+                      </p>
+                    </div>
+                  ) : (
+                    selectedMessages.map((msg) => {
+                      const fromTeacher = Boolean(msg.isTeacher);
+                      return (
+                        <ChatMessageBubble
+                          key={msg.id}
+                          message={msg}
+                          isOwn={fromTeacher}
+                          label={fromTeacher ? 'You' : 'Audience'}
+                          showStudentDot={!fromTeacher}
+                        />
+                      );
+                    })
+                  )}
+                </div>
+
+                {hasUnseenIncoming && (
+                  <button
+                    onClick={jumpToLatest}
+                    className="absolute bottom-4 left-1/2 -translate-x-1/2 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-primary text-white text-xs font-medium shadow-lg hover:bg-primary/90 transition-colors"
+                  >
+                    <ArrowDown className="w-3.5 h-3.5" />
+                    New message
+                  </button>
                 )}
               </div>
 
-              <div ref={messagesContainerRef} className="flex-1 overflow-y-auto p-4 space-y-4">
-                {selectedChat.messages?.length === 0 ? (
-                  <div className="text-center py-8">
-                    <MessageSquare className="w-12 h-12 text-gray-300 mx-auto mb-4" />
-                    <p className="text-text-light">No messages yet. Share the access code with students to start receiving questions.</p>
-                  </div>
-                ) : (
-                  selectedChat.messages.filter(msg => !msg.isTeacher).map(msg => (
-                    <div
-                      key={msg.id}
-                      className="flex justify-start"
+              {isChatActive(selectedChat) && (
+                <form onSubmit={handleSendMessage} className="px-5 py-3 border-t border-primary/10">
+                  <div className="flex items-center gap-2 bg-background border border-primary/15 rounded-full pl-4 pr-1.5 py-1.5 transition-colors focus-within:border-primary/40">
+                    <input
+                      type="text"
+                      value={messageDraft}
+                      onChange={(e) => setMessageDraft(e.target.value)}
+                      placeholder="Message audience…"
+                      className="flex-1 bg-transparent text-sm text-text placeholder-text-light focus:outline-none"
+                    />
+                    <button
+                      type="submit"
+                      disabled={!messageDraft.trim() || isSendingMessage}
+                      className="p-2 rounded-full bg-primary text-white hover:bg-primary/90 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                      title="Send message"
                     >
-                      <div className={`max-w-xs lg:max-w-md px-4 py-2 rounded-lg ${
-                        msg.isHidden
-                          ? 'bg-gray-200 text-gray-400 line-through'
-                          : msg.isAnswered
-                          ? 'bg-green-100 border border-green-200 text-text'
-                          : 'bg-gray-100 text-text'
-                      }`}>
-                        <p className="text-sm">{msg.content || msg.message}</p>
-                        <div className="flex items-center justify-between mt-1">
-                          <p className="text-xs opacity-70">
-                            {new Date(msg.timestamp).toLocaleTimeString()}
-                          </p>
-                          {msg.isAnswered && (
-                            <span className="text-xs text-green-600 font-medium">
-                              ✓ Answered
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  ))
-                )}
-                <div />
-              </div>
-            </div>
+                      <Send className="w-4 h-4" />
+                    </button>
+                  </div>
+                </form>
+              )}
+            </>
           ) : (
-            <div className="bg-white rounded-lg border border-gray-200 h-[600px] flex items-center justify-center">
-              <div className="text-center">
-                <MessageSquare className="w-12 h-12 text-gray-300 mx-auto mb-4" />
-                <h3 className="text-lg font-medium text-text mb-2">Select a chat</h3>
-                <p className="text-text-light">Choose a chat from the sidebar to view and moderate messages</p>
+            <div className="flex-1 flex items-center justify-center p-8">
+              <div className="text-center max-w-xs">
+                <div className="w-14 h-14 rounded-full bg-primary/10 flex items-center justify-center mx-auto mb-4">
+                  <MessageSquare className="w-7 h-7 text-primary/60" />
+                </div>
+                <h3 className="text-base font-medium text-text mb-1">Select a chat</h3>
+                <p className="text-sm text-text-light">
+                  Choose a chat from the sidebar to view and moderate messages
+                </p>
               </div>
             </div>
           )}
-        </div>
+        </section>
       </div>
 
       {showCreate && (
@@ -562,7 +737,7 @@ export default function HostAnonymousChat() {
                   onChange={(e) => setCreateForm({ ...createForm, description: e.target.value })}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary bg-white text-text"
                   rows={3}
-                  placeholder="Optional description for students"
+                  placeholder="Optional description for the audience"
                 />
               </div>
             </div>
@@ -575,10 +750,10 @@ export default function HostAnonymousChat() {
               </button>
               <button
                 onClick={handleCreate}
-                disabled={!createForm.title}
+                disabled={!createForm.title || isCreating}
                 className="px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               >
-                Create Chat
+                {isCreating ? 'Creating…' : 'Create Chat'}
               </button>
             </div>
           </div>

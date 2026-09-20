@@ -32,9 +32,11 @@ const mapUserToProfile = (user = {}, session = {}) => {
     user.displayName ||
     [user.firstName, user.lastName].filter(Boolean).join(' ').trim() ||
     session.name ||
-    'Student';
+    'Audience';
 
-  const roleLabel = (user.role || session.role || 'student').replace(/^\w/, (c) => c.toUpperCase());
+  const rawRole = user.role || session.role || 'student';
+  const roleLabel =
+    rawRole === 'teacher' ? 'Host' : rawRole === 'student' ? 'Audience' : rawRole.replace(/^\w/, (c) => c.toUpperCase());
 
   return {
     fullName,
@@ -277,7 +279,7 @@ export default function AudienceProfile() {
     return d.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
   };
 
-  const navDisplayName = profile?.fullName || student?.name || 'Student';
+  const navDisplayName = profile?.fullName || student?.name || 'Audience';
   const navDisplayEmail = profile?.email || student?.email || '';
 
   const studentNavbar = (
@@ -310,7 +312,7 @@ export default function AudienceProfile() {
                 className="flex items-center space-x-2 p-2 rounded-lg hover:bg-gray-100 transition-colors"
               >
                 <AudienceAvatar name={navDisplayName} />
-                <span className="font-medium text-text">{navDisplayName.split(' ')[0] || 'Student'}</span>
+                <span className="font-medium text-text">{navDisplayName.split(' ')[0] || 'Audience'}</span>
                 <ChevronDown className="w-4 h-4 text-gray-500" />
               </button>
 

@@ -66,11 +66,14 @@ services:
     plan: free
     buildCommand: npm install && npm --prefix client install && npm run build
     staticPublishPath: client/build
-    # SPA fallback: deep links like /student/progress must serve index.html
+    # SPA fallback: refresh/direct visit to /host/space-race (etc.) must serve index.html.
+    # Quote globs — unquoted /* is a YAML alias and Render can drop the rule.
+    # If this Blueprint is not synced, add the same rewrite in the dashboard:
+    #   Settings → Redirects/Rewrites → Source /*  Destination /index.html  Action Rewrite
     routes:
       - type: rewrite
-        source: /*
-        destination: /index.html
+        source: "/*"
+        destination: "/index.html"
     envVars:
       - key: REACT_APP_API_URL
         sync: false

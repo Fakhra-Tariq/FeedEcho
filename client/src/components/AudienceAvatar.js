@@ -12,7 +12,7 @@ const getInitials = (name) => {
 };
 
 export default function AudienceAvatar({
-  name = 'Student',
+  name = 'Audience',
   className = 'w-8 h-8',
   textClassName = 'text-sm',
 }) {

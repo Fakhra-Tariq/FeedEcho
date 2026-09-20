@@ -30,6 +30,7 @@ import {
   reviewQuestionAnswer,
 } from '../utils/scoringUtils';
 import { normalizeQuizTypeLabel } from '../utils/quizQuestionNormalization';
+import PageHeaderCard from '../components/Host/PageHeaderCard';
 import {
   mapSubmissionNodes,
   mergeQuizSubmissionSources,
@@ -258,6 +259,19 @@ const collectReportDataForQuiz = (quiz, submissionsByQuizId, participantsByQuizI
 
   return buildQuizReportRow(quiz, mergedSubmissions, joinedCount);
 };
+
+const OverviewStatCard = ({ label, icon: Icon, value, caption }) => (
+  <div className="bg-[#F2EBF0] rounded-2xl border border-[#6D415F]/20 p-5 shadow-sm">
+    <div className="flex items-center justify-between gap-3 mb-3">
+      <p className="text-xs font-semibold uppercase tracking-wide text-text-light">{label}</p>
+      <div className="w-11 h-11 rounded-full bg-[#6D415F] flex items-center justify-center shadow-lg shrink-0">
+        <Icon className="w-5 h-5 text-white" />
+      </div>
+    </div>
+    <p className="text-3xl font-bold text-text">{value}</p>
+    {caption && <p className="text-xs text-text-light mt-1">{caption}</p>}
+  </div>
+);
 
 export default function HostReports() {
   const { user, userProfile } = useAuth();
@@ -629,7 +643,7 @@ export default function HostReports() {
                         </span>
                         <span className="flex-1 text-text">{text || `Option ${optIdx + 1}`}</span>
                         {isOptionSelected && (
-                          <span className="text-xs font-medium text-primary shrink-0">Student chose</span>
+                          <span className="text-xs font-medium text-primary shrink-0">Audience chose</span>
                         )}
                         {isOptionCorrect && !isOptionSelected && (
                           <span className="text-xs font-medium text-green-700 shrink-0">Correct answer</span>
@@ -641,7 +655,7 @@ export default function HostReports() {
               ) : (
                 <div className="ml-8 space-y-2 text-sm">
                   <div className="flex flex-wrap gap-x-2">
-                    <span className="text-text-light">Student answer:</span>
+                    <span className="text-text-light">Audience answer:</span>
                     <span className={clsx('font-medium', isCorrect ? 'text-green-700' : 'text-red-700')}>
                       {studentAnswer}
                     </span>
@@ -666,44 +680,23 @@ export default function HostReports() {
   return (
     <div className="min-h-full bg-background p-4 sm:p-6 lg:p-8 space-y-8">
       {/* Header */}
-        <div>
-        <h1 className="text-2xl sm:text-3xl font-bold text-text">Reports</h1>
-        <p className="text-text-light mt-1">
-          Quiz performance overview and detailed participant results
-        </p>
-      </div>
+      <PageHeaderCard
+        compact
+        title="Reports"
+        subtitle="Quiz performance overview and detailed participant results"
+      />
 
       {/* Overview stats */}
       <section className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="bg-white rounded-2xl border border-primary/10 p-5 shadow-sm">
-          <div className="flex items-center justify-between mb-3">
-            <p className="text-xs font-semibold uppercase tracking-wide text-text-light">Quizzes</p>
-            <BarChart3 className="w-4 h-4 text-primary" />
-          </div>
-          <p className="text-3xl font-bold text-text">{overviewStats.totalQuizzes}</p>
-        </div>
-        <div className="bg-white rounded-2xl border border-primary/10 p-5 shadow-sm">
-          <div className="flex items-center justify-between mb-3">
-            <p className="text-xs font-semibold uppercase tracking-wide text-text-light">Participants</p>
-            <Users className="w-4 h-4 text-primary" />
-          </div>
-          <p className="text-3xl font-bold text-text">{overviewStats.totalParticipants}</p>
-        </div>
-        <div className="bg-white rounded-2xl border border-primary/10 p-5 shadow-sm">
-          <div className="flex items-center justify-between mb-3">
-            <p className="text-xs font-semibold uppercase tracking-wide text-text-light">Avg score</p>
-            <Award className="w-4 h-4 text-primary" />
-          </div>
-          <p className="text-3xl font-bold text-text">{overviewStats.avgScore}%</p>
-        </div>
-        <div className="bg-white rounded-2xl border border-primary/10 p-5 shadow-sm">
-          <div className="flex items-center justify-between mb-3">
-            <p className="text-xs font-semibold uppercase tracking-wide text-text-light">Pass rate</p>
-            <TrendingUp className="w-4 h-4 text-primary" />
-          </div>
-          <p className="text-3xl font-bold text-text">{overviewStats.passRate}%</p>
-          <p className="text-xs text-text-light mt-1">Passing: {PASS_THRESHOLD}%+</p>
-        </div>
+        <OverviewStatCard label="Quizzes" icon={BarChart3} value={overviewStats.totalQuizzes} />
+        <OverviewStatCard label="Participants" icon={Users} value={overviewStats.totalParticipants} />
+        <OverviewStatCard label="Avg score" icon={Award} value={`${overviewStats.avgScore}%`} />
+        <OverviewStatCard
+          label="Pass rate"
+          icon={TrendingUp}
+          value={`${overviewStats.passRate}%`}
+          caption={`Passing: ${PASS_THRESHOLD}%+`}
+        />
       </section>
 
       {/* Quiz reports list */}
@@ -887,7 +880,7 @@ export default function HostReports() {
                     </p>
                     <h3 className="text-xl font-bold text-text">{selectedReport.quiz.title}</h3>
                     <p className="text-sm text-text-light mt-1">
-                      {selectedLaunch.joinedCount} student{selectedLaunch.joinedCount === 1 ? '' : 's'} joined
+                      {selectedLaunch.joinedCount} audience member{selectedLaunch.joinedCount === 1 ? '' : 's'} joined
                       {selectedLaunch.submittedCount > 0
                         ? ` · ${selectedLaunch.submittedCount} submitted`
                         : ''}
@@ -907,7 +900,7 @@ export default function HostReports() {
                   {selectedLaunch.submissions.length === 0 ? (
                     <div className="text-center py-12 text-text-light">
                       <Users className="w-10 h-10 mx-auto mb-3 opacity-40" />
-                      <p>No students have joined this launch yet.</p>
+                      <p>No audience members have joined this launch yet.</p>
                     </div>
                   ) : (
                     <div className="space-y-3">

@@ -10,14 +10,14 @@ const AudienceSession = () => {
       <div className="w-full max-w-2xl bg-white rounded-2xl shadow-lg p-8">
         <h1 className="text-2xl font-bold text-text mb-2">Session</h1>
         <p className="text-text-light mb-6">
-          <span className="font-medium">Name:</span> {name || 'Student'}
+          <span className="font-medium">Name:</span> {name || 'Audience'}
           <br />
           <span className="font-medium">Code:</span> {code}
         </p>
 
         <div className="border border-dashed border-gray-300 rounded-xl p-6 bg-background">
           <p className="text-text-light">
-            Waiting for your teacher to start the quiz/content for this code.
+            Waiting for your host to start the quiz/content for this code.
           </p>
           <p className="text-sm text-text-light mt-2">
             This is a placeholder screen. Next we will connect it to real-time quiz sessions.

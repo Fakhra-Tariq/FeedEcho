@@ -278,24 +278,27 @@ export const HostDataProvider = ({ children }) => {
           if (active && String(active.status || '').toLowerCase() === 'active') {
             const sessionId = active.id || active.sessionId;
             const joinCode = (active.sessionCode || active.accessCode || '').toString().toUpperCase();
+            const nextCurrentActivity = normalizeSessionCurrentActivity(active.currentActivity);
             if (
               prev.activeSession?.type === 'session' &&
               prev.activeSession.sessionId === sessionId &&
-              prev.activeSession.joinCode === joinCode
+              prev.activeSession.joinCode === joinCode &&
+              prev.activeSession.currentActivity === nextCurrentActivity
             ) {
               return prev;
             }
             return {
               ...prev,
               activeSession: {
+                ...(prev.activeSession?.sessionId === sessionId ? prev.activeSession : {}),
                 id: sessionId,
                 type: 'session',
                 sessionId,
                 joinCode,
-                sessionName: active.sessionName,
-                participants: active.participants || 0,
-                startedAt: active.createdAt,
-                currentActivity: normalizeSessionCurrentActivity(active.currentActivity),
+                sessionName: active.sessionName ?? prev.activeSession?.sessionName,
+                participants: typeof active.participants === 'number' ? active.participants : (prev.activeSession?.participants || 0),
+                startedAt: active.createdAt || prev.activeSession?.startedAt,
+                currentActivity: nextCurrentActivity,
               },
             };
           }
@@ -905,7 +908,11 @@ export const HostDataProvider = ({ children }) => {
       return;
     }
 
-    const response = await anonymousChatAPI.update(chatId, updates);
+    const ending =
+      updates?.isActive === false || String(updates?.status || '').toLowerCase() === 'ended';
+    const response = ending
+      ? await anonymousChatAPI.endChat(chatId)
+      : await anonymousChatAPI.update(chatId, updates);
     if (response.data?.success) {
       const updatedChat = response.data.data;
       setData((prev) => ({
@@ -953,7 +960,7 @@ export const HostDataProvider = ({ children }) => {
       const teacherId = userProfile?.uid;
       
       if (!teacherId) {
-        throw new Error('Teacher ID not found');
+        throw new Error('Host ID not found');
       }
 
       console.log('🔧 Creating session with:', { sessionName, teacherId });

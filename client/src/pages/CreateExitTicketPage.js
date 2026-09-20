@@ -9,6 +9,9 @@ import {
   NO_ACTIVE_SESSION_MESSAGE,
   resolveActiveTeacherSession,
 } from '../utils/requireActiveHostSession';
+import NoActiveSessionLaunchModal, {
+  LaunchRequiresSessionHint,
+} from '../components/Host/NoActiveSessionLaunchModal';
 
 const LIKERT_OPTIONS = [
   "Strongly Agree",
@@ -32,6 +35,7 @@ export default function CreateExitTicketPage() {
   const { alert } = useHybridAlert();
   const [currentStep, setCurrentStep] = useState(1);
   const [isSaving, setIsSaving] = useState(false);
+  const [showNoSessionModal, setShowNoSessionModal] = useState(false);
   const [showJoinCodeModal, setShowJoinCodeModal] = useState(false);
   const [launchedTicketCode, setLaunchedTicketCode] = useState('');
   const [copied, setCopied] = useState(false);
@@ -249,7 +253,7 @@ export default function CreateExitTicketPage() {
     const teacherId = userProfile?.uid;
     const sessionCheck = await resolveActiveTeacherSession(teacherData.activeSession, teacherId);
     if (!sessionCheck.ok) {
-      alert.toast.error(NO_ACTIVE_SESSION_MESSAGE);
+      setShowNoSessionModal(true);
       return;
     }
 
@@ -353,11 +357,11 @@ export default function CreateExitTicketPage() {
                   className="w-4 h-4 text-primary rounded focus:ring-primary"
                 />
                 <span className="text-sm font-medium text-text">
-                  Mark attendance when students submit
+                  Mark attendance when audience members submit
                 </span>
               </label>
               <p className="text-xs text-text-light mt-1">
-                Automatically track which students attended based on submission
+                Automatically track which audience members attended based on submission
               </p>
             </div>
           </div>
@@ -593,14 +597,17 @@ export default function CreateExitTicketPage() {
                 >
                   {isSaving ? 'Saving...' : 'Save as Draft'}
                 </button>
-                <button
-                  onClick={handleLaunch}
-                  disabled={isSaving || !isFormValid}
-                  className="px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  {isSaving ? 'Launching...' : 'Launch Exit Ticket'}
-                  <Sparkles className="w-4 h-4 ml-2 inline" />
-                </button>
+                <div className="inline-flex flex-col items-end">
+                  <button
+                    onClick={handleLaunch}
+                    disabled={isSaving || !isFormValid}
+                    className="px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {isSaving ? 'Launching...' : 'Launch Exit Ticket'}
+                    <Sparkles className="w-4 h-4 ml-2 inline" />
+                  </button>
+                  <LaunchRequiresSessionHint />
+                </div>
               </div>
             </div>
           </div>
@@ -609,6 +616,12 @@ export default function CreateExitTicketPage() {
 
 
       {/* Join Code Modal - matching Space Race/Quiz design */}
+      <NoActiveSessionLaunchModal
+        isOpen={showNoSessionModal}
+        onClose={() => setShowNoSessionModal(false)}
+        onSaveAsDraft={handleSaveDraft}
+      />
+
       {showJoinCodeModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           {/* Dark overlay background */}
@@ -626,7 +639,7 @@ export default function CreateExitTicketPage() {
 
               {/* Title and subtitle */}
               <h2 className="text-2xl font-bold text-gray-900 mb-2">Exit Ticket Launched</h2>
-              <p className="text-sm text-gray-600 mb-8">Share this code with students</p>
+              <p className="text-sm text-gray-600 mb-8">Share this code with audience</p>
 
               {/* Audience Access Code box */}
               <div className="mb-8">

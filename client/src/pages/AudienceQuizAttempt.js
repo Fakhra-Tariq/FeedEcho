@@ -24,7 +24,7 @@ import {
   hasLocalQuizSubmission,
   isQuizJoinWindowExpired,
 } from '../utils/quizLaunchAudienceSettings';
-import { set as dbSet, ref as dbRef, update as dbUpdate, onValue, get } from 'firebase/database';
+import { set as dbSet, ref as dbRef, update as dbUpdate, onValue, get, off } from 'firebase/database';
 import { db } from '../firebase';
 import { useRtdbValue } from '../hooks/useRtdb';
 
@@ -72,7 +72,7 @@ const AudienceQuizAttempt = ({
     participantIdProp || spaceRaceParticipant?.id || null
   );
   const [participantName, setParticipantName] = useState(
-    participantNameProp || spaceRaceParticipant?.name || 'Student'
+    participantNameProp || spaceRaceParticipant?.name || 'Audience'
   );
   const [isSubmittingQuestion, setIsSubmittingQuestion] = useState(false);
   const [localTeamSelection, setLocalTeamSelection] = useState(null);
@@ -101,6 +101,34 @@ const AudienceQuizAttempt = ({
     }
     return `q${index}`;
   };
+
+  const getSpaceRaceQuestionIdAliases = (question, index) => {
+    const ids = [];
+    const add = (value) => {
+      if (value === undefined || value === null) return;
+      const text = String(value).trim();
+      if (!text || ids.includes(text)) return;
+      ids.push(text);
+      const dashed = text.match(/^q-(\d+)$/i);
+      const undashed = text.match(/^q(\d+)$/i);
+      if (dashed) add(`q${dashed[1]}`);
+      if (undashed) add(`q-${undashed[1]}`);
+    };
+    add(getSpaceRaceQuestionId(question, index));
+    add(getStableQuestionId(question, index));
+    add(question?.id);
+    add(question?.questionId);
+    add(question?._id);
+    if (Number.isInteger(index)) {
+      add(`q${index}`);
+      add(`q-${index}`);
+      add(String(index));
+    }
+    return ids;
+  };
+
+  const isSubmittedLockNode = (node) =>
+    Boolean(node) && (node.submitted === true || node.submitted === 'true');
 
   /**
    * Quiz-phase duration in seconds.
@@ -329,7 +357,7 @@ const AudienceQuizAttempt = ({
       setRaceId(raceIdResolved);
       setTeamId(participantData?.teamId ?? null);
       setParticipantId(participantData?.id ?? null);
-      setParticipantName(participantData?.name || 'Student');
+      setParticipantName(participantData?.name || 'Audience');
       applyQuizTimer(quizToUse, null, { forceSpaceRace: true });
       
       // Save with team-specific cache key to ensure different teams get different shuffles
@@ -898,29 +926,44 @@ const AudienceQuizAttempt = ({
     ? getSpaceRaceQuestionId(currentQuestionData, currentQuestion)
     : null;
   const currentSpaceRaceQuestionId = currentQuestionId ? String(currentQuestionId) : null;
+  const normalizedTeamId = teamId != null && teamId !== '' ? String(teamId) : null;
+  const currentQuestionAliases = currentQuestionData
+    ? getSpaceRaceQuestionIdAliases(currentQuestionData, currentQuestion)
+    : currentSpaceRaceQuestionId
+      ? [currentSpaceRaceQuestionId]
+      : [];
+
+  const currentQuestionAliasesRef = useRef(currentQuestionAliases);
+  currentQuestionAliasesRef.current = currentQuestionAliases;
+  const currentSpaceRaceQuestionIdRef = useRef(currentSpaceRaceQuestionId);
+  currentSpaceRaceQuestionIdRef.current = currentSpaceRaceQuestionId;
+  const currentQuestionAliasKey = currentQuestionAliases.join('|');
+
+  const teamSelectionPath =
+    isSpaceRace && raceId && normalizedTeamId != null
+      ? `space_race_team_selection/${raceId}/team_${normalizedTeamId}`
+      : null;
+  const currentQuestionSelectionPath =
+    teamSelectionPath && currentSpaceRaceQuestionId
+      ? `${teamSelectionPath}/question_${currentSpaceRaceQuestionId}`
+      : null;
 
   // Team-level listener — always reactive; avoids stale per-question subscription
-  const { value: liveTeamSelections } = useRtdbValue(
-    isSpaceRace && raceId && teamId != null
-      ? `space_race_team_selection/${raceId}/team_${teamId}`
-      : null,
-    { enabled: Boolean(isSpaceRace && raceId && teamId != null) }
-  );
+  const { value: liveTeamSelections } = useRtdbValue(teamSelectionPath, {
+    enabled: Boolean(teamSelectionPath),
+  });
 
   // Per-question listener (inline path so it re-subscribes when questionId changes)
-  const { value: submissionState } = useRtdbValue(
-    isSpaceRace && raceId && teamId != null && currentQuestionId
-      ? `space_race_team_selection/${raceId}/team_${teamId}/question_${currentQuestionId}`
-      : null,
-    { enabled: Boolean(isSpaceRace && raceId && teamId != null && currentQuestionId) }
-  );
+  const { value: submissionState } = useRtdbValue(currentQuestionSelectionPath, {
+    enabled: Boolean(currentQuestionSelectionPath),
+  });
 
   // Team score + participant answers for completion card (hooks must stay top-level)
   const { value: liveTeamScoreRaw } = useRtdbValue(
-    isSpaceRace && raceId && teamId != null
-      ? `space_race_team_scores/${raceId}/team_${teamId}`
+    isSpaceRace && raceId && normalizedTeamId != null
+      ? `space_race_team_scores/${raceId}/team_${normalizedTeamId}`
       : null,
-    { enabled: Boolean(isSpaceRace && raceId && teamId != null) }
+    { enabled: Boolean(isSpaceRace && raceId && normalizedTeamId != null) }
   );
   const { value: liveParticipantData } = useRtdbValue(
     isSpaceRace && raceId && participantId
@@ -929,19 +972,86 @@ const AudienceQuizAttempt = ({
     { enabled: Boolean(isSpaceRace && raceId && participantId) }
   );
 
-  const liveQuestionNode =
-    (currentSpaceRaceQuestionId &&
-      liveTeamSelections?.[`question_${currentSpaceRaceQuestionId}`]) ||
-    submissionState ||
-    (currentSpaceRaceQuestionId ? teamSelectionsMap[currentSpaceRaceQuestionId] : null) ||
-    null;
+  const applyQuestionLockFromNode = useCallback((questionId, node) => {
+    if (!questionId || !node || typeof node !== 'object') return;
+    const isSubmitted = node.submitted === true || node.submitted === 'true';
+    const canonicalId = currentSpaceRaceQuestionIdRef.current;
+    const aliases = currentQuestionAliasesRef.current || [];
+    const idsToWrite = new Set([String(questionId)]);
+    if (canonicalId && aliases.includes(String(questionId))) {
+      idsToWrite.add(canonicalId);
+    }
+
+    setTeamSelectionsMap((prev) => {
+      let changed = false;
+      const next = { ...prev };
+      idsToWrite.forEach((id) => {
+        const prevNode = next[id];
+        if (
+          prevNode &&
+          prevNode.submitted === isSubmitted &&
+          prevNode.selectedOption === node.selectedOption &&
+          (prevNode.submittedByName || prevNode.selectedByName) ===
+            (node.submittedByName || node.selectedByName) &&
+          prevNode.submittedBy === node.submittedBy
+        ) {
+          return;
+        }
+        next[id] = {
+          ...(prevNode || {}),
+          ...node,
+          submitted: isSubmitted,
+        };
+        changed = true;
+      });
+      return changed ? next : prev;
+    });
+
+    if (!isSubmitted) return;
+
+    setSubmittedQuestionKeys((prev) => {
+      let changed = false;
+      const next = new Set(prev);
+      idsToWrite.forEach((id) => {
+        if (!next.has(id)) {
+          next.add(id);
+          changed = true;
+        }
+      });
+      return changed ? next : prev;
+    });
+  }, []);
+
+  const pickQuestionNode = (...nodes) => {
+    const submitted = nodes.find(isSubmittedLockNode);
+    if (submitted) return submitted;
+    return nodes.find((node) => node && typeof node === 'object') || null;
+  };
+
+  const nodesForCurrentQuestion = [];
+  currentQuestionAliases.forEach((id) => {
+    const liveNode = liveTeamSelections?.[`question_${id}`];
+    if (liveNode) nodesForCurrentQuestion.push(liveNode);
+    if (teamSelectionsMap[id]) nodesForCurrentQuestion.push(teamSelectionsMap[id]);
+  });
+  nodesForCurrentQuestion.push(submissionState, localTeamSelection);
+
+  const liveQuestionNode = pickQuestionNode(...nodesForCurrentQuestion);
+
+  const participantAnswerLocksCurrent = Boolean(
+    isSpaceRace &&
+      Array.isArray(liveParticipantData?.answers) &&
+      liveParticipantData.answers.some((answer) => {
+        if (!answer || answer.questionId == null) return false;
+        return currentQuestionAliases.includes(String(answer.questionId));
+      })
+  );
 
   const isTeamQuestionSubmitted =
-    liveQuestionNode?.submitted === true ||
-    submissionState?.submitted === true ||
-    (currentSpaceRaceQuestionId
-      ? submittedQuestionKeys.has(currentSpaceRaceQuestionId)
-      : false);
+    isSubmittedLockNode(liveQuestionNode) ||
+    isSubmittedLockNode(submissionState) ||
+    currentQuestionAliases.some((id) => submittedQuestionKeys.has(id)) ||
+    participantAnswerLocksCurrent;
 
   const submittedByName =
     liveQuestionNode?.submittedByName ||
@@ -963,95 +1073,116 @@ const AudienceQuizAttempt = ({
     : Boolean(currentQuestionId && submittedQuestionKeys.has(String(currentQuestionId)));
 
   const syncTeamSelectionFromServer = useCallback(async () => {
-    if (!isSpaceRace || !raceId || teamId == null || !currentSpaceRaceQuestionId) return null;
+    if (!isSpaceRace || !raceId || normalizedTeamId == null || !currentSpaceRaceQuestionId) {
+      return null;
+    }
     try {
       const response = await spaceRacesAPI.getTeamSelection(
         raceId,
-        teamId,
+        normalizedTeamId,
         currentSpaceRaceQuestionId
       );
       if (response.data?.success && response.data.data) {
         const data = response.data.data;
-        const isSubmittedByTeam = data.submitted === true;
-
-        setTeamSelectionsMap((prev) => ({
-          ...prev,
-          [currentSpaceRaceQuestionId]: {
-            selectedOption: data.selectedOption,
-            selectedBy: data.selectedBy,
-            selectedByName: data.selectedByName,
-            selectedAt: data.selectedAt,
-            submitted: isSubmittedByTeam,
-            submittedBy: data.submittedBy,
-          },
-        }));
-
-        if (isSubmittedByTeam) {
-          setSubmittedQuestionKeys((prev) => {
-            const next = new Set(prev);
-            next.add(currentSpaceRaceQuestionId);
-            return next;
-          });
-        }
-
+        applyQuestionLockFromNode(currentSpaceRaceQuestionId, data);
         return data;
       }
     } catch (error) {
       console.warn('Team selection sync failed:', error);
     }
     return null;
-  }, [isSpaceRace, raceId, teamId, currentSpaceRaceQuestionId]);
+  }, [
+    isSpaceRace,
+    raceId,
+    normalizedTeamId,
+    currentSpaceRaceQuestionId,
+    applyQuestionLockFromNode,
+  ]);
 
   // Real-time sync: listen to ALL team question selections (instant lock when teammate submits)
   useEffect(() => {
-    if (!isSpaceRace || !raceId || teamId == null) return undefined;
+    if (!isSpaceRace || !raceId || normalizedTeamId == null) return undefined;
 
+    let cancelled = false;
     const teamSelectionsRef = dbRef(
       db,
-      `space_race_team_selection/${raceId}/team_${teamId}`
+      `space_race_team_selection/${raceId}/team_${normalizedTeamId}`
     );
 
     const handleTeamSelectionsUpdate = (snapshot) => {
-      if (!snapshot.exists()) {
-        setTeamSelectionsMap({});
-        setSubmittedQuestionKeys(new Set());
-        return;
-      }
-
+      if (cancelled || !snapshot.exists()) return;
       const raw = snapshot.val() || {};
-      const nextMap = {};
-      const lockedIds = new Set();
-
       Object.entries(raw).forEach(([nodeKey, nodeVal]) => {
         if (!nodeKey.startsWith('question_') || !nodeVal || typeof nodeVal !== 'object') return;
-        const questionId = nodeKey.slice('question_'.length);
-        nextMap[questionId] = nodeVal;
-        if (nodeVal.submitted === true) {
-          lockedIds.add(questionId);
-        }
+        applyQuestionLockFromNode(nodeKey.slice('question_'.length), nodeVal);
       });
-
-      setTeamSelectionsMap(nextMap);
-      setSubmittedQuestionKeys(lockedIds);
     };
 
-    let unsubscribe;
-    try {
-      unsubscribe = onValue(teamSelectionsRef, handleTeamSelectionsUpdate);
-    } catch (error) {
-      console.error('❌ Error setting up team selection listener:', error);
-    }
+    const unsubscribe = onValue(
+      teamSelectionsRef,
+      handleTeamSelectionsUpdate,
+      (error) => {
+        console.warn('Team selection listener error:', error);
+      }
+    );
 
     return () => {
-      if (unsubscribe) {
+      cancelled = true;
+      try {
+        unsubscribe();
+      } catch (error) {
         try {
-          unsubscribe();
-        } catch (error) {
+          off(teamSelectionsRef);
+        } catch {
           console.error('❌ Error unsubscribing team selection listener:', error);
         }
       }
     };
-  }, [isSpaceRace, raceId, teamId]);
+  }, [isSpaceRace, raceId, normalizedTeamId, applyQuestionLockFromNode]);
+
+  // Per-question lock listener: re-subscribes on question change, cleaned up on unmount
+  useEffect(() => {
+    if (!isSpaceRace || !raceId || normalizedTeamId == null || !currentQuestionAliasKey) {
+      return undefined;
+    }
+
+    let cancelled = false;
+    const aliasIds = currentQuestionAliasKey.split('|').filter(Boolean);
+    const unsubscribers = aliasIds.map((aliasId) => {
+      const questionRef = dbRef(
+        db,
+        `space_race_team_selection/${raceId}/team_${normalizedTeamId}/question_${aliasId}`
+      );
+      const unsub = onValue(
+        questionRef,
+        (snapshot) => {
+          if (cancelled || !snapshot.exists()) return;
+          applyQuestionLockFromNode(aliasId, snapshot.val());
+        },
+        (error) => {
+          console.warn('Current question lock listener error:', error);
+        }
+      );
+      return () => {
+        try {
+          unsub();
+        } catch {
+          off(questionRef);
+        }
+      };
+    });
+
+    return () => {
+      cancelled = true;
+      unsubscribers.forEach((stop) => stop());
+    };
+  }, [
+    isSpaceRace,
+    raceId,
+    normalizedTeamId,
+    currentQuestionAliasKey,
+    applyQuestionLockFromNode,
+  ]);
 
   useEffect(() => {
     if (!isSpaceRace) return;
@@ -1059,26 +1190,14 @@ const AudienceQuizAttempt = ({
     syncTeamSelectionFromServer();
   }, [isSpaceRace, currentSpaceRaceQuestionId, syncTeamSelectionFromServer]);
 
-  // Keep local lock set in sync with live team selections map
+  // Keep local lock set in sync with live team selections map (merge only; never wipe locks)
   useEffect(() => {
     if (!isSpaceRace || !liveTeamSelections || typeof liveTeamSelections !== 'object') return;
-    const lockedIds = new Set();
     Object.entries(liveTeamSelections).forEach(([nodeKey, nodeVal]) => {
       if (!nodeKey.startsWith('question_') || !nodeVal || typeof nodeVal !== 'object') return;
-      if (nodeVal.submitted === true) {
-        lockedIds.add(nodeKey.slice('question_'.length));
-      }
+      applyQuestionLockFromNode(nodeKey.slice('question_'.length), nodeVal);
     });
-    setSubmittedQuestionKeys(lockedIds);
-    setTeamSelectionsMap((prev) => {
-      const nextMap = { ...prev };
-      Object.entries(liveTeamSelections).forEach(([nodeKey, nodeVal]) => {
-        if (!nodeKey.startsWith('question_') || !nodeVal || typeof nodeVal !== 'object') return;
-        nextMap[nodeKey.slice('question_'.length)] = nodeVal;
-      });
-      return nextMap;
-    });
-  }, [isSpaceRace, liveTeamSelections]);
+  }, [isSpaceRace, liveTeamSelections, applyQuestionLockFromNode]);
 
   // When teammate locks the question, clear local selection so student can't re-submit
   useEffect(() => {
@@ -1244,6 +1363,18 @@ const AudienceQuizAttempt = ({
     }
 
     setIsSubmittingQuestion(true);
+    const submittedSelection = {
+      selectedOption: answer,
+      submitted: true,
+      submittedBy: participantId,
+      submittedByName: participantName || 'A teammate',
+    };
+    setLocalTeamSelection((prev) => ({
+      ...(prev || {}),
+      ...submittedSelection,
+    }));
+    applyQuestionLockFromNode(questionId, submittedSelection);
+
     try {
       console.log('🚀 Submitting team answer:', { raceId, participantId, questionId, answer, questionIndex: currentQuestion, teamId });
       
@@ -1257,29 +1388,6 @@ const AudienceQuizAttempt = ({
       console.log('✅ Team answer submitted successfully:', response.data);
 
       if (response.data?.success) {
-        const submittedSelection = {
-          selectedOption: answer,
-          submitted: true,
-          submittedBy: participantId,
-          submittedByName: participantName || 'A teammate',
-        };
-        setLocalTeamSelection((prev) => ({
-          ...(prev || {}),
-          ...submittedSelection,
-        }));
-        setTeamSelectionsMap((prev) => ({
-          ...prev,
-          [questionId]: {
-            ...(prev[questionId] || {}),
-            ...submittedSelection,
-          },
-        }));
-        setSubmittedQuestionKeys((prev) => {
-          const next = new Set(prev);
-          next.add(questionId);
-          return next;
-        });
-
         // Broadcast lock so teammates see submitted state in real time
         if (raceId && teamId != null && questionId) {
           try {
@@ -1312,10 +1420,10 @@ const AudienceQuizAttempt = ({
       const errMsg = error.response?.data?.error || '';
       if (errMsg.toLowerCase().includes('already submitted')) {
         const synced = await syncTeamSelectionFromServer();
-        setSubmittedQuestionKeys((prev) => {
-          const next = new Set(prev);
-          next.add(questionId);
-          return next;
+        applyQuestionLockFromNode(questionId, {
+          ...(synced || {}),
+          submitted: true,
+          selectedOption: synced?.selectedOption || answer,
         });
         if (synced?.selectedOption) {
           setAnswers((prev) => ({
@@ -1329,6 +1437,20 @@ const AudienceQuizAttempt = ({
           alert.toast.info('This question was already submitted for your team.');
         }
       } else {
+        setLocalTeamSelection((prev) =>
+          prev ? { ...prev, submitted: false } : prev
+        );
+        setTeamSelectionsMap((prev) => {
+          const node = prev[questionId];
+          if (!node) return prev;
+          return { ...prev, [questionId]: { ...node, submitted: false } };
+        });
+        setSubmittedQuestionKeys((prev) => {
+          if (!prev.has(questionId)) return prev;
+          const next = new Set(prev);
+          next.delete(questionId);
+          return next;
+        });
         alert.toast.error(errMsg || 'Failed to submit team answer.');
       }
     } finally {
@@ -1343,7 +1465,7 @@ const AudienceQuizAttempt = ({
       // If no submissions exist, create one (for Space Race case)
       if (!submissions.length) {
         const newSubmission = {
-          studentName: studentSession?.studentName || 'Student',
+          studentName: studentSession?.studentName || 'Audience',
           sessionCode: studentSession?.sessionCode || '',
           quizId: quiz?.id || '',
           quizTitle: quiz?.title || '',
@@ -1517,7 +1639,7 @@ const AudienceQuizAttempt = ({
         quizSession?.studentName ||
         participantBackup?.studentName ||
         storedParticipant?.name ||
-        'Student';
+        'Audience';
       const effectiveSessionCode =
         quizSession?.sessionCode ||
         participantBackup?.sessionCode ||
@@ -2094,7 +2216,7 @@ const AudienceQuizAttempt = ({
                   <p className="text-sm font-semibold text-amber-900">Submission not synced</p>
                   <p className="text-sm text-amber-800 mt-1">
                     {submissionSyncError ||
-                      'Your score is saved on this device only and was not sent to your teacher yet.'}
+                      'Your score is saved on this device only and was not sent to your host yet.'}
                   </p>
                   <button
                     type="button"
@@ -2223,7 +2345,7 @@ const AudienceQuizAttempt = ({
             <div className="flex items-center space-x-6">
               <div className="flex items-center space-x-2 text-text-light">
                 <Users className="w-4 h-4" />
-                <span className="text-sm">{studentSession?.studentName || 'Student'}</span>
+                <span className="text-sm">{studentSession?.studentName || 'Audience'}</span>
               </div>
               {quiz.launchSettings?.timePerStudentMinutes && (
                 <div className="flex items-center space-x-2 text-text-light">

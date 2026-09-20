@@ -67,10 +67,29 @@ function isSameSessionActivity(currentActivity, activityType, activityId = null)
   const wantKind = normalizeSessionActivityType(activityType);
   const curKind = resolveActivityKind(currentActivity);
   if (!wantKind || curKind !== wantKind) return false;
-  if (!activityId) return true;
   const curId = resolveActivityId(currentActivity);
+  // A new launch (no activityId yet) is not a reclaim of a different live activity.
+  if (!activityId) return !curId;
   if (!curId) return true;
   return String(curId) === String(activityId);
+}
+
+const ACTIVITY_KIND_LABELS = {
+  [SESSION_ACTIVITY_TYPES.quiz]: 'Quiz',
+  [SESSION_ACTIVITY_TYPES.spaceRace]: 'Space Race',
+  [SESSION_ACTIVITY_TYPES.exitTicket]: 'Exit Ticket',
+  [SESSION_ACTIVITY_TYPES.anonymousChat]: 'Live Chat',
+};
+
+function describeSessionActivity(currentActivity) {
+  const kind = resolveActivityKind(currentActivity);
+  return ACTIVITY_KIND_LABELS[kind] || null;
+}
+
+function activityInUseMessage(currentActivity) {
+  const label = describeSessionActivity(currentActivity);
+  if (!label) return ACTIVITY_IN_USE_MESSAGE;
+  return `Another activity is already active (${label}). Please finish the current activity before launching a new one.`;
 }
 
 /**
@@ -291,12 +310,11 @@ async function reconcileSessionCurrentActivity(sessionId) {
  * (unless reclaiming the same activity). Auto-clears only truly finished activities.
  */
 async function assertSessionCanLaunchActivity(sessionId, activityType = null, activityId = null) {
-  const sessionSnap = await db.ref(`sessions/${sessionId}`).get();
-  if (!sessionSnap.exists()) {
+  const reconciled = await reconcileSessionCurrentActivity(sessionId);
+  let session = reconciled.session;
+  if (!session) {
     return { ok: false, error: NO_ACTIVE_SESSION_MESSAGE };
   }
-
-  let session = sessionSnap.val() || {};
 
   if (!isCurrentActivityEmpty(session.currentActivity)) {
     if (activityType && isSameSessionActivity(session.currentActivity, activityType, activityId)) {
@@ -306,13 +324,25 @@ async function assertSessionCanLaunchActivity(sessionId, activityType = null, ac
     const stillLive = await isSessionActivityStillLive(session);
     if (!stillLive) {
       const sessionCode = String(session.sessionCode || '').trim().toUpperCase();
+      console.warn('🧹 assertSessionCanLaunchActivity: clearing stale currentActivity', {
+        sessionId,
+        sessionCode,
+        currentActivity: session.currentActivity,
+        requested: { activityType, activityId },
+      });
       if (sessionCode) {
         await clearCompetingActivityCodeIndexes(sessionCode, null);
       }
       await clearSessionCurrentActivity(sessionId);
       session = { ...session, currentActivity: null };
     } else {
-      return { ok: false, error: ACTIVITY_IN_USE_MESSAGE };
+      console.warn('❌ assertSessionCanLaunchActivity: blocked by live activity', {
+        sessionId,
+        sessionCode: session.sessionCode,
+        currentActivity: session.currentActivity,
+        requested: { activityType, activityId },
+      });
+      return { ok: false, error: activityInUseMessage(session.currentActivity) };
     }
   }
 
@@ -406,7 +436,7 @@ async function setSessionCurrentActivity(sessionId, activityType, activityId = n
       return claim;
     }
 
-    abortReason = ACTIVITY_IN_USE_MESSAGE;
+    abortReason = activityInUseMessage(current);
     return; // abort — another activity owns the slot
   });
 

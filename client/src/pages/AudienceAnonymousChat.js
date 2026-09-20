@@ -1,9 +1,11 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { ArrowLeft, Send, MessageSquare, Users, AlertCircle } from 'lucide-react';
 import { useHybridAlert } from '../contexts/HybridAlertContext';
 import { anonymousChatAPI } from '../services/api';
-import { useRtdbList, useRtdbValue } from '../hooks/useRtdb';
+import { useRtdbList, useRtdbValue, RTDB_EMPTY_LIST } from '../hooks/useRtdb';
+import { toParticipantCount } from '../utils/toParticipantCount';
+import ChatMessageBubble from '../components/Chat/ChatMessageBubble';
 
 const getOrCreateChatParticipantId = (sessionCode) => {
   const storageKey = `chatParticipant_${sessionCode}`;
@@ -31,6 +33,8 @@ const AudienceAnonymousChat = () => {
   const lastAutoJoinCodeRef = React.useRef(null);
   const [isSending, setIsSending] = useState(false);
   const [participantId, setParticipantId] = useState('');
+  const sentMessageIdsRef = useRef(new Set());
+  const [sentMessageVersion, setSentMessageVersion] = useState(0);
 
   useEffect(() => {
     const codeFromUrl = searchParams.get('code');
@@ -54,28 +58,41 @@ const AudienceAnonymousChat = () => {
   );
 
   useEffect(() => {
-    if (!joinResolvedChatId) {
-      setChatId(null);
-      return;
-    }
+    if (!joinResolvedChatId) return;
     setChatId(String(joinResolvedChatId));
   }, [joinResolvedChatId]);
 
-  const { value: chatSession } = useRtdbValue(chatId ? `chat_sessions/${chatId}` : null, {
-    enabled: Boolean(chatId),
+  const liveChatId = joinResolvedChatId ? String(joinResolvedChatId) : chatId;
+
+  const { value: chatSession } = useRtdbValue(liveChatId ? `chat_sessions/${liveChatId}` : null, {
+    enabled: Boolean(liveChatId),
   });
 
-  const { list: messages } = useRtdbList(chatId ? `chat_messages/${chatId}` : null, {
-    enabled: Boolean(chatId),
+  const { list: messages } = useRtdbList(liveChatId ? `chat_messages/${liveChatId}` : null, {
+    enabled: Boolean(liveChatId),
     sort: (a, b) => String(a.timestamp || '').localeCompare(String(b.timestamp || '')),
-    empty: [],
+    empty: RTDB_EMPTY_LIST,
   });
 
   const isChatEnded = isChatSessionEnded(chatSession);
   const canSendMessages = Boolean(chatSession && !isChatEnded && chatSession?.settings?.moderationMode === true);
-  const participantCount = chatSession?.participants ?? 0;
-  const visibleMessages = messages.filter((msg) => !msg.isTeacher && !msg.isHidden);
+  const participantCount = toParticipantCount(chatSession?.participants);
+  const visibleMessages = messages.filter((msg) => !msg.isHidden);
   const showActiveChat = Boolean(chatSession && !isChatEnded);
+
+  const ownSentIds = useMemo(
+    () => new Set(sentMessageIdsRef.current),
+    [sentMessageVersion]
+  );
+
+  const isOwnStudentMessage = (msg) => {
+    if (!msg || msg.isTeacher) return false;
+    if (ownSentIds.has(msg.id)) return true;
+    if (participantId && msg.participantId && String(msg.participantId) === String(participantId)) {
+      return true;
+    }
+    return false;
+  };
 
   useEffect(() => {
     if (!normalizedCode) return;
@@ -98,17 +115,17 @@ const AudienceAnonymousChat = () => {
   }, [messages]);
 
   useEffect(() => {
-    if (!showActiveChat || !chatId || !participantId) return undefined;
+    if (!showActiveChat || !liveChatId || !participantId) return undefined;
 
     const sendPresence = () => {
-      anonymousChatAPI.presence(chatId, { participantId }).catch(() => {});
+      anonymousChatAPI.presence(liveChatId, { participantId }).catch(() => {});
     };
 
     sendPresence();
     const intervalId = window.setInterval(sendPresence, 20000);
 
     const leaveChat = () => {
-      anonymousChatAPI.leave(chatId, { participantId }).catch(() => {});
+      anonymousChatAPI.leave(liveChatId, { participantId }).catch(() => {});
     };
 
     window.addEventListener('pagehide', leaveChat);
@@ -118,7 +135,7 @@ const AudienceAnonymousChat = () => {
       window.removeEventListener('pagehide', leaveChat);
       leaveChat();
     };
-  }, [showActiveChat, chatId, participantId]);
+  }, [showActiveChat, liveChatId, participantId]);
 
   const handleJoinChat = useCallback(async (overrideCode, opts = {}) => {
     const codeToUse = (overrideCode || normalizedCode || '').trim().toUpperCase();
@@ -186,6 +203,9 @@ const AudienceAnonymousChat = () => {
       if (!response.data.success) {
         const errorText = response.data.error || 'Failed to send message';
         alert.toast.error(errorText);
+      } else if (response.data.data?.id) {
+        sentMessageIdsRef.current.add(response.data.data.id);
+        setSentMessageVersion((n) => n + 1);
       }
     } catch (error) {
       const errorText =
@@ -232,7 +252,7 @@ const AudienceAnonymousChat = () => {
                 </h2>
                 <p className="text-text-light">
                   {isChatEnded
-                    ? 'This live chat has ended. Ask your teacher for a new session code if you still have questions.'
+                    ? 'This live chat has ended. Ask your host for a new session code if you still have questions.'
                     : 'Enter the session code to join the chat'}
                 </p>
               </div>
@@ -299,33 +319,36 @@ const AudienceAnonymousChat = () => {
                 ) : (
                   <div className="flex items-center space-x-2 text-orange-600 text-sm">
                     <AlertCircle className="w-4 h-4" />
-                    <span>Waiting for teacher to enable chat...</span>
+                    <span>Waiting for host to enable chat...</span>
                   </div>
                 )}
               </div>
             </div>
 
-            <div className="flex-1 overflow-y-auto p-4 space-y-4">
+            <div className="flex-1 overflow-y-auto p-4 space-y-3">
               {visibleMessages.length === 0 ? (
                 <div className="text-center py-8">
                   <MessageSquare className="w-12 h-12 text-gray-300 mx-auto mb-4" />
                   <p className="text-text-light">
                     {canSendMessages
                       ? 'Be the first to send a message!'
-                      : 'Waiting for teacher to enable chat...'}
+                      : 'Waiting for host to enable chat...'}
                   </p>
                 </div>
               ) : (
-                visibleMessages.map((msg) => (
-                  <div key={msg.id} className="flex justify-start">
-                    <div className="max-w-xs lg:max-w-md px-4 py-2 bg-gray-100 text-text rounded-lg">
-                      <p className="text-sm">{msg.message}</p>
-                      <p className="text-xs text-gray-500 mt-1">
-                        {new Date(msg.timestamp).toLocaleTimeString()}
-                      </p>
-                    </div>
-                  </div>
-                ))
+                visibleMessages.map((msg) => {
+                  const isOwn = isOwnStudentMessage(msg);
+                  const fromTeacher = Boolean(msg.isTeacher);
+                  return (
+                    <ChatMessageBubble
+                      key={msg.id}
+                      message={msg}
+                      isOwn={isOwn}
+                      label={isOwn ? 'You' : fromTeacher ? 'Host' : 'Audience'}
+                      showStudentDot={!isOwn && !fromTeacher}
+                    />
+                  );
+                })
               )}
               <div ref={messagesEndRef} />
             </div>
@@ -358,7 +381,7 @@ const AudienceAnonymousChat = () => {
               <div className="p-4 border-t border-gray-200">
                 <div className="text-center text-gray-500 text-sm">
                   <AlertCircle className="w-5 h-5 mx-auto mb-2" />
-                  <p>Waiting for teacher to enable chat...</p>
+                  <p>Waiting for host to enable chat...</p>
                 </div>
               </div>
             )}

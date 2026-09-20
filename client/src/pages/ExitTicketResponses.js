@@ -299,7 +299,7 @@ export default function ExitTicketResponses() {
               className="flex items-center gap-2 bg-green-100 text-green-800 px-3 py-1 rounded-full text-sm font-medium hover:bg-green-200 transition-colors cursor-pointer"
             >
               <Eye className="w-4 h-4" />
-              {attendance.length} Students (View List)
+              {attendance.length} Audience (View List)
             </button>
           </div>
           {attendance.length > 0 ? (
@@ -323,7 +323,7 @@ export default function ExitTicketResponses() {
           ) : (
             <div className="text-center py-8">
               <Users className="w-12 h-12 text-gray-300 mx-auto mb-4" />
-              <p className="text-text-light">No students have joined this exit ticket yet.</p>
+              <p className="text-text-light">No audience members have joined this exit ticket yet.</p>
             </div>
           )}
         </div>
@@ -425,7 +425,7 @@ export default function ExitTicketResponses() {
                     Audience Privacy Protected
                   </h3>
                   <p className="text-text-light mb-4">
-                    Responses will appear once at least 2 students submit feedback to ensure privacy.
+                    Responses will appear once at least 2 audience members submit feedback to ensure privacy.
                   </p>
                   <div className="bg-primary/5 rounded-lg p-3">
                     <p className="text-sm text-primary">
@@ -455,10 +455,10 @@ export default function ExitTicketResponses() {
             
             <div className="bg-gray-50 rounded-lg p-4 mb-4">
               <p className="text-sm text-text-light mb-3">
-                <span className="font-medium">Attendance ({attendance.length} Students)</span>
+                <span className="font-medium">Attendance ({attendance.length} Audience)</span>
               </p>
               <p className="text-xs text-text-light">
-                Real student names • Only visible to teacher • Pulled from attendance table
+                Real audience names • Only visible to host • Pulled from attendance table
               </p>
             </div>
 
@@ -483,7 +483,7 @@ export default function ExitTicketResponses() {
             ) : (
               <div className="text-center py-8">
                 <Users className="w-12 h-12 text-gray-300 mx-auto mb-4" />
-                <p className="text-text-light">No students have joined this exit ticket yet.</p>
+                <p className="text-text-light">No audience members have joined this exit ticket yet.</p>
               </div>
             )}
           </div>

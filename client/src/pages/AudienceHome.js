@@ -712,8 +712,8 @@ const AudienceHome = () => {
                   onClick={() => setShowProfileDropdown(!showProfileDropdown)}
                   className="flex items-center space-x-2 p-2 rounded-lg hover:bg-gray-100 transition-colors"
                 >
-                  <AudienceAvatar name={student?.name || 'Student'} />
-                  <span className="font-medium text-text">{student?.name?.split(' ')[0] || 'Student'}</span>
+                  <AudienceAvatar name={student?.name || 'Audience'} />
+                  <span className="font-medium text-text">{student?.name?.split(' ')[0] || 'Audience'}</span>
                   <ChevronDown className="w-4 h-4 text-gray-500" />
                 </button>
                 
@@ -721,7 +721,7 @@ const AudienceHome = () => {
                 {showProfileDropdown && (
                   <div className="absolute right-0 mt-2 w-56 bg-white rounded-lg shadow-lg border border-gray-200 z-50">
                     <div className="p-3 border-b border-gray-200">
-                      <p className="font-medium text-text">{student?.name || 'Student'}</p>
+                      <p className="font-medium text-text">{student?.name || 'Audience'}</p>
                       <p className="text-sm text-gray-600">{student?.email || ''}</p>
                     </div>
                     <div className="py-2">
@@ -757,8 +757,8 @@ const AudienceHome = () => {
           <div className="absolute top-0 right-0 w-full h-full bg-gradient-to-l from-black/20 to-transparent"></div>
           <div className="relative flex items-center justify-between">
             <div>
-              <h1 className="text-4xl font-bold mb-3">{greeting}, {student?.name?.split(' ')[0] || 'Student'}!</h1>
-              <p className="text-lg">Welcome back to your student dashboard. Track your progress and join live sessions.</p>
+              <h1 className="text-4xl font-bold mb-3">{greeting}, {student?.name?.split(' ')[0] || 'Audience'}!</h1>
+              <p className="text-lg">Welcome back to your audience dashboard. Track your progress and join live sessions.</p>
             </div>
             <div className="relative">
               <div className="w-28 h-28 bg-black/10 rounded-full flex items-center justify-center cursor-pointer transition-all duration-200 hover:bg-black/20">
@@ -807,7 +807,7 @@ const AudienceHome = () => {
         <div className="bg-white rounded-xl shadow-lg p-8 mb-6 border-2 border-primary">
           <div className="mb-6">
             <h3 className="text-xl font-bold text-primary mb-2">Join a Session</h3>
-            <p className="text-sm text-gray-600">Enter 6-digit code your teacher shared with you</p>
+            <p className="text-sm text-gray-600">Enter 6-digit code your host shared with you</p>
           </div>
           
           <div className="flex items-center space-x-4">

@@ -262,6 +262,9 @@ export const anonymousChatAPI = {
   getById: (id) => api.get(`/anonymous-chats/${id}`),
   update: (id, updates) => api.put(`/anonymous-chats/${id}`, updates),
   addMessage: (id, messageData) => anonymousApi.post(`/anonymous-chats/${id}/messages`, messageData),
+  // Same endpoint, authenticated instance — the server only honours asTeacher for the chat owner
+  addTeacherMessage: (id, messageData) =>
+    api.post(`/anonymous-chats/${id}/messages`, { ...messageData, asTeacher: true }),
   presence: (id, payload) => anonymousApi.post(`/anonymous-chats/${id}/presence`, payload),
   leave: (id, payload) => anonymousApi.post(`/anonymous-chats/${id}/leave`, payload),
   syncStats: (id) => api.post(`/anonymous-chats/${id}/sync-stats`),

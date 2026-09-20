@@ -417,7 +417,7 @@ export default function SpaceRaceGamePanel({
             {raceData?.title || 'Space Race'}
           </h2>
           <p className="text-text/70 text-sm mt-1">
-            Welcome, {participant?.name || 'Student'}
+            Welcome, {participant?.name || 'Audience'}
             {participant?.teamId != null && (
               <span className="ml-2 inline-flex items-center gap-1 text-primary font-medium">
                 <Zap className="w-3 h-3" />

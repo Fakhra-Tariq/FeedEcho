@@ -4,6 +4,9 @@ import { ArrowLeft, Trash2, Save, Rocket, Sparkles } from 'lucide-react';
 import clsx from 'clsx';
 import { useHybridAlert } from '../contexts/HybridAlertContext';
 import LaunchQuizModal from '../components/LaunchQuizModal';
+import NoActiveSessionLaunchModal, {
+  LaunchRequiresSessionHint,
+} from '../components/Host/NoActiveSessionLaunchModal';
 import QuestionTypeDropdown from '../components/QuestionTypeDropdown';
 import AiQuizGeneratorPanel from '../components/AiQuizGeneratorPanel';
 import { quizzesAPI, handleAPIError } from '../services/api';
@@ -28,6 +31,7 @@ const MixedTypeQuizEditor = () => {
   const [isEditMode, setIsEditMode] = useState(false);
   const [editingQuizId, setEditingQuizId] = useState(null);
   const [showLaunchModal, setShowLaunchModal] = useState(false);
+  const [showNoSessionModal, setShowNoSessionModal] = useState(false);
   const [savedQuizId, setSavedQuizId] = useState(null);
   const [showAiPanel, setShowAiPanel] = useState(false);
   const [quizSource, setQuizSource] = useState(null);
@@ -167,7 +171,7 @@ const MixedTypeQuizEditor = () => {
           }
         } catch (err) {
           const apiErr = handleAPIError(err);
-          alert.toast.error(apiErr.message || 'Failed to save quiz. Are you logged in as a teacher?');
+          alert.toast.error(apiErr.message || 'Failed to save quiz. Are you logged in as a host?');
 
           const quiz = {
             id: isActuallyEditMode ? editingQuizId : Date.now(),
@@ -199,7 +203,7 @@ const MixedTypeQuizEditor = () => {
 
     const sessionCheck = requireActiveHostSession(teacherData.activeSession);
     if (!sessionCheck.ok) {
-      alert.toast.error(NO_ACTIVE_SESSION_MESSAGE);
+      setShowNoSessionModal(true);
       return;
     }
 
@@ -467,19 +471,22 @@ const MixedTypeQuizEditor = () => {
 
               {/* Launch Quiz Button - Secondary, appears after saving */}
               {isQuizSaved && (
-                <button
-                  onClick={launchQuiz}
-                  disabled={isQuizLaunched}
-                  className={clsx(
-                    'flex items-center space-x-2 px-4 sm:px-6 py-2 sm:py-3 rounded-xl font-medium text-sm sm:text-base shadow-sm transition-all',
-                    isQuizLaunched
-                      ? 'bg-purple-100 text-purple-700 border border-purple-300 cursor-not-allowed'
-                      : 'bg-[#6D415F] text-white hover:bg-[#5A344D] hover:shadow-md'
-                  )}
-                >
-                  <Rocket className="w-4 h-4 sm:w-5 sm:h-5" />
-                  <span>{isQuizLaunched ? 'Launched' : 'Launch Quiz'}</span>
-                </button>
+                <div className="flex flex-col items-end">
+                  <button
+                    onClick={launchQuiz}
+                    disabled={isQuizLaunched}
+                    className={clsx(
+                      'flex items-center space-x-2 px-4 sm:px-6 py-2 sm:py-3 rounded-xl font-medium text-sm sm:text-base shadow-sm transition-all',
+                      isQuizLaunched
+                        ? 'bg-purple-100 text-purple-700 border border-purple-300 cursor-not-allowed'
+                        : 'bg-[#6D415F] text-white hover:bg-[#5A344D] hover:shadow-md'
+                    )}
+                  >
+                    <Rocket className="w-4 h-4 sm:w-5 sm:h-5" />
+                    <span>{isQuizLaunched ? 'Launched' : 'Launch Quiz'}</span>
+                  </button>
+                  {!isQuizLaunched && <LaunchRequiresSessionHint />}
+                </div>
               )}
             </div>
           </div>
@@ -558,6 +565,18 @@ const MixedTypeQuizEditor = () => {
           questions: questions
         }}
         existingAccessCode={getActiveTeacherSession(teacherData.activeSession)?.joinCode || ''}
+      />
+
+      <NoActiveSessionLaunchModal
+        isOpen={showNoSessionModal}
+        onClose={() => setShowNoSessionModal(false)}
+        onSaveAsDraft={async () => {
+          if (!isQuizSaved) {
+            await saveQuiz();
+          } else {
+            alert.toast.success('Quiz is already saved as a draft');
+          }
+        }}
       />
 
       <AiQuizGeneratorPanel

@@ -32,7 +32,7 @@ const ChatCreatedModal = ({ isOpen, onClose, accessCode }) => {
 
           {/* Title and subtitle */}
           <h2 className="text-2xl font-bold text-gray-900 mb-2">Chat Created</h2>
-          <p className="text-sm text-gray-600 mb-8">Share this code with students</p>
+          <p className="text-sm text-gray-600 mb-8">Share this code with audience</p>
 
           {/* Audience Access Code box */}
           <div className="mb-8">

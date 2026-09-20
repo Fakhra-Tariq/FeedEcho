@@ -1,1 +1,3 @@
+# SPA fallback for static hosts (copied into client/build on `npm run build`).
+# Serve index.html for all paths so React Router can handle nested routes.
 /*    /index.html   200

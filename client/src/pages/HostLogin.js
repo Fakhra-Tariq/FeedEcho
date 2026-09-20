@@ -37,7 +37,7 @@ const HostLogin = () => {
               </svg>
             </div>
             <h1 className="text-3xl font-bold text-text mb-2">Host Portal</h1>
-            <p className="text-neutral-500">Sign in to access your teacher dashboard</p>
+            <p className="text-neutral-500">Sign in to access your host dashboard</p>
           </div>
 
           {/* Login Form */}
@@ -81,7 +81,7 @@ const HostLogin = () => {
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     className="w-full pl-10 pr-3 py-3 border border-neutral-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary transition-colors"
-                    placeholder="teacher@example.com"
+                    placeholder="host@example.com"
                   />
                 </div>
               </div>
@@ -107,7 +107,7 @@ const HostLogin = () => {
             {/* Auth Links */}
             <div className="mt-8 space-y-4 text-center">
               <div className="border-t border-neutral-200 pt-6">
-                <p className="text-sm text-neutral-500 mb-2">Looking for student access?</p>
+                <p className="text-sm text-neutral-500 mb-2">Looking for audience access?</p>
                 <Link
                   to="/"
                   className="inline-flex items-center text-primary hover:text-primary/90 font-medium"
@@ -125,7 +125,7 @@ const HostLogin = () => {
                   to="/host/signup"
                   className="text-secondary hover:text-secondary/90 font-medium"
                 >
-                  Sign up as a teacher
+                  Sign up as a host
                 </Link>
               </p>
             </div>

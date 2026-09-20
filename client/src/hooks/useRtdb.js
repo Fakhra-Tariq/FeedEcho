@@ -23,14 +23,6 @@ export function useRtdbValue(path, { enabled = true } = {}) {
   const [loading, setLoading] = useState(Boolean(enabled && path));
   const [error, setError] = useState(null);
 
-  const alive = useRef(true);
-  useEffect(() => {
-    alive.current = true;
-    return () => {
-      alive.current = false;
-    };
-  }, []);
-
   useEffect(() => {
     if (!enabled || !path) {
       setLoading(false);
@@ -38,6 +30,7 @@ export function useRtdbValue(path, { enabled = true } = {}) {
       return undefined;
     }
 
+    let cancelled = false;
     // Clear stale value immediately when path changes so listeners never show old question state
     setValue(null);
     setLoading(true);
@@ -47,13 +40,13 @@ export function useRtdbValue(path, { enabled = true } = {}) {
     const unsub = onValue(
       r,
       (snap) => {
-        if (!alive.current) return;
+        if (cancelled) return;
         const next = snap.exists() ? snap.val() : null;
         setValue((prev) => (snapshotsEqual(prev, next) ? prev : next));
         setLoading(false);
       },
       (err) => {
-        if (!alive.current) return;
+        if (cancelled) return;
         if (isDev) console.error('Firebase listener error:', { path, error: err });
         setError(err);
         setLoading(false);
@@ -61,6 +54,7 @@ export function useRtdbValue(path, { enabled = true } = {}) {
     );
 
     return () => {
+      cancelled = true;
       try {
         unsub();
       } catch {

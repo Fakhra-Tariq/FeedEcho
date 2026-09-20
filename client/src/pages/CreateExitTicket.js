@@ -18,6 +18,9 @@ import {
   NO_ACTIVE_SESSION_MESSAGE,
   resolveActiveTeacherSession,
 } from '../utils/requireActiveHostSession';
+import NoActiveSessionLaunchModal, {
+  LaunchRequiresSessionHint,
+} from '../components/Host/NoActiveSessionLaunchModal';
 
 const LIKERT_OPTIONS = [
   "Strongly Agree",
@@ -41,6 +44,7 @@ const CreateExitTicket = () => {
   const navigate = useNavigate();
   const [currentStep, setCurrentStep] = useState(1);
   const [isSaving, setIsSaving] = useState(false);
+  const [showNoSessionModal, setShowNoSessionModal] = useState(false);
   
   // Form state
   const [ticketForm, setTicketForm] = useState({
@@ -229,7 +233,7 @@ const CreateExitTicket = () => {
     const teacherId = userProfile?.uid;
     const sessionCheck = await resolveActiveTeacherSession(teacherData.activeSession, teacherId);
     if (!sessionCheck.ok) {
-      alert.toast.error(NO_ACTIVE_SESSION_MESSAGE);
+      setShowNoSessionModal(true);
       return;
     }
 
@@ -293,7 +297,7 @@ const CreateExitTicket = () => {
                 <FileText className="w-5 h-5 text-primary" />
                 <div>
                   <h1 className="text-xl font-semibold text-text">Create Exit Ticket</h1>
-                  <p className="text-sm text-text-light">Collect anonymous student feedback</p>
+                  <p className="text-sm text-text-light">Collect anonymous audience feedback</p>
                 </div>
               </div>
             </div>
@@ -362,11 +366,11 @@ const CreateExitTicket = () => {
                       className="w-4 h-4 text-primary rounded focus:ring-primary"
                     />
                     <span className="text-sm font-medium text-text">
-                      Mark attendance when students submit
+                      Mark attendance when audience members submit
                     </span>
                   </label>
                   <p className="text-xs text-text-light mt-1">
-                    Automatically track which students attended based on submission
+                    Automatically track which audience members attended based on submission
                   </p>
                 </div>
               </div>
@@ -586,14 +590,17 @@ const CreateExitTicket = () => {
                     >
                       {isSaving ? 'Saving...' : 'Save as Draft'}
                     </button>
-                    <button
-                      onClick={handleLaunch}
-                      disabled={isSaving || !isFormValid}
-                      className="btn-primary"
-                    >
-                      {isSaving ? 'Launching...' : 'Launch Exit Ticket'}
-                      <Sparkles className="w-4 h-4 ml-2" />
-                    </button>
+                    <div className="inline-flex flex-col items-end">
+                      <button
+                        onClick={handleLaunch}
+                        disabled={isSaving || !isFormValid}
+                        className="btn-primary"
+                      >
+                        {isSaving ? 'Launching...' : 'Launch Exit Ticket'}
+                        <Sparkles className="w-4 h-4 ml-2" />
+                      </button>
+                      <LaunchRequiresSessionHint />
+                    </div>
                   </div>
                 </div>
               </div>
@@ -601,6 +608,11 @@ const CreateExitTicket = () => {
           )}
         </div>
 
+      <NoActiveSessionLaunchModal
+        isOpen={showNoSessionModal}
+        onClose={() => setShowNoSessionModal(false)}
+        onSaveAsDraft={handleSaveDraft}
+      />
       </div>
     </div>
   );

@@ -3,6 +3,9 @@ import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, Plus, Trash2, Save, Rocket } from 'lucide-react';
 import { useHybridAlert } from '../contexts/HybridAlertContext';
 import LaunchQuizModal from '../components/LaunchQuizModal';
+import NoActiveSessionLaunchModal, {
+  LaunchRequiresSessionHint,
+} from '../components/Host/NoActiveSessionLaunchModal';
 import { quizzesAPI, handleAPIError } from '../services/api';
 import { useHostData } from '../contexts/HostDataContext';
 import { AI_GENERATED_QUIZ_SOURCE } from '../utils/aiGeneratedQuiz';
@@ -24,6 +27,7 @@ const CreateTrueFalseQuiz = () => {
   const [isEditMode, setIsEditMode] = useState(false);
   const [editingQuizId, setEditingQuizId] = useState(null);
   const [showLaunchModal, setShowLaunchModal] = useState(false);
+  const [showNoSessionModal, setShowNoSessionModal] = useState(false);
   const [savedQuizId, setSavedQuizId] = useState(null);
   const [quizSource, setQuizSource] = useState(null);
 
@@ -116,7 +120,7 @@ const CreateTrueFalseQuiz = () => {
       }
     } catch (err) {
       const apiErr = handleAPIError(err);
-      alert.toast.error(apiErr.message || 'Failed to save quiz. Are you logged in as a teacher?');
+      alert.toast.error(apiErr.message || 'Failed to save quiz. Are you logged in as a host?');
       const quiz = { id: isActuallyEditMode ? editingQuizId : Date.now(), ...payload, createdDate: existingQuiz?.createdDate || new Date().toISOString() };
       if (isActuallyEditMode) { const idx = savedQuizzes.findIndex(q => q.id === editingQuizId); if (idx !== -1) savedQuizzes[idx] = quiz; } else savedQuizzes.push(quiz);
       localStorage.setItem('savedQuizzes', JSON.stringify(savedQuizzes));
@@ -128,7 +132,7 @@ const CreateTrueFalseQuiz = () => {
   const launchQuiz = async () => {
     const sessionCheck = requireActiveHostSession(teacherData.activeSession);
     if (!sessionCheck.ok) {
-      alert.toast.error(NO_ACTIVE_SESSION_MESSAGE);
+      setShowNoSessionModal(true);
       return;
     }
 
@@ -187,13 +191,16 @@ const CreateTrueFalseQuiz = () => {
 
               {/* Launch Quiz Button - Secondary, appears after saving */}
               {isQuizSaved && (
-                <button
-                  onClick={launchQuiz}
-                  className="flex items-center space-x-2 px-4 sm:px-6 py-2 sm:py-3 bg-[#6D415F] text-white rounded-xl hover:bg-[#5A344D] transition-colors font-medium text-sm sm:text-base shadow-sm hover:shadow-md"
-                >
-                  <Rocket className="w-4 h-4 sm:w-5 sm:h-5" />
-                  <span>Launch Quiz</span>
-                </button>
+                <div className="flex flex-col items-end">
+                  <button
+                    onClick={launchQuiz}
+                    className="flex items-center space-x-2 px-4 sm:px-6 py-2 sm:py-3 bg-[#6D415F] text-white rounded-xl hover:bg-[#5A344D] transition-colors font-medium text-sm sm:text-base shadow-sm hover:shadow-md"
+                  >
+                    <Rocket className="w-4 h-4 sm:w-5 sm:h-5" />
+                    <span>Launch Quiz</span>
+                  </button>
+                  <LaunchRequiresSessionHint />
+                </div>
               )}
             </div>
           </div>
@@ -364,6 +371,18 @@ const CreateTrueFalseQuiz = () => {
           questions: questions
         }}
         existingAccessCode={getActiveTeacherSession(teacherData.activeSession)?.joinCode || ''}
+      />
+
+      <NoActiveSessionLaunchModal
+        isOpen={showNoSessionModal}
+        onClose={() => setShowNoSessionModal(false)}
+        onSaveAsDraft={async () => {
+          if (!isQuizSaved) {
+            await saveQuiz();
+          } else {
+            alert.toast.success('Quiz is already saved as a draft');
+          }
+        }}
       />
     </div>
   );

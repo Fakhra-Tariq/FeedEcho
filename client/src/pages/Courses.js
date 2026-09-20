@@ -52,7 +52,7 @@ const About = () => {
     {
       title: 'Educators',
       description:
-        'University lecturers and teachers who want to measure comprehension in real time without disrupting the flow of class.',
+        'University lecturers and hosts who want to measure comprehension in real time without disrupting the flow of class.',
       icon: GraduationCap,
     },
     {

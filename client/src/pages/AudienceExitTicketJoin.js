@@ -92,7 +92,7 @@ export default function AudienceExitTicketJoin() {
                 maxLength={6}
               />
               <p className="text-xs text-text-light mt-2">
-                Enter 6-character code provided by your teacher
+                Enter 6-character code provided by your host
               </p>
             </div>
 
@@ -111,7 +111,7 @@ export default function AudienceExitTicketJoin() {
               <ul className="space-y-2 text-sm text-text-light">
                 <li className="flex items-start gap-2">
                   <span className="text-primary">1.</span>
-                  <span>Enter the 6-character join code from your teacher</span>
+                  <span>Enter the 6-character join code from your host</span>
                 </li>
                 <li className="flex items-start gap-2">
                   <span className="text-primary">2.</span>

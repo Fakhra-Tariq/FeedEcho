@@ -118,8 +118,10 @@ router.post('/create', optionalAuth, async (req, res) => {
       const ownerChats = ownerChatsAll.filter((chat) => chat?.createdBy === ownerId);
       const hasActiveChat = ownerChats.some((chat) => {
         if (!chat || typeof chat !== 'object') return false;
-        if (chat.status === 'ended' || chat.isActive === false) return false;
-        return true;
+        if (String(chat.status || '').toLowerCase() === 'ended' || chat.isActive === false) {
+          return false;
+        }
+        return chat.isActive === true || String(chat.status || '').toLowerCase() === 'active';
       });
 
       if (hasActiveChat) {
@@ -132,6 +134,10 @@ router.post('/create', optionalAuth, async (req, res) => {
 
     const launchPrep = await prepareActivityLaunch('anonymousChat', null, ownerId);
     if (!launchPrep.ok) {
+      console.warn('❌ anonymous chat create blocked', {
+        ownerId,
+        error: launchPrep.error,
+      });
       return res.status(400).json({ success: false, error: launchPrep.error });
     }
 
@@ -326,6 +332,17 @@ router.put('/:id', verifyFirebaseToken, async (req, res) => {
       });
     }
     await ref.update(updates);
+
+    const ending =
+      updates.isActive === false || String(updates.status || '').toLowerCase() === 'ended';
+    if (ending) {
+      const joinCode = String(existing.joinCode || existing.sessionCode || '').trim().toUpperCase();
+      if (joinCode) {
+        await chatJoinCodeRef(joinCode).remove();
+      }
+      await clearActivityFromActiveSession('anonymousChat', id, req.user.uid);
+    }
+
     const updated = await ref.get();
     const msgsSnap = await chatMessagesRef(id).get();
     const msgs = msgsSnap.exists() ? Object.values(msgsSnap.val() || {}) : [];
@@ -341,8 +358,8 @@ router.put('/:id', verifyFirebaseToken, async (req, res) => {
   }
 });
 
-// Add message (NO AUTH - for students)
-router.post('/:id/messages', async (req, res) => {
+// Add message (NO AUTH - for students; the chat owner may also post as the teacher)
+router.post('/:id/messages', optionalAuth, async (req, res) => {
   try {
     const id = req.params.id;
     const ref = chatSessionRef(id);
@@ -357,25 +374,39 @@ router.post('/:id/messages', async (req, res) => {
         error: 'This chat has ended',
       });
     }
-    if (!chat.settings?.moderationMode) {
+    // Only the authenticated owner may post as the teacher; the moderation gate applies to students.
+    const isOwner = Boolean(
+      req.user?.uid && (chat.createdBy == null || chat.createdBy === req.user.uid)
+    );
+    const isTeacherMessage = req.body.asTeacher === true;
+    if (isTeacherMessage && !isOwner) {
+      return res.status(401).json({
+        success: false,
+        error: 'Sign in as the chat owner to post as the host',
+      });
+    }
+    if (!isTeacherMessage && !chat.settings?.moderationMode) {
       return res.status(403).json({
         success: false,
         error: 'Chat is not currently accepting messages',
       });
     }
-    const participantId = req.body.participantId || req.body.sender;
+    const participantId = isTeacherMessage ? null : req.body.participantId || req.body.sender;
     if (participantId) {
       await registerChatParticipant(id, participantId);
     }
     const msgId = generateId('msg');
     const newMessage = {
       id: msgId,
-      sender: req.body.sender || 'Anonymous Student',
+      sender: isTeacherMessage ? 'Teacher' : req.body.sender || 'Anonymous Student',
       message: (req.body.message || '').trim(),
       timestamp: new Date().toISOString(),
-      isTeacher: false,
+      isTeacher: isTeacherMessage,
       isAnswered: false,
       isHidden: false,
+      ...(isTeacherMessage
+        ? {}
+        : { participantId: req.body.participantId || req.body.sender || null }),
     };
     const now = new Date().toISOString();
     const analytics = chat.analytics || { uniqueStudents: 0, totalQuestions: 0, questionsPerStudent: 0 };
@@ -386,10 +417,12 @@ router.post('/:id/messages', async (req, res) => {
     await ref.update({
       lastActivity: now,
       updatedAt: now,
-      analytics: {
-        ...analytics,
-        totalQuestions: (analytics.totalQuestions || 0) + 1,
-      },
+      analytics: isTeacherMessage
+        ? analytics
+        : {
+            ...analytics,
+            totalQuestions: (analytics.totalQuestions || 0) + 1,
+          },
     });
     return res.status(201).json({ success: true, data: newMessage, message: 'Message added successfully' });
   } catch (error) {
@@ -587,6 +620,7 @@ router.delete('/:id', verifyFirebaseToken, async (req, res) => {
     };
     if (joinCode) updates[`chat_join_codes/${joinCode}`] = null;
     await db.ref().update(updates);
+    await clearActivityFromActiveSession('anonymousChat', id, req.user.uid);
     return res.status(200).json({ success: true, message: 'Chat session deleted successfully' });
   } catch (error) {
     console.error('Error deleting chat:', error);
