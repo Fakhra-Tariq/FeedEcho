@@ -19,7 +19,7 @@ import {
 } from 'lucide-react';
 import { useRtdbValue } from '../hooks/useRtdb';
 import { useQuizSubmissionListeners } from '../hooks/useQuizSubmissionListeners';
-import { studentsAPI } from '../services/api';
+import { studentsAPI, studyAssistantAPI } from '../services/api';
 import { getStoredAudienceSession, getStudentQueryParams } from '../utils/audienceSession';
 import { matchesStudentRecord } from '../utils/audienceIdentifiers';
 import {
@@ -307,6 +307,8 @@ export default function AudienceProgress() {
     }
   ]);
   const [chatInput, setChatInput] = useState('');
+  const [isSendingChat, setIsSendingChat] = useState(false);
+  const conversationIdRef = useRef(null);
   const { items: activityHistory, loading: loadingActivity, reload: reloadActivity } = useAudienceLiveActivity(student, 200);
   const [hiddenActivityIds, setHiddenActivityIds] = useState([]);
   const [viewModal, setViewModal] = useState(null);
@@ -839,28 +841,69 @@ export default function AudienceProgress() {
     [allQuizAttempts, getQuizQuestions, quizzesTree]
   );
 
-  const handleSendMessage = () => {
-    if (chatInput.trim() === '') return;
-    
+  const formatChatTime = () =>
+    new Date().toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+
+  const handleSendMessage = async () => {
+    const trimmed = chatInput.trim();
+    if (!trimmed || isSendingChat) return;
+
     const newUserMessage = {
       id: Date.now(),
-      text: chatInput,
+      text: trimmed,
       sender: 'user',
-      timestamp: new Date().toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
+      timestamp: formatChatTime()
     };
-    
+
     setChatMessages(prev => [...prev, newUserMessage]);
     setChatInput('');
-    
-    setTimeout(() => {
-      const aiResponse = {
-        id: Date.now() + 1,
-        text: "Thank you for your question! I'm here to help you with your studies. Let me assist you with that topic.",
-        sender: 'ai',
-        timestamp: new Date().toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
+    setIsSendingChat(true);
+
+    const appendAssistantMessage = (text) => {
+      setChatMessages(prev => [
+        ...prev,
+        {
+          id: Date.now() + 1,
+          text,
+          sender: 'ai',
+          timestamp: formatChatTime()
+        }
+      ]);
+    };
+
+    if (!student?.uid) {
+      appendAssistantMessage("Sorry, I couldn't get an answer right now. Please try again.");
+      setIsSendingChat(false);
+      return;
+    }
+
+    try {
+      const payload = {
+        studentId: student.uid,
+        message: trimmed
       };
-      setChatMessages(prev => [...prev, aiResponse]);
-    }, 1000);
+      if (conversationIdRef.current) {
+        payload.conversationId = conversationIdRef.current;
+      }
+
+      const response = await studyAssistantAPI.chat(payload);
+      const { conversationId, reply } = response.data?.data || {};
+
+      if (conversationId) {
+        conversationIdRef.current = conversationId;
+      }
+
+      if (!reply || !String(reply).trim()) {
+        throw new Error('No assistant reply received');
+      }
+
+      appendAssistantMessage(String(reply).trim());
+    } catch (error) {
+      console.error('[study-assistant] Progress panel chat failed', error);
+      appendAssistantMessage("Sorry, I couldn't get an answer right now. Please try again.");
+    } finally {
+      setIsSendingChat(false);
+    }
   };
 
   const handleKeyPress = (e) => {
@@ -1258,7 +1301,7 @@ export default function AudienceProgress() {
                       ? 'bg-primary text-white' 
                       : 'bg-white text-gray-800 border border-gray-200'
                   }`}>
-                    <p className="text-sm">{message.text}</p>
+                    <p className="text-sm whitespace-pre-wrap">{message.text}</p>
                     <p className={`text-xs mt-1 ${
                       message.sender === 'user' ? 'text-primary-100' : 'text-gray-500'
                     }`}>{message.timestamp}</p>

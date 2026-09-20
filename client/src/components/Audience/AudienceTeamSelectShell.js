@@ -7,11 +7,8 @@ import { ArrowLeft, Rocket } from 'lucide-react';
  */
 export default function AudienceTeamSelectShell({
   onLeave,
-  sessionCode = '',
   children,
 }) {
-  const code = String(sessionCode || '').trim().toUpperCase();
-
   return (
     <div className="min-h-screen bg-background flex flex-col">
       <header className="flex-shrink-0 bg-white border-b border-neutral-200 px-4 h-14 flex items-center justify-between">
@@ -27,9 +24,7 @@ export default function AudienceTeamSelectShell({
           <Rocket className="w-5 h-5 text-primary" />
           <span className="font-semibold">Space Race</span>
         </div>
-        <div className="min-w-[4rem] text-right text-xs text-text/60 font-mono tracking-widest">
-          {code || '\u00a0'}
-        </div>
+        <div className="w-16" />
       </header>
 
       <main className="flex-1 overflow-y-auto">

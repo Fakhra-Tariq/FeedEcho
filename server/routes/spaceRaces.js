@@ -1583,30 +1583,37 @@ router.post('/:id/team-selection', async (req, res) => {
     }
 
     const selectionPath = `space_race_team_selection/${raceId}/team_${teamId}/question_${questionId}`;
-    const existingSnap = await db.ref(selectionPath).get();
-    if (existingSnap.exists() && existingSnap.val()?.submitted === true) {
-      return res.status(400).json({ success: false, error: 'Question already submitted for this team' });
-    }
-
     const displayName =
       submittedByName || senderName || participant.name || 'A teammate';
     const now = new Date().toISOString();
 
-    await db.ref(selectionPath).update({
-      selectedOption: selectedOption !== undefined ? selectedOption : existingSnap.val()?.selectedOption || null,
-      selectedBy: participantId,
-      selectedByName: displayName,
-      selectedAt: now,
-      submitted: Boolean(submitted),
-      ...(submitted
-        ? {
-            submittedBy: participantId,
-            submittedByName: displayName,
-            submittedAt: now,
-          }
-        : {}),
-      updatedAt: now,
+    const txResult = await db.ref(selectionPath).transaction((current) => {
+      if (current && (current.submitted === true || current.submitted === 'true')) {
+        return current;
+      }
+      return {
+        ...(current || {}),
+        selectedOption:
+          selectedOption !== undefined ? selectedOption : current?.selectedOption || null,
+        selectedBy: participantId,
+        selectedByName: displayName,
+        selectedAt: now,
+        submitted: Boolean(submitted),
+        ...(submitted
+          ? {
+              submittedBy: participantId,
+              submittedByName: displayName,
+              submittedAt: now,
+            }
+          : {}),
+        updatedAt: now,
+      };
     });
+
+    const committed = txResult.snapshot?.val() || {};
+    if (committed.submitted === true && !submitted) {
+      return res.status(400).json({ success: false, error: 'Question already submitted for this team' });
+    }
 
     return res.json({ success: true });
   } catch (error) {

@@ -91,20 +91,23 @@ const LaunchQuizModal = ({ isOpen, onClose, onLaunch, quiz, existingAccessCode }
         role="presentation"
       />
 
-      <div className="relative bg-white rounded-2xl shadow-xl max-w-lg w-full overflow-hidden">
-        <div className="flex justify-end p-4">
+      <div
+        className="relative bg-white rounded-2xl shadow-xl max-w-lg w-full overflow-hidden flex flex-col max-h-[calc(100vh-32px)]"
+        style={{ maxHeight: 'calc(100dvh - 32px)' }}
+      >
+        <div className="flex items-center justify-between gap-3 px-6 pt-4 pb-2 shrink-0">
+          <h3 className="text-lg font-semibold text-gray-900">Quiz Settings</h3>
           <button
             type="button"
             onClick={onClose}
-            className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+            className="p-2 hover:bg-gray-100 rounded-lg transition-colors shrink-0"
           >
             <X className="w-5 h-5 text-gray-500" />
           </button>
         </div>
 
-        <div className="px-6 pb-6">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">Quiz Settings</h3>
-          <div className="bg-gray-50 rounded-xl p-4 space-y-4">
+        <div className="px-6 min-h-0 overflow-y-auto flex-1">
+          <div className="bg-gray-50 rounded-xl p-3 space-y-3">
             <MinuteStepperField
               label="Quiz live for"
               description="How long the quiz remains live and joinable"
@@ -121,7 +124,7 @@ const LaunchQuizModal = ({ isOpen, onClose, onLaunch, quiz, existingAccessCode }
               presets={QUIZ_TIME_PRESETS}
             />
 
-            <div className="space-y-3">
+            <div className="space-y-2">
               <ToggleRow
                 label="Shuffle questions"
                 enabled={shuffleQuestions}
@@ -147,7 +150,7 @@ const LaunchQuizModal = ({ isOpen, onClose, onLaunch, quiz, existingAccessCode }
           </div>
         </div>
 
-        <div className="flex items-center justify-between gap-4 px-6 pb-6">
+        <div className="flex items-center justify-between gap-4 px-6 pt-3 pb-4 shrink-0">
           <button
             type="button"
             onClick={onClose}
@@ -217,15 +220,15 @@ const MinuteStepperField = ({ label, description, value, onChange, presets }) =>
 
   return (
     <div>
-      <label className="block text-sm font-medium text-gray-700 mb-2">{label}</label>
+      <label className="block text-sm font-medium text-gray-700 mb-1.5">{label}</label>
 
-      <div className="flex flex-wrap gap-2 mb-2">
+      <div className="flex flex-wrap gap-2 mb-1.5">
         {presets.map((preset) => (
           <button
             key={preset}
             type="button"
             onClick={() => onChange(preset)}
-            className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${
+            className={`px-3 py-0.5 rounded-full text-xs font-medium transition-colors ${
               value === preset
                 ? 'bg-[#6D415F] text-white'
                 : 'bg-white border border-gray-200 text-gray-600 hover:border-[#6D415F]/40 hover:text-[#6D415F]'
@@ -240,7 +243,7 @@ const MinuteStepperField = ({ label, description, value, onChange, presets }) =>
         <button
           type="button"
           onClick={() => stepBy(-QUIZ_TIME_STEP_MINUTES)}
-          className="flex items-center justify-center w-9 h-9 rounded-lg border border-gray-200 bg-white text-gray-600 hover:border-[#6D415F]/40 hover:text-[#6D415F] transition-colors"
+          className="flex items-center justify-center w-8 h-8 rounded-lg border border-gray-200 bg-white text-gray-600 hover:border-[#6D415F]/40 hover:text-[#6D415F] transition-colors"
           aria-label={`Decrease ${label}`}
         >
           <Minus className="w-4 h-4" />
@@ -255,7 +258,7 @@ const MinuteStepperField = ({ label, description, value, onChange, presets }) =>
             onChange={handleInputChange}
             onBlur={handleBlur}
             placeholder="No limit"
-            className="w-full px-3 py-2 bg-white border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-[#6D415F] focus:border-transparent text-center"
+            className="w-full px-3 py-1.5 bg-white border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-[#6D415F] focus:border-transparent text-center"
           />
           <span className="text-sm font-medium text-gray-600 shrink-0">minutes</span>
         </div>
@@ -263,7 +266,7 @@ const MinuteStepperField = ({ label, description, value, onChange, presets }) =>
         <button
           type="button"
           onClick={() => stepBy(QUIZ_TIME_STEP_MINUTES)}
-          className="flex items-center justify-center w-9 h-9 rounded-lg border border-gray-200 bg-white text-gray-600 hover:border-[#6D415F]/40 hover:text-[#6D415F] transition-colors"
+          className="flex items-center justify-center w-8 h-8 rounded-lg border border-gray-200 bg-white text-gray-600 hover:border-[#6D415F]/40 hover:text-[#6D415F] transition-colors"
           aria-label={`Increase ${label}`}
         >
           <Plus className="w-4 h-4" />

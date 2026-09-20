@@ -457,15 +457,18 @@ export default function SpaceRaceTeamChat({ raceId, teamId, participant, compact
 
   const renderMessageBody = (msg) => {
     if (msg.type === 'image' && msg.url) {
+      const caption = String(msg.text || '').trim();
+      const isFallbackCaption = !caption || caption === 'Shared an image';
       return (
         <div>
-          {msg.text && <p className="text-sm mb-2">{msg.text}</p>}
+          {isFallbackCaption && caption ? <p className="text-sm mb-2">{caption}</p> : null}
           <img
             src={msg.url}
             alt={msg.fileName || 'Shared image'}
             className="max-w-full rounded-lg border border-white/20 cursor-pointer hover:opacity-90 transition-opacity"
             onClick={() => setSelectedImage(msg.url)}
           />
+          {!isFallbackCaption ? <p className="text-sm mt-2">{caption}</p> : null}
         </div>
       );
     }
@@ -532,14 +535,14 @@ export default function SpaceRaceTeamChat({ raceId, teamId, participant, compact
       <div
         className={
           compactHeader
-            ? 'flex-shrink-0 bg-white border-b border-neutral-200 px-4 py-2.5'
+            ? 'flex-shrink-0 bg-primary px-4 py-2 text-white'
             : 'flex-shrink-0 bg-primary px-4 py-3 text-white'
         }
       >
-        <h3 className={compactHeader ? 'font-semibold text-sm text-text' : 'font-semibold text-lg'}>
+        <h3 className={compactHeader ? 'font-semibold text-sm' : 'font-semibold text-lg'}>
           {teamName} Chat
         </h3>
-        <p className={compactHeader ? 'text-xs text-text/60' : 'text-white/80 text-sm'}>
+        <p className={compactHeader ? 'text-white/80 text-xs' : 'text-white/80 text-sm'}>
           Team chat - only your team members can see these messages
         </p>
       </div>

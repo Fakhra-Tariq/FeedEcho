@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, Play, Square, Settings, Users, Clock, Trophy, Star, Filter, Monitor, Check, Copy, Loader2 } from 'lucide-react';
+import { Plus, Play, Square, Settings, Users, Clock, Trophy, Star, Filter, Monitor, Check, Copy, Loader2, X } from 'lucide-react';
 import { useHostData } from '../contexts/HostDataContext';
 import { useAuth } from '../contexts/AuthContext';
 import SpaceRaceSettings from '../components/SpaceRaceSettings';
@@ -1351,16 +1351,19 @@ return (
             )}
 
             {/* Footer Buttons */}
-            <div className="p-6 border-t border-gray-200 flex items-start justify-end gap-3 flex-wrap">
-                {currentStep === 2 && (
-                  <button
-                    type="button"
-                    onClick={handlePreviousStep}
-                    className="px-4 py-2 text-text-light bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
-                  >
-                    Previous
-                  </button>
-                )}
+            <div className="p-6 border-t border-gray-200 flex items-start justify-between gap-3 flex-wrap">
+                <div>
+                  {currentStep === 2 && (
+                    <button
+                      type="button"
+                      onClick={handlePreviousStep}
+                      className="px-4 py-2 text-text-light bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
+                    >
+                      Previous
+                    </button>
+                  )}
+                </div>
+                <div className="flex items-start gap-3 flex-wrap">
                 <button
                   type="button"
                   onClick={() => setShowCreate(false)}
@@ -1401,6 +1404,7 @@ return (
                     </div>
                   </>
                 )}
+                </div>
             </div>
           </div>
         </div>
@@ -1516,6 +1520,14 @@ return (
           
           {/* Alert modal */}
           <div className="relative bg-white rounded-2xl shadow-2xl max-w-md w-full mx-4 overflow-hidden">
+            <button
+              type="button"
+              onClick={() => setShowActiveRaceAlert(false)}
+              className="absolute top-4 right-4 p-2 hover:bg-gray-100 rounded-lg transition-colors"
+              aria-label="Close"
+            >
+              <X className="w-5 h-5 text-gray-500" />
+            </button>
             <div className="p-8 text-center">
               {/* Warning icon */}
               <div className="flex justify-center mb-6">
@@ -1536,6 +1548,7 @@ return (
                 <button
                   onClick={() => {
                     setShowActiveRaceAlert(false);
+                    setShowCreate(false);
                     navigate(`/host/space-race`);
                   }}
                   className="w-full px-6 py-3 bg-[#6D415F] text-white rounded-lg hover:bg-[#5A344D] transition-colors font-medium"

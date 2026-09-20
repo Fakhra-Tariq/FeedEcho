@@ -1076,10 +1076,22 @@ const AudienceQuizAttempt = ({
       const next = { ...prev };
       idsToWrite.forEach((id) => {
         const prevNode = next[id];
+        const prevSubmitted =
+          prevNode && (prevNode.submitted === true || prevNode.submitted === 'true');
+        // Never let live-typing / draft updates overwrite a locked submitted answer
+        if (prevSubmitted && !isSubmitted) {
+          return;
+        }
+        const incomingAnswer = node.selectedOption ?? node.answer;
+        const prevAnswer = prevNode?.selectedOption ?? prevNode?.answer;
+        const selectedOption =
+          incomingAnswer != null && String(incomingAnswer) !== ''
+            ? incomingAnswer
+            : prevAnswer;
         if (
           prevNode &&
-          prevNode.submitted === isSubmitted &&
-          prevNode.selectedOption === node.selectedOption &&
+          prevSubmitted === isSubmitted &&
+          prevNode.selectedOption === selectedOption &&
           (prevNode.submittedByName || prevNode.selectedByName) ===
             (node.submittedByName || node.selectedByName) &&
           prevNode.submittedBy === node.submittedBy
@@ -1089,7 +1101,8 @@ const AudienceQuizAttempt = ({
         next[id] = {
           ...(prevNode || {}),
           ...node,
-          submitted: isSubmitted,
+          submitted: prevSubmitted || isSubmitted,
+          ...(selectedOption !== undefined ? { selectedOption } : {}),
         };
         changed = true;
       });
@@ -1111,9 +1124,19 @@ const AudienceQuizAttempt = ({
     });
   }, []);
 
+  const readLockAnswer = (node) => {
+    if (!node) return '';
+    const value = node.selectedOption ?? node.answer;
+    if (value == null) return '';
+    return String(value);
+  };
+
   const pickQuestionNode = (...nodes) => {
-    const submitted = nodes.find(isSubmittedLockNode);
-    if (submitted) return submitted;
+    const submitted = nodes.filter(isSubmittedLockNode);
+    if (submitted.length) {
+      const withAnswer = submitted.find((node) => readLockAnswer(node).trim() !== '');
+      return withAnswer || submitted[0];
+    }
     return nodes.find((node) => node && typeof node === 'object') || null;
   };
 
@@ -1288,22 +1311,41 @@ const AudienceQuizAttempt = ({
     });
   }, [isSpaceRace, liveTeamSelections, applyQuestionLockFromNode]);
 
-  // When teammate locks the question, clear local selection so student can't re-submit
+  const lockedAnswerFromParticipant = (() => {
+    if (!Array.isArray(liveParticipantData?.answers)) return '';
+    const row = liveParticipantData.answers.find(
+      (answer) => answer && currentQuestionAliases.includes(String(answer.questionId))
+    );
+    return row?.answer != null ? String(row.answer) : '';
+  })();
+
+  const lockedAnswerValue = isTeamQuestionSubmitted
+    ? (
+        (isSubmittedLockNode(liveQuestionNode) && readLockAnswer(liveQuestionNode)) ||
+        (isSubmittedLockNode(submissionState) && readLockAnswer(submissionState)) ||
+        currentQuestionAliases
+          .map((id) =>
+            isSubmittedLockNode(teamSelectionsMap[id]) ? readLockAnswer(teamSelectionsMap[id]) : ''
+          )
+          .find((value) => String(value).trim() !== '') ||
+        lockedAnswerFromParticipant ||
+        ''
+      )
+    : '';
+
+  // When locked, pin the displayed answer to the final submitted value (not live-typing drafts)
   useEffect(() => {
     if (!isSpaceRace || !isTeamQuestionSubmitted || !currentSpaceRaceQuestionId) return;
 
     setLocalTeamSelection(null);
-    setAnswers((prev) => {
-      if (!currentQuestionData) return prev;
+    const finalAnswer = String(lockedAnswerValue || '').trim();
+    if (finalAnswer && currentQuestionData) {
       const answerKey = getQuestionKey(currentQuestionData, currentQuestion);
-      if (prev[answerKey] == null && prev[String(answerKey)] == null) return prev;
-      const next = { ...prev };
-      delete next[answerKey];
-      delete next[String(answerKey)];
-      delete next[currentQuestion];
-      delete next[String(currentQuestion)];
-      return next;
-    });
+      setAnswers((prev) => {
+        if (String(prev[answerKey] ?? '') === finalAnswer) return prev;
+        return { ...prev, [answerKey]: finalAnswer };
+      });
+    }
     setSubmittedQuestionKeys((prev) => {
       if (prev.has(currentSpaceRaceQuestionId)) return prev;
       const next = new Set(prev);
@@ -1316,12 +1358,17 @@ const AudienceQuizAttempt = ({
     currentSpaceRaceQuestionId,
     currentQuestion,
     currentQuestionData,
+    lockedAnswerValue,
   ]);
 
   // Prefer live team selection so teammates see highlights instantly
   const displaySelectedOption = isSpaceRace
     ? (isTeamQuestionSubmitted
-        ? (teamSelection?.selectedOption || submissionState?.selectedOption || '')
+        ? (lockedAnswerValue ||
+            readLockAnswer(teamSelection) ||
+            readLockAnswer(submissionState) ||
+            getAnswerForQuestion(currentQuestionData, currentQuestion) ||
+            '')
         : (teamSelection?.selectedOption ||
             submissionState?.selectedOption ||
             getAnswerForQuestion(currentQuestionData, currentQuestion) ||
@@ -1412,6 +1459,12 @@ const AudienceQuizAttempt = ({
       try {
         const question = quiz.questions[questionIndex];
         const questionId = getSpaceRaceQuestionId(question, questionIndex);
+        if (
+          submittedQuestionKeys.has(questionId) ||
+          submittedQuestionKeys.has(String(questionId))
+        ) {
+          return;
+        }
         const optimisticSelection = {
           selectedOption: answer,
           selectedBy: participantId,
@@ -2025,7 +2078,7 @@ const AudienceQuizAttempt = ({
 
   if (isSpaceRace && quizTimeExpired && !isSubmitted) {
     return (
-      <div className={`${shellClass} flex items-center justify-center p-4`}>
+      <div className={`${shellClass} flex items-center justify-center p-4 min-h-full h-full`}>
         <div className="bg-white rounded-3xl shadow-soft border border-primary/10 p-8 max-w-md w-full text-center">
           <Clock className="w-16 h-16 text-error-500 mx-auto mb-4" />
           <h1 className="text-2xl font-bold text-text mb-4">Time&apos;s Up</h1>
@@ -2074,18 +2127,18 @@ const AudienceQuizAttempt = ({
     // If showFinalScore is false, show a simple completion message without score
     if (!showFinalScore) {
       return (
-        <div className="flex items-center justify-center min-h-screen pt-40" style={{ backgroundColor: 'rgb(244 241 236)' }}>
-          <div className="bg-white rounded-3xl shadow-soft border border-primary/10 p-8 max-w-md w-full text-center">
-            <CheckCircle className="w-20 h-20 text-primary mx-auto mb-6" />
-            <h1 className="text-3xl font-bold text-text mb-4">
+        <div className={`${shellClass} flex items-center justify-center p-4 ${isSpaceRace ? 'min-h-full h-full' : 'min-h-screen'}`}>
+          <div className={`bg-white rounded-3xl shadow-soft border border-primary/10 max-w-md w-full text-center ${isSpaceRace ? 'p-5' : 'p-8'}`}>
+            <CheckCircle className={`w-20 h-20 text-primary mx-auto ${isSpaceRace ? 'mb-3' : 'mb-6'}`} />
+            <h1 className={`text-3xl font-bold text-text ${isSpaceRace ? 'mb-2' : 'mb-4'}`}>
               {isSpaceRace ? 'Space Race Quiz Completed!' : 'Quiz Completed!'}
             </h1>
-            <p className="text-lg text-text-light mb-6">
+            <p className={`text-lg text-text-light ${isSpaceRace ? 'mb-3' : 'mb-6'}`}>
               Thank you for completing the quiz!
             </p>
 
-            <div className="mb-6">
-              <p className="text-sm text-text-light mb-2">
+            <div className={isSpaceRace ? 'mb-3' : 'mb-6'}>
+              <p className={`text-sm text-text-light ${isSpaceRace ? 'mb-1.5' : 'mb-2'}`}>
                 Redirecting {isSpaceRace ? 'back to Space Race' : 'to homepage'} in{' '}
                 <span className="font-semibold text-primary">{redirectCountdown}</span> seconds...
               </p>
@@ -2144,22 +2197,22 @@ const AudienceQuizAttempt = ({
     };
 
     return (
-      <div className={`${shellClass} flex items-center justify-center p-4 min-h-screen`}>
-        <div className="bg-white rounded-3xl shadow-soft border border-primary/10 p-8 max-w-md w-full text-center">
-          <div className={`w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-6 ${getScoreBgColor(displayPercentage)}`}>
+      <div className={`${shellClass} flex items-center justify-center p-4 ${isSpaceRace ? 'min-h-full h-full' : 'min-h-screen'}`}>
+        <div className={`bg-white rounded-3xl shadow-soft border border-primary/10 max-w-md w-full text-center ${isSpaceRace ? 'p-5' : 'p-8'}`}>
+          <div className={`w-20 h-20 rounded-full flex items-center justify-center mx-auto ${isSpaceRace ? 'mb-3' : 'mb-6'} ${getScoreBgColor(displayPercentage)}`}>
             <CheckCircle className={`w-10 h-10 ${getScoreTextColor(displayPercentage)}`} />
           </div>
           
-          <h1 className="text-3xl font-bold text-text mb-4">
+          <h1 className={`text-3xl font-bold text-text ${isSpaceRace ? 'mb-2' : 'mb-4'}`}>
             {isSpaceRace ? 'Space Race Quiz Completed!' : 'Quiz Completed!'}
           </h1>
           
-          <p className="text-lg text-text-light mb-6">
+          <p className={`text-lg text-text-light ${isSpaceRace ? 'mb-3' : 'mb-6'}`}>
             {getPerformanceComment(displayPercentage)}
           </p>
 
           {submissionSyncFailed && (
-            <div className="mb-6 rounded-xl border border-amber-200 bg-amber-50 p-4 text-left">
+            <div className={`${isSpaceRace ? 'mb-3' : 'mb-6'} rounded-xl border border-amber-200 bg-amber-50 p-4 text-left`}>
               <div className="flex items-start gap-2">
                 <AlertCircle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
                 <div className="min-w-0">
@@ -2182,11 +2235,11 @@ const AudienceQuizAttempt = ({
           )}
           
           {/* Score Card with Visual Representation */}
-          <div className="bg-gradient-to-r from-primary/5 to-primary/10 rounded-2xl p-6 mb-6">
-            <div className="text-5xl font-bold text-primary mb-2">
+          <div className={`bg-gradient-to-r from-primary/5 to-primary/10 rounded-2xl ${isSpaceRace ? 'p-4 mb-3' : 'p-6 mb-6'}`}>
+            <div className={`text-5xl font-bold text-primary ${isSpaceRace ? 'mb-1' : 'mb-2'}`}>
               {displayPercentage}%
             </div>
-            <p className="text-text-light mb-4">
+            <p className={`text-text-light ${isSpaceRace ? 'mb-2' : 'mb-4'}`}>
               {isSpaceRace
                 ? `Your team scored ${displayPercentage}% (${displayScore} of ${displayTotal} correct)`
                 : `You got ${displayScore} out of ${displayTotal} questions correct`}
@@ -2201,7 +2254,7 @@ const AudienceQuizAttempt = ({
             </div>
             
             {/* Score Breakdown */}
-            <div className="mt-4 grid grid-cols-3 gap-2 text-center">
+            <div className={`${isSpaceRace ? 'mt-3' : 'mt-4'} grid grid-cols-3 gap-2 text-center`}>
               <div className="bg-white/50 rounded-lg p-2">
                 <div className="text-2xl font-bold text-text">{displayScore}</div>
                 <div className="text-xs text-text-light">Correct</div>
@@ -2217,8 +2270,8 @@ const AudienceQuizAttempt = ({
             </div>
           </div>
           
-          <div className="mb-6">
-            <p className="text-sm text-text-light mb-2">
+          <div className={isSpaceRace ? 'mb-3' : 'mb-6'}>
+            <p className={`text-sm text-text-light ${isSpaceRace ? 'mb-1.5' : 'mb-2'}`}>
               Redirecting {isSpaceRace ? 'back to Space Race' : 'to homepage'} in <span className="font-semibold text-primary">{redirectCountdown}</span> seconds...
             </p>
             <div className="w-full bg-neutral-200 rounded-full h-2">
@@ -2284,25 +2337,27 @@ const AudienceQuizAttempt = ({
       {/* Quiz Info Header */}
       {!embedded && (
       <div className="bg-white border-b border-neutral-200">
-        <div className="max-w-4xl mx-auto px-4 py-4">
-          <div className="grid grid-cols-3 items-center gap-2 sm:gap-4">
+        <div className="max-w-4xl mx-auto px-4 py-3">
+          <div className="grid grid-cols-3 items-center gap-2">
             <div className="flex justify-start min-w-0">
-              <img
-                src="/FeedEcho-logo.png.png"
-                alt="FeedEcho"
-                className="h-24 sm:h-32 w-auto max-w-full object-contain object-left mix-blend-multiply"
-              />
+              <div className="leading-none">
+                <p className="font-bold italic text-[#6D415F] text-base">FeedEcho</p>
+                <p className="text-[11px] text-gray-500 mt-0.5">The loop of learning</p>
+              </div>
             </div>
             <div className="min-w-0 flex flex-wrap items-center justify-center gap-x-2 gap-y-1">
-              <h1 className="text-sm sm:text-xl font-semibold text-text text-center leading-tight break-words">
+              <h1 className="text-sm sm:text-base font-bold text-gray-900 text-center leading-tight break-words">
                 {quiz.title}
               </h1>
-              <span className="px-3 py-1 bg-primary/10 text-primary rounded-full text-xs sm:text-sm font-medium whitespace-nowrap">
+              <span
+                className="px-2 py-0.5 rounded-full text-xs font-medium whitespace-nowrap"
+                style={{ backgroundColor: '#F1E5EB', color: '#6D415F' }}
+              >
                 {quiz.type}
               </span>
             </div>
             <div className="flex justify-end min-w-0">
-              <div className="flex items-center space-x-2 text-text-light min-w-0">
+              <div className="flex items-center gap-1.5 text-text-light min-w-0">
                 <Users className="w-4 h-4 shrink-0" />
                 <span className="text-sm truncate">{studentSession?.studentName || 'Audience'}</span>
               </div>
@@ -2310,7 +2365,7 @@ const AudienceQuizAttempt = ({
           </div>
           {/* Duration notice + single live countdown (header shows Duration label only) */}
           {(isSpaceRace || (quiz.launchSettings && (quiz.launchSettings.timePerStudentMinutes || quiz.launchSettings.quizAvailabilityMinutes || quiz.launchSettings.timeLimit || quiz.launchSettings.countdown))) && (
-            <div className="mt-3 p-3 rounded-lg border bg-primary/10 border-primary/20">
+            <div className="mt-2 px-3 py-2 rounded-lg border bg-primary/10 border-primary/20">
               <div className="flex items-center justify-between">
                 <div className="flex items-center space-x-2 text-primary">
                   <Clock className="w-4 h-4" />
@@ -2347,26 +2402,6 @@ const AudienceQuizAttempt = ({
 
       {!embedded && <GuestProgressLoginBanner />}
 
-      {/* Progress Bar */}
-      <div className="bg-white border-b border-neutral-200">
-        <div className="max-w-4xl mx-auto px-4 py-3">
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-sm text-text-light">
-              Question {currentQuestion + 1} of {quiz.questions.length}
-            </span>
-            <span className="text-sm font-medium text-primary">
-              {Math.round(progress)}% Complete
-            </span>
-          </div>
-          <div className="w-full bg-neutral-200 rounded-full h-2">
-            <div
-              className="bg-gradient-to-r from-primary to-primary/80 h-2 rounded-full transition-all duration-300 ease-out"
-              style={{ width: `${progress}%` }}
-            ></div>
-          </div>
-        </div>
-      </div>
-
       {/* Quiz Duration Timer - Always show for Space Races, even when embedded */}
       {embedded && isSpaceRace && timeLeft !== null && (
         <div className="bg-primary/10 border-b border-primary/20">
@@ -2381,31 +2416,41 @@ const AudienceQuizAttempt = ({
         </div>
       )}
 
-      {/* Quiz Content */}
-      <div className="max-w-4xl mx-auto px-4 py-8">
-        {/* key forces remount + fresh RTDB subscription when question changes */}
+      {/* Quiz Content — single card: progress, question, options, and nav are siblings */}
+      <div className="max-w-4xl mx-auto px-4 py-4">
         <div
           key={currentQuestionId || `q-${currentQuestion}`}
-          className="bg-white rounded-2xl shadow-soft border border-neutral-200 p-8"
+          className="bg-white rounded-2xl shadow-soft border border-neutral-200 p-4 sm:p-5"
         >
-          {/* Question */}
-          <div className="mb-8">
-            <div className="flex items-start space-x-4 mb-6">
-              <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
-                <span className="text-primary font-semibold">
-                  {currentQuestion + 1}
-                </span>
-              </div>
-              <h3 className="text-xl font-semibold text-text flex-1">
-                {question.questionText}
-              </h3>
-            </div>
+          <div className="flex items-center justify-between">
+            <span className="text-sm text-text-light">
+              Question {currentQuestion + 1} of {quiz.questions.length}
+            </span>
+            <span className="text-sm font-medium text-[#6D415F]">
+              {Math.round(progress)}% Complete
+            </span>
+          </div>
+          <div className="mt-2 w-full bg-neutral-200 rounded-full h-[5px]">
+            <div
+              className="bg-[#6D415F] h-[5px] rounded-full transition-all duration-300 ease-out"
+              style={{ width: `${progress}%` }}
+            ></div>
           </div>
 
-          {/* Answer Options */}
+          <div className="mt-4 flex items-start gap-3">
+            <div className="w-8 h-8 rounded-full bg-[#F1E5EB] flex items-center justify-center flex-shrink-0">
+              <span className="text-[#6D415F] font-semibold text-sm">
+                {currentQuestion + 1}
+              </span>
+            </div>
+            <h3 className="text-base sm:text-lg font-semibold text-text flex-1 leading-snug">
+              {question.questionText}
+            </h3>
+          </div>
+
           {isSpaceRace && isCurrentQuestionSubmitted && (
             <div
-              className="mb-4 p-3 rounded-lg font-semibold text-sm flex items-center gap-2"
+              className="mt-4 p-3 rounded-lg font-semibold text-sm flex items-center gap-2"
               style={{
                 backgroundColor: '#f5eef2',
                 border: '1.5px solid #6d415f',
@@ -2417,7 +2462,7 @@ const AudienceQuizAttempt = ({
           )}
 
           {isSpaceRace && displaySelectedOption && !isCurrentQuestionSubmitted && (
-            <div className="mb-4 p-3 rounded-lg bg-primary/5 border border-primary/20 text-sm text-text">
+            <div className="mt-4 p-3 rounded-lg bg-primary/5 border border-primary/20 text-sm text-text">
               Team selected: <strong className="text-primary">{displaySelectedOption}</strong>
               {teamSelection?.selectedByName ? (
                 <span className="text-text/70"> ({teamSelection.selectedByName})</span>
@@ -2425,16 +2470,16 @@ const AudienceQuizAttempt = ({
             </div>
           )}
 
-          <div className="space-y-3">
+          <div className="mt-4 space-y-2.5">
             {effectiveQuestionType === 'Multiple Choice' && (question.options || []).map((option, index) => {
               const optionText = option.text ?? option;
               const isTeamSelected =
-                isSpaceRace && displaySelectedOption === optionText;
-              const isSelected = displaySelectedOption === optionText;
+                isSpaceRace && String(displaySelectedOption) === String(optionText);
+              const isSelected = String(displaySelectedOption) === String(optionText);
               const optionLocked = isSpaceRace && isCurrentQuestionSubmitted;
               return (
               <label
-                key={index}
+                key={`${index}-${isSelected ? 'selected' : 'idle'}`}
                 onClick={(e) => {
                   if (optionLocked) {
                     e.preventDefault();
@@ -2447,12 +2492,12 @@ const AudienceQuizAttempt = ({
                   opacity: optionLocked ? 0.5 : 1,
                   cursor: optionLocked ? 'not-allowed' : 'pointer',
                 }}
-                className={`flex items-center p-4 rounded-xl border-2 transition-all ${
+                className={`flex items-center py-3 px-4 rounded-xl border-[1.5px] transition-all ${
                   optionLocked
                     ? 'border-gray-200 bg-gray-50'
                     : isTeamSelected || isSelected
-                    ? 'border-[#6d415f] bg-[#f5eef2] ring-2 ring-[#6d415f]/20'
-                    : 'border-neutral-300 hover:border-neutral-400'
+                    ? 'border-[#6D415F] bg-[#F1E5EB]'
+                    : 'border-neutral-300 bg-white hover:border-neutral-400'
                 }`}
               >
                 <input
@@ -2465,7 +2510,7 @@ const AudienceQuizAttempt = ({
                     if (optionLocked) return;
                     handleAnswerChange(currentQuestion, optionText);
                   }}
-                  className="w-4 h-4 text-[#6d415f] border-neutral-300 focus:ring-[#6d415f] focus:ring-2"
+                  className="w-4 h-4 accent-[#6D415F] text-[#6D415F] border-neutral-300"
                 />
                 <span className="ml-3 text-text">{optionText}</span>
               </label>
@@ -2476,12 +2521,12 @@ const AudienceQuizAttempt = ({
               <>
                 {['True', 'False'].map((option) => {
                   const isTeamSelected =
-                    isSpaceRace && displaySelectedOption === option;
-                  const isSelected = displaySelectedOption === option;
+                    isSpaceRace && String(displaySelectedOption) === String(option);
+                  const isSelected = String(displaySelectedOption) === String(option);
                   const optionLocked = isSpaceRace && isCurrentQuestionSubmitted;
                   return (
                   <label
-                    key={option}
+                    key={`${option}-${isSelected ? 'selected' : 'idle'}`}
                     onClick={(e) => {
                       if (optionLocked) {
                         e.preventDefault();
@@ -2494,12 +2539,12 @@ const AudienceQuizAttempt = ({
                       opacity: optionLocked ? 0.5 : 1,
                       cursor: optionLocked ? 'not-allowed' : 'pointer',
                     }}
-                    className={`flex items-center p-4 rounded-xl border-2 transition-all ${
+                    className={`flex items-center py-3 px-4 rounded-xl border-[1.5px] transition-all ${
                       optionLocked
                         ? 'border-gray-200 bg-gray-50'
                         : isTeamSelected || isSelected
-                        ? 'border-[#6d415f] bg-[#f5eef2] ring-2 ring-[#6d415f]/20'
-                        : 'border-neutral-300 hover:border-neutral-400'
+                        ? 'border-[#6D415F] bg-[#F1E5EB]'
+                        : 'border-neutral-300 bg-white hover:border-neutral-400'
                     }`}
                   >
                     <input
@@ -2512,7 +2557,7 @@ const AudienceQuizAttempt = ({
                         if (optionLocked) return;
                         handleAnswerChange(currentQuestion, option);
                       }}
-                      className="w-4 h-4 text-[#6d415f] border-neutral-300 focus:ring-[#6d415f] focus:ring-2"
+                      className="w-4 h-4 accent-[#6D415F] text-[#6D415F] border-neutral-300"
                     />
                     <span className="ml-3 text-text">{option}</span>
                   </label>
@@ -2539,8 +2584,8 @@ const AudienceQuizAttempt = ({
                   opacity: isSpaceRace && isCurrentQuestionSubmitted ? 0.5 : 1,
                   cursor: isSpaceRace && isCurrentQuestionSubmitted ? 'not-allowed' : 'text',
                 }}
-                className={`w-full px-4 py-3 border-2 border-neutral-300 rounded-xl focus:ring-2 focus:ring-[#6d415f] focus:border-[#6d415f] transition-colors text-text resize-none ${
-                  isSpaceRace && isCurrentQuestionSubmitted ? 'bg-gray-50' : ''
+                className={`w-full px-4 py-3 border-[1.5px] border-neutral-300 rounded-xl focus:ring-2 focus:ring-[#6D415F] focus:border-[#6D415F] transition-colors text-text resize-none ${
+                  isSpaceRace && isCurrentQuestionSubmitted ? 'bg-gray-50' : 'bg-white'
                 }`}
                 rows={effectiveQuestionType === 'Short Answer' ? 3 : 6}
               />
@@ -2556,11 +2601,11 @@ const AudienceQuizAttempt = ({
                   isSubmittingQuestion ||
                   !(displaySelectedOption && String(displaySelectedOption).trim())
                 }
-                className={`px-6 py-3 rounded-lg font-semibold text-white flex items-center gap-2 transition-all ${
+                className={`px-5 py-2.5 rounded-lg font-semibold text-white flex items-center gap-2 transition-all ${
                   isSubmittingQuestion ||
                   !(displaySelectedOption && String(displaySelectedOption).trim())
-                    ? 'bg-gray-300 cursor-not-allowed opacity-60'
-                    : 'bg-[#6d415f] hover:bg-[#5c3650] cursor-pointer'
+                    ? 'bg-neutral-200 text-neutral-400 cursor-not-allowed'
+                    : 'bg-[#6D415F] hover:bg-[#5c3650] cursor-pointer'
                 }`}
               >
                 {isSubmittingQuestion ? 'Submitting...' : '🚀 Submit Answer for Team'}
@@ -2568,15 +2613,14 @@ const AudienceQuizAttempt = ({
             </div>
           )}
 
-          {/* Navigation */}
-          <div className="flex items-center justify-between mt-8">
+          <div className="flex items-center justify-between mt-5">
             <button
               onClick={() => setCurrentQuestion(currentQuestion - 1)}
               disabled={currentQuestion === 0}
-              className={`flex items-center space-x-2 px-6 py-3 rounded-xl transition-all ${
+              className={`flex items-center space-x-2 px-5 py-2.5 rounded-xl font-medium transition-all ${
                 currentQuestion === 0
-                  ? 'bg-neutral-100 text-neutral-400 cursor-not-allowed'
-                  : 'bg-white border-2 border-neutral-300 text-text hover:border-neutral-400'
+                  ? 'bg-neutral-200 text-neutral-400 cursor-not-allowed'
+                  : 'bg-white border-[1.5px] border-[#6D415F] text-[#6D415F] hover:bg-[#F1E5EB]'
               }`}
             >
               <ArrowLeft className="w-4 h-4" />
@@ -2589,7 +2633,7 @@ const AudienceQuizAttempt = ({
                   <button
                     type="button"
                     onClick={() => setIsSubmitted(true)}
-                    className="px-6 py-3 rounded-lg font-semibold text-white bg-[#6d415f] hover:bg-[#5c3650] transition-all"
+                    className="px-5 py-2.5 rounded-lg font-bold text-white bg-[#6D415F] hover:bg-[#5c3650] transition-all"
                   >
                     Finish
                   </button>
@@ -2597,7 +2641,7 @@ const AudienceQuizAttempt = ({
                   <button
                     type="button"
                     onClick={() => setCurrentQuestion(currentQuestion + 1)}
-                    className="px-6 py-3 rounded-lg font-semibold text-white bg-[#6d415f] hover:bg-[#5c3650] transition-all"
+                    className="px-5 py-2.5 rounded-lg font-bold text-white bg-[#6D415F] hover:bg-[#5c3650] transition-all"
                   >
                     Next →
                   </button>
@@ -2607,10 +2651,10 @@ const AudienceQuizAttempt = ({
               <button
                 onClick={handleSubmitQuiz}
                 disabled={isSubmitting || !hasAnyAnswer()}
-                className={`flex items-center space-x-2 px-6 py-3 rounded-xl transition-all ${
+                className={`flex items-center space-x-2 px-5 py-2.5 rounded-xl font-bold transition-all ${
                   isSubmitting || !hasAnyAnswer()
-                    ? 'bg-neutral-100 text-neutral-400 cursor-not-allowed'
-                    : 'bg-primary text-white hover:bg-primary/90'
+                    ? 'bg-neutral-200 text-neutral-400 cursor-not-allowed'
+                    : 'bg-[#6D415F] text-white hover:bg-[#5c3650]'
                 }`}
               >
                 {isSubmitting ? (
@@ -2629,10 +2673,10 @@ const AudienceQuizAttempt = ({
               <button
                 onClick={() => setCurrentQuestion(currentQuestion + 1)}
                 disabled={!getAnswerForQuestion(question, currentQuestion)}
-                className={`flex items-center space-x-2 px-6 py-3 rounded-xl transition-all ${
+                className={`flex items-center space-x-2 px-5 py-2.5 rounded-xl font-bold transition-all ${
                   !getAnswerForQuestion(question, currentQuestion)
-                    ? 'bg-neutral-100 text-neutral-400 cursor-not-allowed'
-                    : 'bg-primary text-white hover:bg-primary/90'
+                    ? 'bg-neutral-200 text-neutral-400 cursor-not-allowed'
+                    : 'bg-[#6D415F] text-white hover:bg-[#5c3650]'
                 }`}
               >
                 <span>Next</span>

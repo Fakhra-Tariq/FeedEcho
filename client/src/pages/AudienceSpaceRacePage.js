@@ -425,7 +425,7 @@ export default function AudienceSpaceRacePage() {
 
   return (
     <>
-      <style>{`.quiz-embed-root > div { min-height: 0 !important; height: auto !important; }`}</style>
+      <style>{`.quiz-embed-root { min-height: 100%; } .quiz-embed-root > div { min-height: 100% !important; }`}</style>
       <div className="flex flex-col h-screen min-h-screen overflow-hidden bg-background">
         <div className="flex-shrink-0 bg-white border-b border-neutral-200 px-4 h-14 flex items-center justify-between">
           <button
@@ -444,7 +444,7 @@ export default function AudienceSpaceRacePage() {
         </div>
 
         <div className="flex-1 min-h-0 flex flex-col md:flex-row overflow-hidden">
-          <div className="w-full md:w-[60%] flex flex-col min-w-0 min-h-0 overflow-hidden border-r border-neutral-200 flex-1">
+          <div className="w-full md:flex-1 flex flex-col min-w-0 min-h-0 overflow-hidden border-r border-neutral-200">
             <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
               {isQuizView && (
                 <SpaceRaceGamePanel
@@ -457,7 +457,7 @@ export default function AudienceSpaceRacePage() {
               )}
               <div className="flex-1 min-h-0 overflow-y-auto bg-background">
                 {isQuizView ? (
-                  <div className="space-race-quiz-embed min-h-full quiz-embed-root">
+                  <div className="space-race-quiz-embed min-h-full h-full quiz-embed-root">
                     <AudienceQuizAttempt
                       embedded
                       spaceRaceMode
@@ -482,7 +482,7 @@ export default function AudienceSpaceRacePage() {
             </div>
           </div>
 
-          <div className="w-full md:w-[40%] flex-shrink-0 h-[45vh] md:h-full min-h-0 overflow-hidden">
+          <div className="w-full md:w-[34%] xl:w-[32%] flex-shrink-0 h-[45vh] md:h-full min-h-0 overflow-hidden">
             {resolvedTeamId != null && resolvedTeamId !== '' ? (
               <SpaceRaceTeamChat
                 raceId={activeRaceId}

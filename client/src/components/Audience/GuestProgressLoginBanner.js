@@ -28,13 +28,13 @@ export default function GuestProgressLoginBanner() {
   };
 
   return (
-    <div className="bg-primary/10 border-b border-primary/20">
-      <div className="max-w-4xl mx-auto px-4 py-3 flex items-start justify-between gap-3">
+    <div className="bg-[#F1E5EB]">
+      <div className="max-w-4xl mx-auto px-4 py-2 flex items-center justify-between gap-3">
         <p className="text-sm text-text min-w-0">
           Log in to save this to your progress history.{' '}
           <Link
             to="/join"
-            className="font-semibold text-primary hover:text-primary/80 underline underline-offset-2"
+            className="font-semibold text-[#6D415F] hover:text-[#5A344D] underline underline-offset-2"
           >
             Log in
           </Link>
@@ -43,7 +43,7 @@ export default function GuestProgressLoginBanner() {
           type="button"
           onClick={handleDismiss}
           aria-label="Dismiss"
-          className="shrink-0 p-1 rounded-md text-text/60 hover:text-text hover:bg-primary/10 transition-colors"
+          className="shrink-0 p-1 rounded-md text-text/60 hover:text-text hover:bg-white/40 transition-colors"
         >
           <X className="w-4 h-4" />
         </button>
