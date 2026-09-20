@@ -15,6 +15,15 @@ const {
   getStudentHistory,
   getSharedResources,
 } = require('../utils/spaceRaceResourceArchive');
+const {
+  normalizeSpaceRaceQuestionKey,
+  answersIncludeQuestion,
+  calculateTeamScoreFromAnswers,
+  getTeamScoreValue,
+  getSharedTeamScoreState,
+  buildSharedTeamScoreUpdates,
+  isTeamQuizTimerExpired,
+} = require('../utils/spaceRaceTeamScore');
 const router = express.Router();
 
 // ERD-aligned RTDB paths
@@ -53,58 +62,6 @@ const resolveQuizQuestion = (questions, questionId, questionIndex) => {
       `q-${index}` === normalizedQuestionId
   );
   return fallbackIndex >= 0 ? questions[fallbackIndex] : null;
-};
-
-/** Normalize question ids so q0 / q-0 / "0" compare as the same team answer. */
-const normalizeSpaceRaceQuestionKey = (questionId, questionIndex = null) => {
-  if (questionId !== undefined && questionId !== null && String(questionId).trim() !== '') {
-    const raw = String(questionId).trim();
-    const qMatch = raw.match(/^q-?(\d+)$/i);
-    if (qMatch) return `q${qMatch[1]}`;
-    if (/^\d+$/.test(raw)) return `q${raw}`;
-    return raw;
-  }
-  if (Number.isInteger(questionIndex)) return `q${questionIndex}`;
-  return '';
-};
-
-const answersIncludeQuestion = (answers, questionId, questionIndex = null) => {
-  const target = normalizeSpaceRaceQuestionKey(questionId, questionIndex);
-  if (!target || !Array.isArray(answers)) return false;
-  return answers.some((a) => {
-    if (!a) return false;
-    const key = normalizeSpaceRaceQuestionKey(a.questionId, a.questionIndex);
-    return key === target;
-  });
-};
-
-/** Team score out of 100: each correct answer is worth (100 / N), rounded. */
-const calculateTeamScoreFromAnswers = (answers, totalQuestions) => {
-  const n = Number(totalQuestions) || 0;
-  if (n <= 0) return { score: 0, correctCount: 0, pointsPerQuestion: 0 };
-
-  const pointsPerQuestion = 100 / n;
-  const seen = new Set();
-  let correctCount = 0;
-
-  (Array.isArray(answers) ? answers : []).forEach((ans) => {
-    if (!ans) return;
-    const key = normalizeSpaceRaceQuestionKey(ans.questionId, ans.questionIndex);
-    if (!key || seen.has(key)) return;
-    seen.add(key);
-    if (ans.isCorrect === true) correctCount += 1;
-  });
-
-  return {
-    score: Math.round(correctCount * pointsPerQuestion),
-    correctCount,
-    pointsPerQuestion,
-  };
-};
-
-const getTeamScoreValue = (rawValue) => {
-  if (typeof rawValue === 'number') return Number.isFinite(rawValue) ? rawValue : 0;
-  return Number(rawValue?.score ?? 0) || 0;
 };
 
 const normalizeTeamAssignment = (value) => {
@@ -1110,68 +1067,47 @@ router.post('/start', async (req, res) => {
   }
 });
 
-// Helper function to recalculate team scores using dynamic scoring
+// Recalculate from shared team lock nodes so every member gets the same team score
 async function recalculateTeamScores(raceId, quizData) {
   try {
     console.log('🔄 Recalculating team scores with dynamic scoring for race:', raceId);
-    
+
     const participantsSnapshot = await raceParticipantsRef(raceId).get();
     if (!participantsSnapshot.exists()) {
       console.log('No participants found for race:', raceId);
       return;
     }
-    
+
     const participants = participantsSnapshot.val() || {};
     const totalQuestions = quizData.questions?.length || 0;
-    
-    console.log('📊 Recalculation parameters:', { totalQuestions });
-    
-    const teamScores = {};
+    const teamIds = new Set();
+    Object.values(participants).forEach((p) => {
+      if (p && p.teamId != null) teamIds.add(p.teamId);
+    });
+
     const updates = {};
-    
-    // Process each participant — score = round(correct / N * 100)
-    Object.entries(participants).forEach(([pid, participant]) => {
-      const teamId = participant.teamId || 1;
-      const answers = Array.isArray(participant.answers) ? participant.answers : [];
-      const { score: newScore, correctCount, pointsPerQuestion } = calculateTeamScoreFromAnswers(
-        answers,
-        totalQuestions
+    const teamScores = {};
+
+    for (const teamId of teamIds) {
+      const shared = await getSharedTeamScoreState(raceId, teamId, totalQuestions, participants);
+      Object.assign(
+        updates,
+        buildSharedTeamScoreUpdates({
+          raceId,
+          teamId,
+          allParticipants: participants,
+          score: shared.score,
+          answers: shared.answers,
+          extraTeamScoreFields: { recalculated: true, correctCount: shared.correctCount, totalQuestions },
+        })
       );
-      
-      console.log(`📊 Recalculating participant ${pid}:`, {
-        teamId,
-        correctCount,
-        newScore,
-        pointsPerQuestion,
-        oldScore: participant.score,
-        totalAnswers: answers.length
-      });
-      
-      // Update participant score only (don't touch completedAt - that's set when they finish)
-      updates[`space_race_participants/${raceId}/${pid}/score`] = newScore;
-      
-      // Aggregate team score (use max since all team members share team performance)
-      if (!teamScores[teamId]) {
-        teamScores[teamId] = 0;
-      }
-      teamScores[teamId] = Math.max(teamScores[teamId], newScore);
-    });
-    
-    // Update team scores
-    Object.entries(teamScores).forEach(([teamId, score]) => {
-      updates[`space_race_team_scores/${raceId}/team_${teamId}`] = {
-        score: score,
-        lastUpdatedAt: new Date().toISOString(),
-        recalculated: true
-      };
-    });
-    
-    // Apply all updates
+      teamScores[teamId] = shared.score;
+    }
+
     if (Object.keys(updates).length > 0) {
       await db.ref().update(updates);
       console.log('✅ Team scores recalculated successfully:', teamScores);
     }
-    
   } catch (error) {
     console.error('❌ Error recalculating team scores:', error);
   }
@@ -1319,6 +1255,16 @@ router.post('/:id/submit-answer', async (req, res) => {
     if (teamId === undefined || teamId === null) {
       return res.status(400).json({ success: false, error: 'Participant is not assigned to a team' });
     }
+
+    const timerState = await isTeamQuizTimerExpired(id, teamId);
+    if (timerState.expired) {
+      return res.status(403).json({
+        success: false,
+        error: "Time's up — this quiz is closed.",
+        expired: true,
+        endTime: timerState.timer?.endTime || null,
+      });
+    }
     
     let quizData = null;
     if (race.quiz && race.quiz.questions) {
@@ -1431,48 +1377,10 @@ router.post('/:id/submit-answer', async (req, res) => {
     const allParticipants = allParticipantsSnap.val() || {};
     const submittingParticipant = allParticipants[participantId];
     const submitTeamId = submittingParticipant?.teamId ?? teamId;
+    const submittedAt = new Date().toISOString();
     const updates = {};
 
-    // Award points + answer to every member of the same team
-    Object.entries(allParticipants).forEach(([pid, pData]) => {
-      if (!pData || String(pData.teamId) !== String(submitTeamId)) return;
-
-      const existingAnswers = Array.isArray(pData.answers) ? pData.answers : [];
-      const alreadyAnswered = existingAnswers.some(
-        (a) =>
-          String(a.questionId) === String(resolvedQuestionId) ||
-          String(a.questionId) === String(questionId)
-      );
-      if (!alreadyAnswered) {
-        updates[`space_race_participants/${id}/${pid}/score`] =
-          (Number(pData.score) || 0) + points;
-        updates[`space_race_participants/${id}/${pid}/answers`] = [
-          ...existingAnswers,
-          {
-            questionId: resolvedQuestionId,
-            answer,
-            isCorrect,
-            points,
-            submittedAt: new Date().toISOString(),
-            questionIndex: questionIndex || 0,
-            awardedByTeammate: pid !== participantId,
-          },
-        ];
-      }
-    });
-
-    // Authoritative team score (team_N path used by leaderboard + completion card)
-    const teamScoreSnap = await db
-      .ref(`space_race_team_scores/${id}/team_${submitTeamId}`)
-      .get();
-    const newTeamScore = getTeamScoreValue(teamScoreSnap.val()) + points;
-    updates[`space_race_team_scores/${id}/team_${submitTeamId}`] = {
-      score: newTeamScore,
-      lastUpdatedAt: new Date().toISOString(),
-      lastUpdatedBy: participantId,
-    };
-
-    // Lock question for all teammates (real-time via RTDB)
+    // Lock question for all teammates (real-time via RTDB) — lock behavior unchanged
     updates[
       `space_race_team_selection/${id}/team_${submitTeamId}/question_${resolvedQuestionId}/submitted`
     ] = true;
@@ -1487,13 +1395,51 @@ router.post('/:id/submit-answer', async (req, res) => {
     ] = submittingParticipant?.name || participant?.name || 'A teammate';
     updates[
       `space_race_team_selection/${id}/team_${submitTeamId}/question_${resolvedQuestionId}/submittedAt`
-    ] = new Date().toISOString();
+    ] = submittedAt;
     updates[
       `space_race_team_selection/${id}/team_${submitTeamId}/question_${resolvedQuestionId}/isCorrect`
     ] = isCorrect;
     updates[
       `space_race_team_selection/${id}/team_${submitTeamId}/question_${resolvedQuestionId}/points`
     ] = points;
+
+    // Score once from the team's shared submitted answers (including this lock)
+    const sharedBefore = await getSharedTeamScoreState(
+      id,
+      submitTeamId,
+      totalQuestions,
+      allParticipants
+    );
+    const teamAnswers = Array.isArray(sharedBefore.answers) ? [...sharedBefore.answers] : [];
+    if (!answersIncludeQuestion(teamAnswers, resolvedQuestionId, resolvedIndex)) {
+      teamAnswers.push({
+        questionId: resolvedQuestionId,
+        answer,
+        isCorrect,
+        points,
+        submittedAt,
+        submittedBy: participantId,
+        submittedByName: submittingParticipant?.name || participant?.name || 'A teammate',
+        questionIndex: Number.isInteger(resolvedIndex) && resolvedIndex >= 0 ? resolvedIndex : 0,
+      });
+    }
+    const { score: newTeamScore, correctCount } = calculateTeamScoreFromAnswers(
+      teamAnswers,
+      totalQuestions
+    );
+
+    Object.assign(
+      updates,
+      buildSharedTeamScoreUpdates({
+        raceId: id,
+        teamId: submitTeamId,
+        allParticipants,
+        score: newTeamScore,
+        answers: teamAnswers,
+        lastUpdatedBy: participantId,
+        extraTeamScoreFields: { correctCount, totalQuestions },
+      })
+    );
 
     await db.ref().update(updates);
 
@@ -1541,12 +1487,24 @@ router.post('/:id/start-quiz', async (req, res) => {
     
     // Only set if not already set for this team
     if (teamTimerSnap.exists() && teamTimerSnap.val().quizStartedAt) {
-      console.log('Quiz already started for this team:', teamId, 'at:', teamTimerSnap.val().quizStartedAt);
+      const existingTimer = teamTimerSnap.val();
+      const existingEndMs = existingTimer.endTime ? new Date(existingTimer.endTime).getTime() : NaN;
+      if (Number.isFinite(existingEndMs) && existingEndMs <= Date.now()) {
+        console.log('Quiz time already expired for this team:', teamId);
+        return res.status(403).json({
+          success: false,
+          expired: true,
+          error: "Time's up — this quiz is closed.",
+          quizStartedAt: existingTimer.quizStartedAt,
+          endTime: existingTimer.endTime,
+        });
+      }
+      console.log('Quiz already started for this team:', teamId, 'at:', existingTimer.quizStartedAt);
       return res.json({ 
         success: true, 
         message: 'Quiz already started for this team',
-        quizStartedAt: teamTimerSnap.val().quizStartedAt,
-        endTime: teamTimerSnap.val().endTime
+        quizStartedAt: existingTimer.quizStartedAt,
+        endTime: existingTimer.endTime
       });
     }
     
@@ -1681,10 +1639,6 @@ router.get('/:id/final-score', async (req, res) => {
     
     const participant = participantSnap.val();
     
-    // Get all answers for this participant
-    // Note: Answers are stored in the participant document, not in a separate subcollection
-    const answers = participant.answers || [];
-
     // Load quiz data for scoring
     let quizData = race.quiz || null;
     if (!quizData && race.quizId) {
@@ -1710,30 +1664,31 @@ router.get('/:id/final-score', async (req, res) => {
       });
     }
     
-    // Prefer team collective score from stored answer correctness (same formula as submit-answer)
     const totalQuestions = Array.isArray(quizData.questions) ? quizData.questions.length : 0;
     const teamId = participant.teamId;
-    let teamAnswers = Array.isArray(answers) ? answers : [];
+    const allSnap = await raceParticipantsRef(id).get();
+    const all = allSnap.exists() ? allSnap.val() || {} : {};
 
-    if (teamId !== undefined && teamId !== null) {
-      try {
-        const allSnap = await raceParticipantsRef(id).get();
-        const all = allSnap.exists() ? allSnap.val() || {} : {};
-        const merged = new Map();
-        Object.values(all).forEach((p) => {
-          if (!p || String(p.teamId) !== String(teamId)) return;
-          (Array.isArray(p.answers) ? p.answers : []).forEach((ans) => {
-            const key = normalizeSpaceRaceQuestionKey(ans?.questionId, ans?.questionIndex);
-            if (key && !merged.has(key)) merged.set(key, ans);
-          });
-        });
-        if (merged.size > 0) teamAnswers = Array.from(merged.values());
-      } catch (mergeErr) {
-        console.warn('Could not merge team answers for final score:', mergeErr.message);
-      }
+    if (teamId === undefined || teamId === null) {
+      const answers = Array.isArray(participant.answers) ? participant.answers : [];
+      const { score, correctCount } = calculateTeamScoreFromAnswers(answers, totalQuestions);
+      const percentage = totalQuestions > 0 ? Math.round((correctCount / totalQuestions) * 100) : 0;
+      await raceParticipantsRef(id).child(participantId).update({
+        score,
+        completedAt: new Date().toISOString(),
+      });
+      return res.json({
+        success: true,
+        score,
+        correctAnswers: correctCount,
+        totalQuestions,
+        percentage,
+        points: score,
+      });
     }
 
-    const { score, correctCount } = calculateTeamScoreFromAnswers(teamAnswers, totalQuestions);
+    const shared = await getSharedTeamScoreState(id, teamId, totalQuestions, all);
+    const { score, correctCount, answers: teamAnswers } = shared;
     const percentage = totalQuestions > 0 ? Math.round((correctCount / totalQuestions) * 100) : 0;
 
     console.log('📊 Backend Final Team Score Result:', {
@@ -1742,37 +1697,19 @@ router.get('/:id/final-score', async (req, res) => {
       totalQuestions,
       percentage,
       teamId,
+      sharedAnswerCount: teamAnswers.length,
     });
 
-    const completedAt = new Date().toISOString();
-    const finalUpdates = {
-      [`space_race_participants/${id}/${participantId}/score`]: score,
-      [`space_race_participants/${id}/${participantId}/completedAt`]: completedAt,
-    };
-
-    // Keep every teammate on the same collective score
-    if (teamId !== undefined && teamId !== null) {
-      const allSnap = await raceParticipantsRef(id).get();
-      const all = allSnap.exists() ? allSnap.val() || {} : {};
-      Object.entries(all).forEach(([pid, p]) => {
-        if (!p || String(p.teamId) !== String(teamId)) return;
-        finalUpdates[`space_race_participants/${id}/${pid}/score`] = score;
-        finalUpdates[`space_race_participants/${id}/${pid}/answers`] = teamAnswers.map((ans) => ({
-          ...ans,
-          awardedByTeammate:
-            pid === participantId
-              ? ans.awardedByTeammate === true
-              : ans.awardedByTeammate !== false,
-        }));
-      });
-      finalUpdates[`space_race_team_scores/${id}/team_${teamId}`] = {
-        score,
-        correctCount,
-        totalQuestions,
-        lastUpdatedAt: completedAt,
-        lastUpdatedBy: participantId,
-      };
-    }
+    const finalUpdates = buildSharedTeamScoreUpdates({
+      raceId: id,
+      teamId,
+      allParticipants: all,
+      score,
+      answers: teamAnswers,
+      lastUpdatedBy: participantId,
+      markCompletedPid: participantId,
+      extraTeamScoreFields: { correctCount, totalQuestions },
+    });
 
     await db.ref().update(finalUpdates);
     

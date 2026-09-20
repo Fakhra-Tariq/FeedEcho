@@ -165,6 +165,22 @@ export default function SpaceRaceGamePanel({
     { enabled: Boolean(raceId && participant?.teamId != null) }
   );
 
+  const [quizTimeExpired, setQuizTimeExpired] = useState(false);
+
+  useEffect(() => {
+    if (!teamTimer?.endTime) {
+      setQuizTimeExpired(false);
+      return undefined;
+    }
+    const checkExpired = () => {
+      const end = new Date(teamTimer.endTime).getTime();
+      setQuizTimeExpired(Number.isFinite(end) && end <= Date.now());
+    };
+    checkExpired();
+    const interval = setInterval(checkExpired, 1000);
+    return () => clearInterval(interval);
+  }, [teamTimer?.endTime]);
+
   const { list: allParticipants, error: participantsRtdbError } = useRtdbList(
     raceId ? `space_race_participants/${raceId}` : null,
     { enabled: Boolean(raceId), empty: [] }
@@ -280,6 +296,10 @@ export default function SpaceRaceGamePanel({
   const handleStartQuiz = async () => {
     const qId = quizId || raceData?.quizId;
     if (qId && raceId && participant?.teamId != null) {
+      if (teamTimer?.endTime && new Date(teamTimer.endTime).getTime() <= Date.now()) {
+        setQuizTimeExpired(true);
+        return;
+      }
       // Always call startQuiz to ensure timer is set properly for this team
       // The backend handles the case where quiz is already started for this team
       try {
@@ -293,6 +313,11 @@ export default function SpaceRaceGamePanel({
           teamId: participant.teamId
         });
 
+        if (response.data?.expired) {
+          setQuizTimeExpired(true);
+          return;
+        }
+
         console.log('✅ Quiz timer started:', response.data);
         // If backend returned an endTime (quiz already started), store it for the quiz page
         if (response.data?.endTime) {
@@ -301,6 +326,10 @@ export default function SpaceRaceGamePanel({
           console.log('🕐 Stored synchronized endTime for team:', participant.teamId, response.data.endTime);
         }
       } catch (error) {
+        if (error?.response?.data?.expired) {
+          setQuizTimeExpired(true);
+          return;
+        }
         console.error('Failed to start quiz timer:', error);
         // Continue anyway - the quiz can still be taken
       }
@@ -375,7 +404,7 @@ export default function SpaceRaceGamePanel({
               key={member.id}
               className="text-xs bg-neutral-100 text-text/80 px-2 py-1 rounded-full border border-neutral-200"
             >
-              {member.name} ({Math.round(member.score || 0)})
+              {member.name} ({roundedScore})
             </span>
           ))}
         </div>
@@ -442,7 +471,7 @@ export default function SpaceRaceGamePanel({
         </div>
       </div>
 
-      {hasQuiz && !window.location.pathname.includes('/quiz/') && !hasAttemptedQuiz && (
+      {hasQuiz && !window.location.pathname.includes('/quiz/') && !hasAttemptedQuiz && !quizTimeExpired && (
         <div className="bg-primary/5 border border-primary/20 rounded-xl p-4 flex flex-col sm:flex-row items-center justify-between gap-3">
           <p className="text-text text-sm">The quiz is ready — coordinate with your team and compete!</p>
           <button
@@ -452,6 +481,15 @@ export default function SpaceRaceGamePanel({
           >
             Start Quiz
           </button>
+        </div>
+      )}
+
+      {hasQuiz && !window.location.pathname.includes('/quiz/') && !hasAttemptedQuiz && quizTimeExpired && (
+        <div className="bg-error-50 border border-error-200 rounded-xl p-4 flex flex-col sm:flex-row items-center justify-between gap-3">
+          <p className="text-text text-sm">Time&apos;s up — this quiz is closed and can no longer be opened or attempted.</p>
+          <div className="px-5 py-2 bg-neutral-300 text-neutral-600 rounded-lg font-semibold whitespace-nowrap">
+            Quiz Closed
+          </div>
         </div>
       )}
       

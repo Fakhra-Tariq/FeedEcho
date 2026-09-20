@@ -1,6 +1,7 @@
 const express = require('express');
 const { db } = require('../config/firebase');
 const { calculateQuizScore } = require('../utils/scoringUtils');
+const { getSharedTeamScoreState, getTeamScoreValue } = require('../utils/spaceRaceTeamScore');
 const {
   writeLaunchSubmission,
   loadLaunchBundles,
@@ -171,18 +172,32 @@ router.post('/:quizId/submit', async (req, res) => {
 
     let score, correctAnswers, totalQuestions, percentage;
 
-    // For Space Race, use pre-calculated team score from Firebase
+    // For Space Race, use the shared team score from lock nodes / team_scores
     if (raceId && participantId) {
       try {
         const participantSnap = await spaceRaceParticipantsRef(raceId).child(participantId).get();
         if (participantSnap.exists()) {
           const participantData = participantSnap.val();
-          const teamScore = participantData.score || 0;
-          const teamAnswers = participantData.answers || [];
-          
-          // Calculate percentage from team answers
-          const correctCount = teamAnswers.filter(a => a.isCorrect).length;
-          totalQuestions = quiz.questions.length;
+          const teamId = participantData.teamId;
+          totalQuestions = Array.isArray(quiz.questions) ? quiz.questions.length : 0;
+
+          let teamScore = Number(participantData.score) || 0;
+          let teamAnswers = Array.isArray(participantData.answers) ? participantData.answers : [];
+          let correctCount = teamAnswers.filter((a) => a && a.isCorrect === true).length;
+
+          if (teamId !== undefined && teamId !== null) {
+            const shared = await getSharedTeamScoreState(raceId, teamId, totalQuestions);
+            if (shared.answers.length > 0) {
+              teamScore = shared.score;
+              teamAnswers = shared.answers;
+              correctCount = shared.correctCount;
+            } else {
+              const teamScoreSnap = await db.ref(`space_race_team_scores/${raceId}/team_${teamId}`).get();
+              const storedTeamScore = getTeamScoreValue(teamScoreSnap.val());
+              if (storedTeamScore > 0) teamScore = storedTeamScore;
+            }
+          }
+
           correctAnswers = correctCount;
           score = teamScore;
           percentage = totalQuestions > 0 ? Math.round((correctCount / totalQuestions) * 100) : 0;

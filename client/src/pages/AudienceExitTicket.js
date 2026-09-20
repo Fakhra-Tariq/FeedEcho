@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, Send, CheckCircle } from 'lucide-react';
+import { ArrowLeft, Send, CheckCircle, Users } from 'lucide-react';
 import { useHybridAlert } from '../contexts/HybridAlertContext';
 import { exitTicketsAPI } from '../services/api';
+import { getStoredAudienceSession } from '../utils/audienceSession';
+import GuestProgressLoginBanner from '../components/Audience/GuestProgressLoginBanner';
 
 const AudienceExitTicket = () => {
   const navigate = useNavigate();
@@ -249,8 +251,40 @@ const AudienceExitTicket = () => {
     );
   }
 
+  const participantDisplayName =
+    getJoinedStudentName() ||
+    getStoredAudienceSession()?.name ||
+    'Audience';
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-orange-50 via-white to-purple-50">
+      <div className="bg-white border-b border-neutral-200">
+        <div className="max-w-4xl mx-auto px-4 py-4">
+          <div className="grid grid-cols-3 items-center gap-2 sm:gap-4">
+            <div className="flex justify-start min-w-0">
+              <img
+                src="/FeedEcho-logo.png.png"
+                alt="FeedEcho"
+                className="h-24 sm:h-32 w-auto max-w-full object-contain object-left mix-blend-multiply"
+              />
+            </div>
+            <div className="min-w-0 flex flex-wrap items-center justify-center gap-x-2 gap-y-1">
+              <h1 className="text-sm sm:text-xl font-semibold text-text text-center leading-tight break-words">
+                {exitTicket?.title}
+              </h1>
+            </div>
+            <div className="flex justify-end min-w-0">
+              <div className="flex items-center space-x-2 text-text-light min-w-0">
+                <Users className="w-4 h-4 shrink-0" />
+                <span className="text-sm truncate">{participantDisplayName}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <GuestProgressLoginBanner />
+
       <div className="container mx-auto px-4 py-8">
         {/* Exit Ticket Form */}
         <div className="max-w-2xl mx-auto">
@@ -258,10 +292,6 @@ const AudienceExitTicket = () => {
             <form onSubmit={handleSubmit} className="space-y-6">
               {/* Exit Ticket Content */}
               <div className="bg-gray-50 rounded-xl p-6">
-                <h2 className="text-xl font-semibold text-text mb-6">
-                  {exitTicket?.title}
-                </h2>
-
                 {/* Questions */}
                 <div className="space-y-8">
                   {exitTicket?.questions?.map((question, index) => (

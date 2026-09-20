@@ -108,6 +108,15 @@ export const mergeQuizAttemptRows = (existing, row) => {
         ? primary.answers
         : secondary.answers || primary.answers,
     timeTaken: primary.timeTaken ?? secondary.timeTaken ?? null,
+    submittedAt: (() => {
+      const a = getRowSubmittedAt(primary);
+      const b = getRowSubmittedAt(secondary);
+      const ta = a ? new Date(a).getTime() : NaN;
+      const tb = b ? new Date(b).getTime() : NaN;
+      if (!Number.isNaN(tb) && (Number.isNaN(ta) || tb > ta)) return b;
+      if (!Number.isNaN(ta)) return a;
+      return primary.submittedAt || secondary.submittedAt || null;
+    })(),
   };
 };
 
@@ -145,6 +154,11 @@ export const saveLocalQuizSubmission = (incoming) => {
     const list = Array.isArray(raw) ? raw : [];
     const merged = collapseQuizAttemptRows([...list, incoming]);
     localStorage.setItem('quizSubmissions', JSON.stringify(merged));
+    try {
+      window.dispatchEvent(new Event('quizSubmissionSaved'));
+    } catch {
+      // ignore
+    }
   } catch (err) {
     console.warn('Failed to save local quiz submission:', err);
   }

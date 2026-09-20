@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Clock, Send, CheckCircle, AlertCircle, ChevronRight, Users } from 'lucide-react';
 import { useHybridAlert } from '../contexts/HybridAlertContext';
@@ -9,7 +9,7 @@ import {
   normalizeTeamId,
 } from '../utils/spaceRaceSession';
 import { getStoredAudienceSession } from '../utils/audienceSession';
-import { calculateScore, validateQuizData, compareAnswer, getStableQuestionId, normalizeAnswersByQuestionId } from '../utils/scoringUtils';
+import { calculateScore, validateQuizData, getStableQuestionId, normalizeAnswersByQuestionId } from '../utils/scoringUtils';
 import { getEffectiveQuestionType, normalizeQuizForClient } from '../utils/quizQuestionNormalization';
 import { saveLocalQuizSubmission } from '../utils/audienceQuizAttempts';
 import {
@@ -24,9 +24,10 @@ import {
   hasLocalQuizSubmission,
   isQuizJoinWindowExpired,
 } from '../utils/quizLaunchAudienceSettings';
-import { set as dbSet, ref as dbRef, update as dbUpdate, onValue, get, off } from 'firebase/database';
+import { ref as dbRef, onValue, get, off } from 'firebase/database';
 import { db } from '../firebase';
 import { useRtdbValue } from '../hooks/useRtdb';
+import GuestProgressLoginBanner from '../components/Audience/GuestProgressLoginBanner';
 
 const AudienceQuizAttempt = ({
   embedded = false,
@@ -81,6 +82,7 @@ const AudienceQuizAttempt = ({
   const [raceData, setRaceData] = useState(null);
   const raceDataRef = useRef(null);
   const [teamAnswersForScore, setTeamAnswersForScore] = useState(null);
+  const [quizTimeExpired, setQuizTimeExpired] = useState(false);
 
   const getQuestionKey = (question, index) => getStableQuestionId(question, index);
 
@@ -421,7 +423,22 @@ const AudienceQuizAttempt = ({
         });
 
         console.log('🚀 Start quiz API response:', res.data);
+        if (res.data?.expired) {
+          setQuizTimeExpired(true);
+          if (res.data.endTime) {
+            quizData.launchSettings = quizData.launchSettings || {};
+            quizData.launchSettings.endTime = res.data.endTime;
+            try {
+              localStorage.setItem('spaceRaceEndTime', res.data.endTime);
+            } catch {
+              // ignore
+            }
+            applyQuizTimer(quizData, null, { forceSpaceRace: true });
+          }
+          return { expired: true, ...res.data };
+        }
         if (res.data?.success) {
+          setQuizTimeExpired(false);
           console.log('✅ Quiz timer started successfully:', res.data);
           // If backend returned an endTime (quiz already started), update quiz data with it
           if (res.data.endTime) {
@@ -449,8 +466,23 @@ const AudienceQuizAttempt = ({
           console.log('⚠️ Start quiz API returned unsuccessful:', res.data);
         }
       } catch (error) {
+        const expiredPayload = error?.response?.data;
+        if (expiredPayload?.expired) {
+          setQuizTimeExpired(true);
+          if (expiredPayload.endTime) {
+            quizData.launchSettings = quizData.launchSettings || {};
+            quizData.launchSettings.endTime = expiredPayload.endTime;
+            try {
+              localStorage.setItem('spaceRaceEndTime', expiredPayload.endTime);
+            } catch {
+              // ignore
+            }
+            applyQuizTimer(quizData, null, { forceSpaceRace: true });
+          }
+          return { expired: true, ...expiredPayload };
+        }
         console.error('❌ Failed to start quiz timer:', error);
-        // Don't block the quiz if timer start fails
+        // Don't block the quiz if timer start fails for other reasons
       }
     };
 
@@ -819,6 +851,7 @@ const AudienceQuizAttempt = ({
           const remaining = Math.max(0, Math.floor((endTime.getTime() - now.getTime()) / 1000));
           setTimeLeft(remaining);
           localStorage.setItem('spaceRaceEndTime', data.endTime);
+          if (remaining <= 0) setQuizTimeExpired(true);
           console.log('⏱️ Quiz timer:', remaining, 'seconds remaining for team', teamId);
         } else if (data.duration && Number(data.duration) > 0) {
           // duration on team timer is quiz duration seconds (set by startQuiz)
@@ -872,18 +905,26 @@ const AudienceQuizAttempt = ({
     return () => clearInterval(timer);
   }, [spaceRaceTimerActive, teamId]);
 
-  // Auto-submit when quiz timer reaches 0
+  // Auto-submit when quiz timer reaches 0 (Space Race: close only if team endTime has elapsed)
   useEffect(() => {
     if (timeLeft !== 0 || isSubmitted || !quiz) return;
 
     if (isSpaceRace) {
-      const hasStartedQuiz = hasAnyAnswer();
-      if (!hasStartedQuiz) return;
+      let endIso = quiz?.launchSettings?.endTime || null;
+      try {
+        endIso = localStorage.getItem('spaceRaceEndTime') || endIso;
+      } catch {
+        // ignore
+      }
+      if (endIso && new Date(endIso).getTime() <= Date.now()) {
+        setQuizTimeExpired(true);
+      }
+      return;
     }
 
     console.log('⏰ Quiz time is up! Auto-submitting...');
     handleSubmitQuiz();
-  }, [timeLeft, isSubmitted, quiz, answers, isSpaceRace]);
+  }, [timeLeft, isSubmitted, quiz, isSpaceRace]);
 
   // Prevent navigation and refresh
   useEffect(() => {
@@ -971,6 +1012,54 @@ const AudienceQuizAttempt = ({
       : null,
     { enabled: Boolean(isSpaceRace && raceId && participantId) }
   );
+
+  const spaceRaceSharedScore = useMemo(() => {
+    const totalQuestionsCount = quiz?.questions?.length || 0;
+    const fromSelections = [];
+    if (liveTeamSelections && typeof liveTeamSelections === 'object') {
+      Object.entries(liveTeamSelections).forEach(([key, node]) => {
+        if (!node || !String(key).startsWith('question_')) return;
+        if (node.submitted !== true && node.submitted !== 'true') return;
+        fromSelections.push({
+          questionId: String(key).slice('question_'.length),
+          answer: node.selectedOption ?? node.answer ?? null,
+          isCorrect: node.isCorrect === true,
+          points: Number(node.points) || 0,
+          submittedBy: node.submittedBy || null,
+          submittedByName: node.submittedByName || null,
+          submittedAt: node.submittedAt || null,
+        });
+      });
+    }
+    const participantAnswers = Array.isArray(liveParticipantData?.answers)
+      ? liveParticipantData.answers
+      : [];
+    const teamAnswers = fromSelections.length > 0 ? fromSelections : participantAnswers;
+    let correctCount = teamAnswers.filter((a) => a?.isCorrect === true).length;
+    const computedScore =
+      totalQuestionsCount > 0 ? Math.round((correctCount / totalQuestionsCount) * 100) : 0;
+    const liveTeamScoreValue =
+      typeof liveTeamScoreRaw === 'number'
+        ? liveTeamScoreRaw
+        : Number(liveTeamScoreRaw?.score ?? 0) || 0;
+    const score =
+      fromSelections.length > 0
+        ? computedScore
+        : liveTeamScoreValue || Number(liveParticipantData?.score) || computedScore;
+    if (correctCount === 0 && score > 0 && totalQuestionsCount > 0) {
+      correctCount = Math.round((score / 100) * totalQuestionsCount);
+    }
+    return {
+      score,
+      correctCount,
+      totalQuestions: totalQuestionsCount,
+      percentage:
+        totalQuestionsCount > 0
+          ? Math.round((correctCount / totalQuestionsCount) * 100)
+          : Math.round(score),
+      teamAnswers,
+    };
+  }, [liveTeamSelections, liveTeamScoreRaw, liveParticipantData, quiz?.questions?.length]);
 
   const applyQuestionLockFromNode = useCallback((questionId, node) => {
     if (!questionId || !node || typeof node !== 'object') return;
@@ -1250,11 +1339,15 @@ const AudienceQuizAttempt = ({
     // This ensures all team members see the exact same time
     if (isSpaceRace) {
       const checkTimeExpired = () => {
-        // Only auto-submit if student has actually started the quiz (answered at least one question)
-        const hasStartedQuiz = hasAnyAnswer();
-        if (timeLeft <= 0 && !isSubmitted && hasStartedQuiz) {
-          console.log('⏰ Time expired! Auto-submitting quiz...');
-          handleSubmitQuiz();
+        if (timeLeft > 0 || isSubmitted) return;
+        let endIso = quiz?.launchSettings?.endTime || null;
+        try {
+          endIso = localStorage.getItem('spaceRaceEndTime') || endIso;
+        } catch {
+          // ignore
+        }
+        if (endIso && new Date(endIso).getTime() <= Date.now()) {
+          setQuizTimeExpired(true);
         }
       };
 
@@ -1551,56 +1644,19 @@ const AudienceQuizAttempt = ({
         console.warn('⚠️ Quiz data validation warnings (scoring will use server-side quiz):', validation.issues);
       }
 
-      // For Space Race, fetch the participant's pre-calculated score from Firebase
-      // The backend already calculates team scores and assigns them to all team members
-      // This ensures all team members get the same score
+      // For Space Race, use the shared team score (lock nodes / team_scores), not personal answers
       let scoringResult;
       if (isSpaceRace && raceId && participantId) {
-        try {
-          // Fetch participant data from Firebase to get the team-calculated score
-          const participantPath = `space_race_participants/${raceId}/${participantId}`;
-          const participantRef = dbRef(db, participantPath);
-          const participantSnap = await get(participantRef);
-          
-          if (participantSnap.exists()) {
-            const participantData = participantSnap.val();
-            const teamScore = participantData.score || 0;
-            const teamAnswers = participantData.answers || [];
-            
-            // Calculate percentage from team answers
-            const correctCount = teamAnswers.filter(a => a.isCorrect).length;
-            const totalQuestionsCount = quiz.questions.length;
-            const teamPercentage = totalQuestionsCount > 0 ? Math.round((correctCount / totalQuestionsCount) * 100) : 0;
-            
-            scoringResult = {
-              score: teamScore,
-              correctAnswers: correctCount,
-              totalQuestions: totalQuestionsCount,
-              unansweredCount: 0,
-              percentage: teamPercentage,
-              points: teamScore,
-              teamAnswers: teamAnswers
-            };
-            
-            console.log('🎯 Using team-calculated score from Firebase:', {
-              teamScore,
-              correctCount,
-              totalQuestionsCount,
-              teamPercentage,
-              teamAnswersCount: teamAnswers.length
-            });
-          } else {
-            console.log('⚠️ Participant not found in Firebase, falling back to local calculation');
-            // Fallback to local calculation with team answers
-            const effectiveAnswers = normalizeAnswersByQuestionId(quiz.questions, answers);
-            scoringResult = calculateScore(quiz.questions, effectiveAnswers, quiz.type);
-          }
-        } catch (error) {
-          console.error('Error fetching participant score from Firebase:', error);
-          // Fallback to local calculation
-          const effectiveAnswers = normalizeAnswersByQuestionId(quiz.questions, answers);
-          scoringResult = calculateScore(quiz.questions, effectiveAnswers, quiz.type);
-        }
+        scoringResult = {
+          score: spaceRaceSharedScore.score,
+          correctAnswers: spaceRaceSharedScore.correctCount,
+          totalQuestions: spaceRaceSharedScore.totalQuestions,
+          unansweredCount: 0,
+          percentage: spaceRaceSharedScore.percentage,
+          points: spaceRaceSharedScore.score,
+          teamAnswers: spaceRaceSharedScore.teamAnswers,
+        };
+        console.log('🎯 Using shared Space Race team score:', scoringResult);
       } else {
         // For regular quiz, use local calculation with questionId-keyed answers
         const effectiveAnswers = normalizeAnswersByQuestionId(quiz.questions, answers);
@@ -1767,22 +1823,7 @@ const AudienceQuizAttempt = ({
           score = serverCorrectAnswers;
           percentage = serverPercentage;
 
-          if (isSpaceRace && raceId && teamId) {
-            try {
-              const teamScorePath = `space_race_team_scores/${raceId}/team_${teamId}`;
-              const teamScoreData = {
-                score: serverScore,
-                percentage: serverPercentage,
-                correctAnswers: serverCorrectAnswers,
-                lastUpdatedBy: participantId,
-                lastUpdatedAt: new Date().toISOString(),
-              };
-
-              await dbSet(dbRef(db, teamScorePath), teamScoreData);
-            } catch (error) {
-              console.error('❌ Failed to synchronize team score to Firebase:', error);
-            }
-          }
+          // Never overwrite the canonical team score from a personal quiz-submit payload
         } else {
           const syncError =
             syncResult.error ||
@@ -1799,146 +1840,42 @@ const AudienceQuizAttempt = ({
         }
       }
 
-      // Check if this is a Space Race quiz and submit answers to Space Race API
-      const spaceRaceQuiz = localStorage.getItem('spaceRaceQuiz');
-      const spaceRaceData = localStorage.getItem('spaceRaceData');
-      
-      if (isSpaceRace && spaceRaceQuiz && spaceRaceData) {
+      // Sync every teammate to the shared team score (from lock nodes), even if this member never submitted
+      if (isSpaceRace && raceId) {
         try {
-          const raceData = JSON.parse(spaceRaceData);
-          const participantData =
-            loadSpaceRaceParticipant(raceData?.id) || loadSpaceRaceParticipant(null) || {};
-          
-          let answerSubmissionFailed = false;
-          let score = 0; // Declare score variable for Space Race section
-          let percentage = 0; // Declare percentage variable for Space Race section
-          
-          // Submit each answer to Space Race API using shared scoring utility
-          for (let i = 0; i < quiz.questions.length; i++) {
-            const question = quiz.questions[i];
-            const studentAnswer = getAnswerForQuestion(question, i);
-            
-            // Use shared scoring utility for consistent answer comparison
-            const { isCorrect, points } = compareAnswer(question, studentAnswer, quiz.type);
-            
-            // Submit answer to Space Race API
-            try {
-              const response = await spaceRacesAPI.submitAnswer(raceData.id, {
-                participantId: participantData.id,
-                questionId: question.id || `q${i}`,
-                answer: studentAnswer,
-                questionIndex: i
-              });
-              
-              console.log(`📝 Space Race Answer ${i + 1} submitted:`, {
-                questionId: question.id,
-                studentAnswer,
-                isCorrect,
-                points,
-                response: response.data
-              });
-            } catch (error) {
-              console.error(`❌ Space Race answer submission failed for question ${i + 1}:`, error);
-              answerSubmissionFailed = true;
-            }
-          }
-          
-          // Get final score from Space Race API for accurate percentage
-          let finalScoreResponse = null;
-          try {
-            console.log('🏁 Getting final Space Race score...');
-            finalScoreResponse = await spaceRacesAPI.getFinalScore(raceData.id, {
-              participantId: participantData.id
+          const finalParticipantId = storedParticipant?.id || participantId;
+          if (finalParticipantId) {
+            const finalScoreResponse = await spaceRacesAPI.getFinalScore(raceId, {
+              participantId: finalParticipantId,
             });
-            
+
             if (finalScoreResponse.data && finalScoreResponse.data.success) {
               const finalScoreData = finalScoreResponse.data;
-              console.log('✅ Final Space Race score received:', finalScoreData);
-              
-              // Use shared scoring utility to verify and ensure consistency
-              const frontendScoring = calculateScore(
-                quiz.questions,
-                normalizeAnswersByQuestionId(quiz.questions, answers),
-                quiz.type
-              );
-              
-              console.log('🔍 Score consistency check:', {
-                frontendCalculation: frontendScoring,
-                backendResponse: finalScoreData,
-                isConsistent: frontendScoring.score === finalScoreData.score && frontendScoring.percentage === finalScoreData.percentage
-              });
-              
-              // Update score and percentage with accurate values (prefer backend if available)
-              score = finalScoreData.score || frontendScoring.score;
-              percentage = finalScoreData.percentage || frontendScoring.percentage;
-
               updateLatestSubmission({
-                correctAnswers: finalScoreData.correctAnswers || frontendScoring.correctAnswers,
-                totalQuestions: finalScoreData.totalQuestions || frontendScoring.totalQuestions,
-                percentage: percentage,
-                points: finalScoreData.points || frontendScoring.points,
-                source: 'spaceRace'
-              });
-
-              console.log('🎯 Updated with Space Race final score:', {
-                score,
-                correctAnswers: finalScoreData.correctAnswers || frontendScoring.correctAnswers,
-                totalQuestions: finalScoreData.totalQuestions || frontendScoring.totalQuestions,
-                percentage,
-                points: finalScoreData.points || frontendScoring.points
+                correctAnswers: finalScoreData.correctAnswers,
+                totalQuestions: finalScoreData.totalQuestions,
+                percentage: finalScoreData.percentage,
+                points: finalScoreData.points ?? finalScoreData.score,
+                source: 'spaceRace',
               });
             } else {
-              console.log('⚠️ Failed to get final score, using frontend calculation');
-              console.log('API Response:', finalScoreResponse);
-              answerSubmissionFailed = true;
-            }
-          } catch (finalScoreError) {
-            console.log('❌ Error getting final score:', finalScoreError);
-            console.log('⚠️ Using frontend calculation as fallback');
-            answerSubmissionFailed = true;
-          }
-          
-          // FALLBACK: Use shared scoring utility if backend fails
-          if (answerSubmissionFailed || !finalScoreResponse?.data?.success) {
-            console.log('🔄 Using shared scoring utility fallback...');
-            const fallbackScoring = calculateScore(
-              quiz.questions,
-              normalizeAnswersByQuestionId(quiz.questions, answers),
-              quiz.type
-            );
-
-            console.log('📊 Fallback scoring result:', fallbackScoring);
-
-            // Force update with correct calculation
-            score = fallbackScoring.correctAnswers; // Use correctAnswers for display
-            percentage = fallbackScoring.percentage;
-
-            updateLatestSubmission({
-              correctAnswers: fallbackScoring.correctAnswers,
-              totalQuestions: fallbackScoring.totalQuestions,
-              percentage: fallbackScoring.percentage,
-              points: fallbackScoring.points,
-              source: 'spaceRace'
-            });
-
-            console.log('✅ Applied fallback score:', { score, percentage, points: fallbackScoring.points });
-
-            // Try to update backend with correct score
-            try {
-              await spaceRacesAPI.updateScore(raceData.id, {
-                participantId: participantData.id,
-                score: fallbackScoring.points // Send points to backend
+              updateLatestSubmission({
+                correctAnswers: spaceRaceSharedScore.correctCount,
+                totalQuestions: spaceRaceSharedScore.totalQuestions,
+                percentage: spaceRaceSharedScore.percentage,
+                points: spaceRaceSharedScore.score,
+                source: 'spaceRace',
               });
-              console.log('📝 Updated backend with fallback score');
-            } catch (updateError) {
-              console.log('⚠️ Failed to update backend score:', updateError);
             }
           }
-          
-          // Keep Space Race session data so students can return to the lobby
-          
-        } catch (error) {
-          // Silent error handling
+        } catch (finalScoreError) {
+          updateLatestSubmission({
+            correctAnswers: spaceRaceSharedScore.correctCount,
+            totalQuestions: spaceRaceSharedScore.totalQuestions,
+            percentage: spaceRaceSharedScore.percentage,
+            points: spaceRaceSharedScore.score,
+            source: 'spaceRace',
+          });
         }
       }
 
@@ -1957,9 +1894,13 @@ const AudienceQuizAttempt = ({
     }
   };
 
-  // Fetch team answers from Firebase for Space Race when quiz is submitted
+  // Fetch shared team score when a teammate finishes (hydrates late joiners)
   useEffect(() => {
     if (isSubmitted && isSpaceRace && raceId && participantId) {
+      spaceRacesAPI.getFinalScore(raceId, { participantId }).catch((err) => {
+        console.warn('Could not sync shared team final score:', err);
+      });
+
       const fetchTeamAnswers = async () => {
         try {
           const participantPath = `space_race_participants/${raceId}/${participantId}`;
@@ -2082,6 +2023,28 @@ const AudienceQuizAttempt = ({
     );
   }
 
+  if (isSpaceRace && quizTimeExpired && !isSubmitted) {
+    return (
+      <div className={`${shellClass} flex items-center justify-center p-4`}>
+        <div className="bg-white rounded-3xl shadow-soft border border-primary/10 p-8 max-w-md w-full text-center">
+          <Clock className="w-16 h-16 text-error-500 mx-auto mb-4" />
+          <h1 className="text-2xl font-bold text-text mb-4">Time&apos;s Up</h1>
+          <p className="text-text-light mb-6">
+            This quiz is closed. Your team&apos;s time has ended, so it can no longer be opened or attempted.
+          </p>
+          <button
+            onClick={() =>
+              navigate(raceId ? `/audience/space-race/${raceId}` : '/audience/home', { replace: true })
+            }
+            className="px-6 py-3 bg-primary text-white rounded-xl hover:bg-primary/90 transition-colors"
+          >
+            Back to Race
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   if (isSubmitted) {
     const submissions = JSON.parse(localStorage.getItem('quizSubmissions') || '[]');
     const currentSubmission =
@@ -2148,24 +2111,11 @@ const AudienceQuizAttempt = ({
 
     console.log('📊 Show final score setting:', showFinalScore);
 
-    // Space Race: show TEAM score from RTDB (shared across teammates)
+    // Space Race: show TEAM score from shared lock nodes / team_scores (same for every member)
     const totalQuestionsCount = quiz?.questions?.length || 0;
-    const teamAnswers = Array.isArray(liveParticipantData?.answers)
-      ? liveParticipantData.answers
-      : [];
-    const teamCorrectCount = teamAnswers.filter((a) => a?.isCorrect === true).length;
-    const liveTeamScoreValue =
-      typeof liveTeamScoreRaw === 'number'
-        ? liveTeamScoreRaw
-        : Number(liveTeamScoreRaw?.score ?? 0) || 0;
-    const teamPercentage =
-      totalQuestionsCount > 0
-        ? Math.round((teamCorrectCount / totalQuestionsCount) * 100)
-        : Math.round(liveTeamScoreValue);
-    const teamTotalScore =
-      liveTeamScoreValue > 0
-        ? Math.round(liveTeamScoreValue)
-        : teamPercentage;
+    const teamCorrectCount = spaceRaceSharedScore.correctCount;
+    const teamPercentage = spaceRaceSharedScore.percentage;
+    const teamTotalScore = spaceRaceSharedScore.score;
 
     const displayScore = isSpaceRace
       ? teamCorrectCount
@@ -2335,34 +2285,27 @@ const AudienceQuizAttempt = ({
       {!embedded && (
       <div className="bg-white border-b border-neutral-200">
         <div className="max-w-4xl mx-auto px-4 py-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-4">
-              <h1 className="text-xl font-semibold text-text">{quiz.title}</h1>
-              <span className="px-3 py-1 bg-primary/10 text-primary rounded-full text-sm font-medium">
+          <div className="grid grid-cols-3 items-center gap-2 sm:gap-4">
+            <div className="flex justify-start min-w-0">
+              <img
+                src="/FeedEcho-logo.png.png"
+                alt="FeedEcho"
+                className="h-24 sm:h-32 w-auto max-w-full object-contain object-left mix-blend-multiply"
+              />
+            </div>
+            <div className="min-w-0 flex flex-wrap items-center justify-center gap-x-2 gap-y-1">
+              <h1 className="text-sm sm:text-xl font-semibold text-text text-center leading-tight break-words">
+                {quiz.title}
+              </h1>
+              <span className="px-3 py-1 bg-primary/10 text-primary rounded-full text-xs sm:text-sm font-medium whitespace-nowrap">
                 {quiz.type}
               </span>
             </div>
-            <div className="flex items-center space-x-6">
-              <div className="flex items-center space-x-2 text-text-light">
-                <Users className="w-4 h-4" />
-                <span className="text-sm">{studentSession?.studentName || 'Audience'}</span>
+            <div className="flex justify-end min-w-0">
+              <div className="flex items-center space-x-2 text-text-light min-w-0">
+                <Users className="w-4 h-4 shrink-0" />
+                <span className="text-sm truncate">{studentSession?.studentName || 'Audience'}</span>
               </div>
-              {quiz.launchSettings?.timePerStudentMinutes && (
-                <div className="flex items-center space-x-2 text-text-light">
-                  <Clock className="w-4 h-4" />
-                  <span className="text-sm font-medium">
-                    Duration: {quiz.launchSettings.timePerStudentMinutes} min
-                  </span>
-                </div>
-              )}
-              {quiz.launchSettings?.timeLimit && (
-                <div className="flex items-center space-x-2 text-text-light">
-                  <Clock className="w-4 h-4" />
-                  <span className="text-sm font-medium">
-                    Duration: {quiz.launchSettings.timeLimit} min
-                  </span>
-                </div>
-              )}
             </div>
           </div>
           {/* Duration notice + single live countdown (header shows Duration label only) */}
@@ -2393,9 +2336,6 @@ const AudienceQuizAttempt = ({
                       : 'text-primary'
                   }`}>
                     Time remaining: {formatTime(timeLeft)}
-                    {timeLeft === 0 && !hasAnyAnswer() && (
-                      <span className="ml-2 text-xs text-error-600">(No questions answered)</span>
-                    )}
                   </div>
                 )}
               </div>
@@ -2404,6 +2344,8 @@ const AudienceQuizAttempt = ({
         </div>
       </div>
       )}
+
+      {!embedded && <GuestProgressLoginBanner />}
 
       {/* Progress Bar */}
       <div className="bg-white border-b border-neutral-200">

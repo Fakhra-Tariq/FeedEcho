@@ -544,7 +544,7 @@ export default function HostSpaceRaceDisplay() {
                             <span className="font-medium text-text">{participant.name}</span>
                           </div>
                           <span className={`font-bold ${style.text}`}>
-                            {Math.round(participant.score || 0)}
+                            {Math.round(teamScore)}
                           </span>
                         </div>
                       ))}

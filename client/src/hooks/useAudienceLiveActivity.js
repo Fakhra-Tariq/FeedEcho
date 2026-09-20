@@ -9,14 +9,15 @@ export function useAudienceLiveActivity(student, limit = 50) {
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  const loadActivity = useCallback(async () => {
+  const loadActivity = useCallback(async (opts = {}) => {
+    const silent = opts?.silent === true;
     if (!student) {
       setItems([]);
       setLoading(false);
       return;
     }
 
-    setLoading(true);
+    if (!silent) setLoading(true);
     try {
       const response = await studentsAPI.getActivity({
         ...getStudentQueryParams(student),
@@ -25,9 +26,9 @@ export function useAudienceLiveActivity(student, limit = 50) {
       setItems(response.data?.data || []);
     } catch (error) {
       console.error('Failed to load student activity:', error);
-      setItems([]);
+      if (!silent) setItems([]);
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   }, [student, limit]);
 
@@ -38,9 +39,9 @@ export function useAudienceLiveActivity(student, limit = 50) {
   useEffect(() => {
     if (!student) return undefined;
 
-    const onFocus = () => loadActivity();
+    const onFocus = () => loadActivity({ silent: true });
     const onVisibility = () => {
-      if (document.visibilityState === 'visible') loadActivity();
+      if (document.visibilityState === 'visible') loadActivity({ silent: true });
     };
 
     window.addEventListener('focus', onFocus);

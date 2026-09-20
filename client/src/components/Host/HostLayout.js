@@ -4,7 +4,6 @@ import { User, LogOut } from 'lucide-react';
 import clsx from 'clsx';
 import { useAuth } from '../../contexts/AuthContext';
 import { useClickOutside } from '../../hooks/useClickOutside';
-import SessionStatusBadge from './SessionStatusBadge';
 
 const navItems = [
   { label: 'Explore', to: '/host/explore' },
@@ -66,9 +65,7 @@ const HostLayout = () => {
               ))}
             </nav>
 
-            <div className="flex shrink-0 items-center gap-2 sm:gap-3 ml-auto lg:ml-0">
-              <SessionStatusBadge />
-
+            <div className="flex shrink-0 items-center ml-auto lg:ml-0">
               <div className="relative" ref={profileDropdownRef}>
                 <button
                   type="button"

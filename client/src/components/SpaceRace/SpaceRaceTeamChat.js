@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Send, Paperclip, Image as ImageIcon, FileText, Link as LinkIcon } from 'lucide-react';
+import { Send, Paperclip, Image as ImageIcon, FileText, Link as LinkIcon, X } from 'lucide-react';
 import { useRtdbList } from '../../hooks/useRtdb';
 import { spaceRacesAPI } from '../../services/api';
 import { useHybridAlert } from '../../contexts/HybridAlertContext';
@@ -69,7 +69,7 @@ const LinkPreview = ({ url, title }) => {
   );
 };
 
-export default function SpaceRaceTeamChat({ raceId, teamId, participant }) {
+export default function SpaceRaceTeamChat({ raceId, teamId, participant, compactHeader = false }) {
   const { alert } = useHybridAlert();
   const [message, setMessage] = useState('');
   const [isSending, setIsSending] = useState(false);
@@ -197,6 +197,17 @@ export default function SpaceRaceTeamChat({ raceId, teamId, participant }) {
     }
   };
 
+  const pendingAttachment = pastedImage || selectedFileImage || selectedFile || null;
+  const pendingAttachmentType = selectedFile && pendingAttachment === selectedFile ? 'file' : 'image';
+
+  const clearPendingAttachment = () => {
+    if (pastedImage?.previewUrl) URL.revokeObjectURL(pastedImage.previewUrl);
+    if (selectedFileImage?.previewUrl) URL.revokeObjectURL(selectedFileImage.previewUrl);
+    setPastedImage(null);
+    setSelectedFileImage(null);
+    setSelectedFile(null);
+  };
+
   const handleSendText = async () => {
     const trimmed = message.trim();
     if (!trimmed || isSending || isUploading) return;
@@ -229,7 +240,23 @@ export default function SpaceRaceTeamChat({ raceId, teamId, participant }) {
     );
   };
 
-  const uploadAttachment = async (file, type) => {
+  const handleSendComposer = async () => {
+    if (isSending || isUploading) return;
+
+    if (pendingAttachment?.file) {
+      const caption = message.trim();
+      const file = pendingAttachment.file;
+      const type = pendingAttachmentType;
+      setMessage('');
+      clearPendingAttachment();
+      await uploadAttachment(file, type, caption);
+      return;
+    }
+
+    await handleSendText();
+  };
+
+  const uploadAttachment = async (file, type, caption = '') => {
     if (!file || !raceId || normalizedTeamId == null) {
       console.error('Missing required data for upload:', { file: !!file, raceId: !!raceId, teamId: normalizedTeamId });
       alert.toast.error('Missing required information for upload');
@@ -284,6 +311,10 @@ export default function SpaceRaceTeamChat({ raceId, teamId, participant }) {
         throw new Error(`Failed to encode ${type} to base64`);
       }
 
+      const captionText = String(caption || '').trim();
+      const fallbackText = type === 'image' ? 'Shared an image' : `Shared ${file.name}`;
+      const messageText = captionText || fallbackText;
+
       const optimisticId = `pending-${Date.now()}`;
       console.log('Adding optimistic message:', { optimisticId, type, fileName: file.name });
       
@@ -293,7 +324,7 @@ export default function SpaceRaceTeamChat({ raceId, teamId, participant }) {
             id: optimisticId,
             participantId: participant.id,
             senderName: participant.name || 'You',
-            text: type === 'image' ? 'Shared an image' : `Shared ${file.name}`,
+            text: messageText,
             type,
             url: downloadUrl,
             fileName: file.name,
@@ -305,7 +336,7 @@ export default function SpaceRaceTeamChat({ raceId, teamId, participant }) {
 
       console.log('Sending message payload to server...');
       console.log('Payload:', {
-        text: type === 'image' ? 'Shared an image' : `Shared ${file.name}`,
+        text: messageText,
         type,
         urlLength: downloadUrl?.length,
         fileName: file.name,
@@ -313,7 +344,7 @@ export default function SpaceRaceTeamChat({ raceId, teamId, participant }) {
       
       const result = await sendMessagePayload(
         {
-          text: type === 'image' ? 'Shared an image' : `Shared ${file.name}`,
+          text: messageText,
           type,
           url: downloadUrl,
           fileName: file.name,
@@ -374,12 +405,14 @@ export default function SpaceRaceTeamChat({ raceId, teamId, participant }) {
     // For images, show preview before sending (like WhatsApp)
     if (type === 'image') {
       const previewUrl = URL.createObjectURL(file);
+      clearPendingAttachment();
       setSelectedFileImage({ file, previewUrl });
       return;
     }
 
     // For files, show preview before sending
     if (type === 'file') {
+      clearPendingAttachment();
       setSelectedFile({ file });
       return;
     }
@@ -414,68 +447,12 @@ export default function SpaceRaceTeamChat({ raceId, teamId, participant }) {
 
           // Create preview URL
           const previewUrl = URL.createObjectURL(file);
+          clearPendingAttachment();
           setPastedImage({ file, previewUrl });
         }
         break;
       }
     }
-  };
-
-  const sendPastedImage = async () => {
-    if (!pastedImage) return;
-    
-    try {
-      await uploadAttachment(pastedImage.file, 'image');
-      setPastedImage(null);
-    } catch (error) {
-      console.error('Upload failed for pasted image:', error);
-      alert.toast.error(error.message || 'Failed to upload pasted image');
-    }
-  };
-
-  const cancelPastedImage = () => {
-    if (pastedImage?.previewUrl) {
-      URL.revokeObjectURL(pastedImage.previewUrl);
-    }
-    setPastedImage(null);
-  };
-
-  const sendSelectedFileImage = async () => {
-    if (!selectedFileImage) return;
-    
-    try {
-      await uploadAttachment(selectedFileImage.file, 'image');
-      setSelectedFileImage(null);
-    } catch (error) {
-      console.error('Upload failed for selected image:', error);
-      alert.toast.error(error.message || 'Failed to upload image');
-    }
-  };
-
-  const cancelSelectedFileImage = () => {
-    if (selectedFileImage?.previewUrl) {
-      URL.revokeObjectURL(selectedFileImage.previewUrl);
-    }
-    setSelectedFileImage(null);
-  };
-
-  const sendSelectedFile = async () => {
-    if (!selectedFile) return;
-
-    console.log('sendSelectedFile called:', { file: selectedFile.file.name, size: selectedFile.file.size, type: selectedFile.file.type });
-
-    try {
-      await uploadAttachment(selectedFile.file, 'file');
-      console.log('Upload completed successfully, clearing selectedFile');
-      setSelectedFile(null);
-    } catch (error) {
-      console.error('Upload failed for selected file:', error);
-      alert.toast.error(error.message || 'Failed to upload file');
-    }
-  };
-
-  const cancelSelectedFile = () => {
-    setSelectedFile(null);
   };
 
   const renderMessageBody = (msg) => {
@@ -552,9 +529,19 @@ export default function SpaceRaceTeamChat({ raceId, teamId, participant }) {
 
   return (
     <div className="h-full flex flex-col overflow-hidden bg-white border-l border-gray-200">
-      <div className="flex-shrink-0 bg-primary px-4 py-3 text-white">
-        <h3 className="font-semibold text-lg">{teamName} Chat</h3>
-        <p className="text-white/80 text-sm">Team chat - only your team members can see these messages</p>
+      <div
+        className={
+          compactHeader
+            ? 'flex-shrink-0 bg-white border-b border-neutral-200 px-4 py-2.5'
+            : 'flex-shrink-0 bg-primary px-4 py-3 text-white'
+        }
+      >
+        <h3 className={compactHeader ? 'font-semibold text-sm text-text' : 'font-semibold text-lg'}>
+          {teamName} Chat
+        </h3>
+        <p className={compactHeader ? 'text-xs text-text/60' : 'text-white/80 text-sm'}>
+          Team chat - only your team members can see these messages
+        </p>
       </div>
 
       <div className="flex-1 min-h-0 overflow-y-auto p-4 space-y-2 bg-[#f0ebe8]">
@@ -618,6 +605,42 @@ export default function SpaceRaceTeamChat({ raceId, teamId, participant }) {
       )}
 
       <div className="flex-shrink-0 p-4 bg-white border-t border-gray-200">
+        {pendingAttachment && (
+          <div className="mb-2">
+            {pendingAttachmentType === 'image' && pendingAttachment.previewUrl ? (
+              <div className="relative inline-block">
+                <img
+                  src={pendingAttachment.previewUrl}
+                  alt="Attachment preview"
+                  className="h-16 w-16 object-cover rounded-lg border border-gray-200"
+                />
+                <button
+                  type="button"
+                  onClick={clearPendingAttachment}
+                  className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-gray-800 text-white flex items-center justify-center hover:bg-gray-700"
+                  title="Remove attachment"
+                >
+                  <X className="w-3 h-3" />
+                </button>
+              </div>
+            ) : (
+              <div className="relative inline-flex items-center gap-2 pl-2 pr-8 py-1.5 rounded-lg border border-gray-200 bg-gray-50 max-w-full">
+                <FileText className="w-4 h-4 text-gray-500 flex-shrink-0" />
+                <span className="text-xs text-gray-700 truncate max-w-[180px]">
+                  {pendingAttachment.file?.name || 'File'}
+                </span>
+                <button
+                  type="button"
+                  onClick={clearPendingAttachment}
+                  className="absolute top-1 right-1 w-5 h-5 rounded-full bg-gray-800 text-white flex items-center justify-center hover:bg-gray-700"
+                  title="Remove attachment"
+                >
+                  <X className="w-3 h-3" />
+                </button>
+              </div>
+            )}
+          </div>
+        )}
         <div className="flex items-center gap-2">
           <input
             ref={imageInputRef}
@@ -658,18 +681,18 @@ export default function SpaceRaceTeamChat({ raceId, teamId, participant }) {
             onKeyDown={(e) => {
               if (e.key === 'Enter') {
                 e.preventDefault();
-                handleSendText();
+                handleSendComposer();
               }
             }}
             onPaste={handlePaste}
-            placeholder="Message your team..."
+            placeholder={pendingAttachment ? 'Add a caption...' : 'Message your team...'}
             className="flex-1 px-4 py-3 border border-gray-300 rounded-full focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary text-text"
             disabled={isSending || isUploading}
           />
           <button
             type="button"
-            onClick={handleSendText}
-            disabled={!message.trim() || isSending || isUploading}
+            onClick={handleSendComposer}
+            disabled={(!message.trim() && !pendingAttachment) || isSending || isUploading}
             className="w-11 h-11 bg-primary rounded-full flex items-center justify-center hover:bg-primary/90 disabled:opacity-50 transition-colors"
           >
             <Send className="w-5 h-5 text-white" />
@@ -679,101 +702,6 @@ export default function SpaceRaceTeamChat({ raceId, teamId, participant }) {
           <p className="text-xs text-gray-500 mt-2">
             {isUploading ? 'Uploading...' : 'Sending...'}
           </p>
-        )}
-        
-        {/* Pasted Image Preview */}
-        {pastedImage && (
-          <div className="mt-3 p-3 bg-gray-50 rounded-lg border border-gray-200">
-            <div className="flex items-start gap-3">
-              <img
-                src={pastedImage.previewUrl}
-                alt="Pasted image"
-                className="w-20 h-20 object-cover rounded-lg border border-gray-200"
-              />
-              <div className="flex-1">
-                <p className="text-sm font-medium text-gray-700">Image ready to send</p>
-                <p className="text-xs text-gray-500 mt-1">Size: {(pastedImage.file.size / 1024).toFixed(1)} KB</p>
-                <div className="flex gap-2 mt-2">
-                  <button
-                    onClick={sendPastedImage}
-                    disabled={isUploading}
-                    className="px-3 py-1.5 bg-primary text-white text-sm rounded-md hover:bg-primary/90 disabled:opacity-50"
-                  >
-                    Send
-                  </button>
-                  <button
-                    onClick={cancelPastedImage}
-                    className="px-3 py-1.5 bg-gray-200 text-gray-700 text-sm rounded-md hover:bg-gray-300"
-                  >
-                    Cancel
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-        
-        {/* Selected File Image Preview */}
-        {selectedFileImage && (
-          <div className="mt-3 p-3 bg-gray-50 rounded-lg border border-gray-200">
-            <div className="flex items-start gap-3">
-              <img
-                src={selectedFileImage.previewUrl}
-                alt="Selected image"
-                className="w-20 h-20 object-cover rounded-lg border border-gray-200"
-              />
-              <div className="flex-1">
-                <p className="text-sm font-medium text-gray-700">Image ready to send</p>
-                <p className="text-xs text-gray-500 mt-1">Size: {(selectedFileImage.file.size / 1024).toFixed(1)} KB</p>
-                <div className="flex gap-2 mt-2">
-                  <button
-                    onClick={sendSelectedFileImage}
-                    disabled={isUploading}
-                    className="px-3 py-1.5 bg-primary text-white text-sm rounded-md hover:bg-primary/90 disabled:opacity-50"
-                  >
-                    Send
-                  </button>
-                  <button
-                    onClick={cancelSelectedFileImage}
-                    className="px-3 py-1.5 bg-gray-200 text-gray-700 text-sm rounded-md hover:bg-gray-300"
-                  >
-                    Cancel
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Selected File Preview */}
-        {selectedFile && (
-          <div className="mt-3 p-3 bg-gray-50 rounded-lg border border-gray-200">
-            <div className="flex items-start gap-3">
-              <div className="w-20 h-20 flex items-center justify-center rounded-lg border border-gray-200 bg-gray-100">
-                <FileText className="w-8 h-8 text-gray-400" />
-              </div>
-              <div className="flex-1">
-                <p className="text-sm font-medium text-gray-700">File ready to send</p>
-                <p className="text-xs text-gray-500 mt-1 truncate max-w-[200px]">{selectedFile.file.name}</p>
-                <p className="text-xs text-gray-500 mt-1">Size: {(selectedFile.file.size / 1024).toFixed(1)} KB</p>
-                <div className="flex gap-2 mt-2">
-                  <button
-                    onClick={sendSelectedFile}
-                    disabled={isUploading}
-                    className="px-3 py-1.5 bg-primary text-white text-sm rounded-md hover:bg-primary/90 disabled:opacity-50"
-                  >
-                    Send
-                  </button>
-                  <button
-                    onClick={cancelSelectedFile}
-                    className="px-3 py-1.5 bg-gray-200 text-gray-700 text-sm rounded-md hover:bg-gray-300"
-                  >
-                    Cancel
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
         )}
       </div>
 

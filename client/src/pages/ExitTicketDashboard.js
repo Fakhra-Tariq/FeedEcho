@@ -11,9 +11,7 @@ import SessionLaunchBanner from '../components/Host/SessionLaunchBanner';
 import PageHeaderCard from '../components/Host/PageHeaderCard';
 import HeaderCardStats from '../components/Host/HeaderCardStats';
 import ListFilterBar from '../components/Host/ListFilterBar';
-import NoActiveSessionLaunchModal, {
-  LaunchRequiresSessionHint,
-} from '../components/Host/NoActiveSessionLaunchModal';
+import NoActiveSessionLaunchModal from '../components/Host/NoActiveSessionLaunchModal';
 import {
   NO_ACTIVE_SESSION_MESSAGE,
   resolveActiveTeacherSession,
@@ -703,7 +701,7 @@ export default function ExitTicketDashboard() {
                   )}
                   
                   {ticket.status === 'draft' && (
-                    <div className="flex items-center space-x-2 mt-2">
+                    <>
                       <button
                         onClick={() => navigate(`/host/exit-tickets/create?edit=${ticket.id}`)}
                         className="p-2 text-gray-600 rounded-lg border border-gray-300 hover:bg-gray-100 transition-colors text-sm flex items-center"
@@ -712,17 +710,14 @@ export default function ExitTicketDashboard() {
                         <RotateCcw className="w-4 h-4 mr-1" />
                         Edit
                       </button>
-                      <div className="inline-flex flex-col items-start">
-                        <button
-                          onClick={() => handleLaunchTicket(ticket.id)}
-                          className="p-2 text-primary rounded-lg border border-primary/50 hover:bg-primary/10 transition-colors text-sm flex items-center"
-                          title="Launch Exit Ticket"
-                        >
-                          <Play className="w-4 h-4 mr-1" />
-                          Launch
-                        </button>
-                        <LaunchRequiresSessionHint className="ml-1" />
-                      </div>
+                      <button
+                        onClick={() => handleLaunchTicket(ticket.id)}
+                        className="p-2 text-primary rounded-lg border border-primary/50 hover:bg-primary/10 transition-colors text-sm flex items-center"
+                        title="Launch Exit Ticket"
+                      >
+                        <Play className="w-4 h-4 mr-1" />
+                        Launch
+                      </button>
                       <button
                         onClick={() => handleArchiveTicket(ticket.id)}
                         className="p-2 text-primary rounded-lg border border-primary/50 hover:bg-primary/10 transition-colors text-sm flex items-center"
@@ -731,7 +726,7 @@ export default function ExitTicketDashboard() {
                         <Archive className="w-4 h-4 mr-1" />
                         Archive
                       </button>
-                    </div>
+                    </>
                   )}
                   
                   {ticket.status === 'archived' && (

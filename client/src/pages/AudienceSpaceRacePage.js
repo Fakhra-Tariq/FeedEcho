@@ -8,6 +8,7 @@ import { useHybridAlert } from '../contexts/HybridAlertContext';
 import AudienceQuizAttempt from './AudienceQuizAttempt';
 import SpaceRaceGamePanel from '../components/SpaceRace/SpaceRaceGamePanel';
 import SpaceRaceTeamChat from '../components/SpaceRace/SpaceRaceTeamChat';
+import AudienceTeamSelectShell from '../components/Audience/AudienceTeamSelectShell';
 import {
   saveSpaceRaceParticipant,
   loadSpaceRaceParticipant,
@@ -358,10 +359,18 @@ export default function AudienceSpaceRacePage() {
 
   if (showTeamSelection) {
     const maxStudentsPerTeam = raceData?.settings?.studentsPerTeam || 5;
+    const handleTeamSelectionLeave = () => {
+      setShowTeamSelection(false);
+      setPendingJoin(null);
+      setSelectedTeam('');
+      setJoinError('');
+    };
 
     return (
-      <div className="min-h-screen bg-background flex items-center justify-center p-4">
-        <div className="w-full max-w-md bg-white rounded-2xl shadow-soft border border-neutral-200 p-8">
+      <AudienceTeamSelectShell
+        onLeave={handleTeamSelectionLeave}
+        sessionCode={pendingJoin?.trimmedCode}
+      >
           <h2 className="text-xl font-bold text-text mb-2 text-center">Choose your team</h2>
           <p className="text-text/70 text-sm mb-6 text-center">
             Select a team to join (max {maxStudentsPerTeam} participants per team)
@@ -405,8 +414,7 @@ export default function AudienceSpaceRacePage() {
           >
             {isJoining ? 'Joining...' : 'Continue'}
           </button>
-        </div>
-      </div>
+      </AudienceTeamSelectShell>
     );
   }
 
@@ -418,73 +426,76 @@ export default function AudienceSpaceRacePage() {
   return (
     <>
       <style>{`.quiz-embed-root > div { min-height: 0 !important; height: auto !important; }`}</style>
-      <div className="flex flex-col md:flex-row h-screen min-h-screen overflow-hidden bg-background">
-        <div className="w-full md:w-[60%] flex flex-col min-w-0 min-h-0 overflow-hidden border-r border-neutral-200">
-          <div className="flex-shrink-0 bg-white border-b border-neutral-200 px-4 h-14 flex items-center justify-between">
-            <button
-              type="button"
-              onClick={handleLeave}
-              className="flex items-center gap-2 text-text/70 hover:text-text text-sm"
-            >
-              <ArrowLeft className="w-4 h-4" />
-              Leave
-            </button>
-            <div className="flex items-center gap-2 text-text">
-              <Rocket className="w-5 h-5 text-primary" />
-              <span className="font-semibold">Space Race</span>
-            </div>
-            <div className="w-16" />
+      <div className="flex flex-col h-screen min-h-screen overflow-hidden bg-background">
+        <div className="flex-shrink-0 bg-white border-b border-neutral-200 px-4 h-14 flex items-center justify-between">
+          <button
+            type="button"
+            onClick={handleLeave}
+            className="flex items-center gap-2 text-text/70 hover:text-text text-sm"
+          >
+            <ArrowLeft className="w-4 h-4" />
+            Leave
+          </button>
+          <div className="flex items-center gap-2 text-text">
+            <Rocket className="w-5 h-5 text-primary" />
+            <span className="font-semibold">Space Race</span>
           </div>
+          <div className="w-16" />
+        </div>
 
-          <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
-            {isQuizView && (
-              <SpaceRaceGamePanel
-                raceId={activeRaceId}
-                participant={participant}
-                quizId={activeQuizId}
-                compact
-                onTimeUp={() => alert.toast.info('Race time is up!')}
-              />
-            )}
-            <div className="flex-1 min-h-0 overflow-y-auto bg-background">
-              {isQuizView ? (
-                <div className="space-race-quiz-embed min-h-full quiz-embed-root">
-                  <AudienceQuizAttempt
-                    embedded
-                    spaceRaceMode
-                    spaceRaceId={activeRaceId}
-                    spaceRaceQuizId={activeQuizId}
-                    spaceRaceParticipant={participant}
-                    raceId={activeRaceId}
-                    teamId={participant?.teamId}
-                    participantId={participant?.id}
-                    participantName={participant?.name}
-                  />
-                </div>
-              ) : (
+        <div className="flex-1 min-h-0 flex flex-col md:flex-row overflow-hidden">
+          <div className="w-full md:w-[60%] flex flex-col min-w-0 min-h-0 overflow-hidden border-r border-neutral-200 flex-1">
+            <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
+              {isQuizView && (
                 <SpaceRaceGamePanel
                   raceId={activeRaceId}
                   participant={participant}
                   quizId={activeQuizId}
+                  compact
                   onTimeUp={() => alert.toast.info('Race time is up!')}
                 />
               )}
+              <div className="flex-1 min-h-0 overflow-y-auto bg-background">
+                {isQuizView ? (
+                  <div className="space-race-quiz-embed min-h-full quiz-embed-root">
+                    <AudienceQuizAttempt
+                      embedded
+                      spaceRaceMode
+                      spaceRaceId={activeRaceId}
+                      spaceRaceQuizId={activeQuizId}
+                      spaceRaceParticipant={participant}
+                      raceId={activeRaceId}
+                      teamId={participant?.teamId}
+                      participantId={participant?.id}
+                      participantName={participant?.name}
+                    />
+                  </div>
+                ) : (
+                  <SpaceRaceGamePanel
+                    raceId={activeRaceId}
+                    participant={participant}
+                    quizId={activeQuizId}
+                    onTimeUp={() => alert.toast.info('Race time is up!')}
+                  />
+                )}
+              </div>
             </div>
           </div>
-        </div>
 
-        <div className="w-full md:w-[40%] flex-shrink-0 h-[45vh] md:h-screen min-h-0 overflow-hidden">
-          {resolvedTeamId != null && resolvedTeamId !== '' ? (
-            <SpaceRaceTeamChat
-              raceId={activeRaceId}
-              teamId={resolvedTeamId}
-              participant={participant}
-            />
-          ) : (
-            <div className="h-full flex items-center justify-center bg-white border-l border-neutral-200 text-text/60 text-sm p-4 text-center">
-              Join a team to unlock team chat
-            </div>
-          )}
+          <div className="w-full md:w-[40%] flex-shrink-0 h-[45vh] md:h-full min-h-0 overflow-hidden">
+            {resolvedTeamId != null && resolvedTeamId !== '' ? (
+              <SpaceRaceTeamChat
+                raceId={activeRaceId}
+                teamId={resolvedTeamId}
+                participant={participant}
+                compactHeader
+              />
+            ) : (
+              <div className="h-full flex items-center justify-center bg-white border-l border-neutral-200 text-text/60 text-sm p-4 text-center">
+                Join a team to unlock team chat
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </>

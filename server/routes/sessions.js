@@ -16,6 +16,7 @@ const {
   reconcileSessionCurrentActivity,
 } = require('../utils/teacherSessionGuard');
 const { writeLaunchParticipant, closeActiveQuizLaunch } = require('../utils/quizLaunches');
+const { getSharedTeamScoreState } = require('../utils/spaceRaceTeamScore');
 const router = express.Router();
 
 // ERD-aligned RTDB paths
@@ -594,6 +595,27 @@ router.post('/join', async (req, res) => {
             },
           }
         : null;
+
+      if (quizWithLaunchSettings?.questions?.length && assignedTeamId != null) {
+        try {
+          const shared = await getSharedTeamScoreState(
+            effectiveSession.sessionId,
+            assignedTeamId,
+            quizWithLaunchSettings.questions.length
+          );
+          if (shared.answers.length > 0) {
+            await raceParticipantsRef(effectiveSession.sessionId).child(participantId).update({
+              score: shared.score,
+              answers: shared.answers.map((ans) => ({
+                ...ans,
+                awardedByTeammate: true,
+              })),
+            });
+          }
+        } catch (hydrateError) {
+          console.warn('Could not hydrate new teammate with shared team score:', hydrateError);
+        }
+      }
 
       const racePayload = {
         id: effectiveSession.sessionId,

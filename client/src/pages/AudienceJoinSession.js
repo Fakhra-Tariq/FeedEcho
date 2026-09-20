@@ -9,6 +9,7 @@ import {
 } from '../utils/joinSessionFlow';
 import { onValue, ref as dbRef, off } from 'firebase/database';
 import { db } from '../firebase';
+import AudienceTeamSelectShell from '../components/Audience/AudienceTeamSelectShell';
 
 const AudienceJoinSession = () => {
   const navigate = useNavigate();
@@ -147,10 +148,20 @@ const AudienceJoinSession = () => {
 
   if (showTeamSelection) {
     const maxStudentsPerTeam = raceData?.settings?.studentsPerTeam || 5;
+    const handleTeamSelectionBack = () => {
+      setShowTeamSelection(false);
+      setRaceData(null);
+      setSelectedTeam('');
+      if (loggedInAudience) {
+        navigate('/audience/home');
+      }
+    };
 
     return (
-      <div className="min-h-screen bg-gradient-to-br from-orange-50 via-white to-purple-50 flex items-center justify-center p-4">
-        <div className="w-full max-w-md bg-white rounded-2xl shadow-soft border border-neutral-200 p-8">
+      <AudienceTeamSelectShell
+        onLeave={handleTeamSelectionBack}
+        sessionCode={pendingJoin?.trimmedCode || sessionCode}
+      >
           <h2 className="text-xl font-bold text-text mb-2 text-center">Choose your team</h2>
           <p className="text-text/70 text-sm mb-6 text-center">
             Select a team to join (max {maxStudentsPerTeam} participants per team)
@@ -196,20 +207,12 @@ const AudienceJoinSession = () => {
           </button>
           <button
             type="button"
-            onClick={() => {
-              setShowTeamSelection(false);
-              setRaceData(null);
-              setSelectedTeam('');
-              if (loggedInAudience) {
-                navigate('/audience/home');
-              }
-            }}
+            onClick={handleTeamSelectionBack}
             className="w-full py-2 text-text/70 hover:text-text text-sm mt-2"
           >
             Back
           </button>
-        </div>
-      </div>
+      </AudienceTeamSelectShell>
     );
   }
 

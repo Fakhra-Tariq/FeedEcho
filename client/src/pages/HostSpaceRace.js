@@ -1351,8 +1351,7 @@ return (
             )}
 
             {/* Footer Buttons */}
-            <div className="p-6 border-t border-gray-200 flex justify-between">
-              <div>
+            <div className="p-6 border-t border-gray-200 flex items-start justify-end gap-3 flex-wrap">
                 {currentStep === 2 && (
                   <button
                     type="button"
@@ -1362,8 +1361,6 @@ return (
                     Previous
                   </button>
                 )}
-              </div>
-              <div className="flex space-x-3">
                 <button
                   type="button"
                   onClick={() => setShowCreate(false)}
@@ -1391,7 +1388,7 @@ return (
                     >
                       {isCreating ? 'Saving...' : 'Save as Draft'}
                     </button>
-                    <div className="inline-flex flex-col items-end">
+                    <div className="flex flex-col items-center">
                       <button
                         type="button"
                         onClick={handleStartRace}
@@ -1400,11 +1397,10 @@ return (
                       >
                         {isCreating ? 'Launching...' : 'Launch'}
                       </button>
-                      <LaunchRequiresSessionHint />
+                      <LaunchRequiresSessionHint className="w-0 min-w-full text-center" />
                     </div>
                   </>
                 )}
-              </div>
             </div>
           </div>
         </div>

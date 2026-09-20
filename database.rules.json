@@ -156,6 +156,12 @@
         ".write": true
       }
     },
+    "space_race_team_timers": {
+      "$raceId": {
+        ".read": true,
+        ".write": true
+      }
+    },
 
     "sessions": {
       ".read": "auth != null",

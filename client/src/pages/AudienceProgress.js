@@ -58,6 +58,19 @@ const formatDateTime = (iso) => {
   return `${date} · ${time}`;
 };
 
+/** Local date/time parts from a raw ISO timestamp. Falls back to stored strings for legacy rows. */
+const formatQuizDateTimeParts = (row) => {
+  const iso = row?.submittedAt || row?.sortKey || null;
+  if (iso) {
+    const dt = formatDateTime(iso);
+    if (dt !== '—') {
+      const [date, time] = dt.split(' · ');
+      return { date, time: time || '—' };
+    }
+  }
+  return { date: row?.date || '—', time: row?.time || '—' };
+};
+
 const getActivityDedupeKey = (item) => getQuizActivityDedupeKey(item);
 
 const activityRichnessScore = (item) => {
@@ -84,7 +97,24 @@ const activityRichnessScore = (item) => {
 const mergeActivityItems = (existing, incoming) => {
   const base = activityRichnessScore(incoming) >= activityRichnessScore(existing) ? incoming : existing;
   const other = base === incoming ? existing : incoming;
-  return { ...other, ...base, id: getActivityDedupeKey(base) || getActivityDedupeKey(other) };
+  const merged = { ...other, ...base, id: getActivityDedupeKey(base) || getActivityDedupeKey(other) };
+  if (merged.type === 'quiz') {
+    const a = existing.submittedAt || existing.sortKey;
+    const b = incoming.submittedAt || incoming.sortKey;
+    const ta = a ? new Date(a).getTime() : NaN;
+    const tb = b ? new Date(b).getTime() : NaN;
+    if (!Number.isNaN(tb) && (Number.isNaN(ta) || tb > ta)) {
+      merged.submittedAt = b;
+      merged.sortKey = incoming.sortKey || b;
+    } else if (!Number.isNaN(ta)) {
+      merged.submittedAt = a;
+      merged.sortKey = existing.sortKey || a;
+    }
+    const parts = formatQuizDateTimeParts(merged);
+    merged.date = parts.date;
+    merged.time = parts.time;
+  }
+  return merged;
 };
 
 const extractStudentAnswer = extractSubmissionAnswer;
@@ -277,7 +307,7 @@ export default function AudienceProgress() {
     }
   ]);
   const [chatInput, setChatInput] = useState('');
-  const { items: activityHistory, loading: loadingActivity } = useAudienceLiveActivity(student, 200);
+  const { items: activityHistory, loading: loadingActivity, reload: reloadActivity } = useAudienceLiveActivity(student, 200);
   const [hiddenActivityIds, setHiddenActivityIds] = useState([]);
   const [viewModal, setViewModal] = useState(null);
   const [deleteConfirm, setDeleteConfirm] = useState(null);
@@ -375,6 +405,39 @@ export default function AudienceProgress() {
     return () => window.removeEventListener('storage', onStorage);
   }, [refreshLocalSubmissions]);
 
+  useEffect(() => {
+    if (!student) return undefined;
+
+    const refreshQuizTimesSilent = () => {
+      refreshLocalSubmissions();
+      studentsAPI
+        .getQuizHistory({ ...getStudentQueryParams(student), limit: 200 })
+        .then((response) => {
+          setServerQuizRows(Array.isArray(response.data?.data) ? response.data.data : []);
+        })
+        .catch(() => {});
+      reloadActivity({ silent: true });
+    };
+
+    const interval = setInterval(refreshQuizTimesSilent, 4000);
+    const onFocus = () => refreshQuizTimesSilent();
+    const onVisibility = () => {
+      if (document.visibilityState === 'visible') refreshQuizTimesSilent();
+    };
+    const onSubmitted = () => refreshQuizTimesSilent();
+
+    window.addEventListener('focus', onFocus);
+    document.addEventListener('visibilitychange', onVisibility);
+    window.addEventListener('quizSubmissionSaved', onSubmitted);
+
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('focus', onFocus);
+      document.removeEventListener('visibilitychange', onVisibility);
+      window.removeEventListener('quizSubmissionSaved', onSubmitted);
+    };
+  }, [student, refreshLocalSubmissions, reloadActivity]);
+
   const firebaseQuizRows = useMemo(
     () => flattenQuizSubmissionsFromMap(submissionsByQuizId, student),
     [submissionsByQuizId, student]
@@ -423,8 +486,7 @@ export default function AudienceProgress() {
   const buildQuizActivityItem = useCallback(
     (row) => {
       const submittedAt = row.submittedAt;
-      const dt = formatDateTime(submittedAt);
-      const [date, time] = dt === '—' ? ['—', '—'] : dt.split(' · ');
+      const { date, time } = formatQuizDateTimeParts(row);
       const percentage = Number(row.percentage ?? 0);
       return {
         id: getQuizActivityDedupeKey({
@@ -741,7 +803,7 @@ export default function AudienceProgress() {
         questions.length > 0
           ? calculateQuizScore(questions, answers, quizType)
           : null;
-      return {
+      const detail = {
         ...base,
         quizId,
         title: base.quizTitle || base.title || item.title,
@@ -767,9 +829,11 @@ export default function AudienceProgress() {
           0,
         answers,
         submittedAt: base.submittedAt || item.sortKey || item.submittedAt,
-        date: base.date || item.date,
-        time: base.time || item.time,
         questions,
+      };
+      return {
+        ...detail,
+        ...formatQuizDateTimeParts(detail),
       };
     },
     [allQuizAttempts, getQuizQuestions, quizzesTree]
@@ -1029,10 +1093,14 @@ export default function AudienceProgress() {
                   {viewModal.data.title || viewModal.data.quizTitle}
                 </p>
                 <p className="text-sm text-gray-600">
-                  Date: {viewModal.data.date || formatDateTime(viewModal.data.submittedAt).split(' · ')[0]}
+                  Date: {viewModal.type === 'quiz'
+                    ? formatQuizDateTimeParts(viewModal.data).date
+                    : (viewModal.data.date || formatDateTime(viewModal.data.submittedAt).split(' · ')[0])}
                 </p>
                 <p className="text-sm text-gray-600">
-                  Time: {viewModal.data.time || formatDateTime(viewModal.data.submittedAt).split(' · ')[1]}
+                  Time: {viewModal.type === 'quiz'
+                    ? formatQuizDateTimeParts(viewModal.data).time
+                    : (viewModal.data.time || formatDateTime(viewModal.data.submittedAt).split(' · ')[1])}
                 </p>
                 {viewModal.type === 'quiz' && (
                   <>
