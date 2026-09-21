@@ -773,11 +773,13 @@ const AudienceQuizAttempt = ({
     return () => {
       cancelled = true;
     };
+    // Depend on participant id/teamId only — score/submission updates must not reload the quiz.
   }, [
     effectiveQuizId,
     embedded,
     spaceRaceId,
-    spaceRaceParticipant,
+    spaceRaceParticipant?.id,
+    spaceRaceParticipant?.teamId,
     navigate,
     isSpaceRaceRoute,
   ]);

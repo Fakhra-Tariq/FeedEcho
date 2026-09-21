@@ -678,7 +678,7 @@ export default function HostReports() {
   };
 
   return (
-    <div className="min-h-full bg-background p-4 sm:p-6 lg:p-8 space-y-8">
+    <div className="w-full space-y-8">
       {/* Header */}
       <PageHeaderCard
         compact

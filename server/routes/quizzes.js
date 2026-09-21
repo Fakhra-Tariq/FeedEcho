@@ -70,10 +70,12 @@ const generateAiQuizHandler = async (req, res) => {
   try {
     const validation = validateGenerateAiQuizBody(req.body);
     if (!validation.ok) {
+      const error = validation.errors.join('; ');
       return res.status(400).json({
         success: false,
-        error: validation.errors.join('; '),
+        error,
         errors: validation.errors,
+        data: { error, questions: [] },
       });
     }
 
@@ -86,8 +88,9 @@ const generateAiQuizHandler = async (req, res) => {
 
     if (result.kind === 'refusal') {
       return res.status(200).json({
-        success: true,
-        data: { message: result.message },
+        success: false,
+        error: result.message,
+        data: { error: result.message, questions: [] },
       });
     }
 

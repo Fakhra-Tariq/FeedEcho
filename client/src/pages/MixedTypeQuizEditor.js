@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { ArrowLeft, Trash2, Save, Rocket, Sparkles } from 'lucide-react';
+import { Trash2, Save, Rocket, Sparkles } from 'lucide-react';
 import clsx from 'clsx';
 import { useHybridAlert } from '../contexts/HybridAlertContext';
 import LaunchQuizModal from '../components/LaunchQuizModal';
@@ -19,10 +19,12 @@ import {
   requireActiveHostSession,
 } from '../utils/requireActiveHostSession';
 import { persistLaunchedQuizInLocalStorage } from '../utils/quizLaunchSettings';
+import useQuizCreateBackToLibrary from '../hooks/useQuizCreateBackToLibrary';
 
 const MixedTypeQuizEditor = () => {
   const navigate = useNavigate();
   const location = useLocation();
+  useQuizCreateBackToLibrary();
   const { alert } = useHybridAlert();
   const { data: teacherData } = useHostData();
   const [quizTitle, setQuizTitle] = useState('');
@@ -33,7 +35,10 @@ const MixedTypeQuizEditor = () => {
   const [showLaunchModal, setShowLaunchModal] = useState(false);
   const [showNoSessionModal, setShowNoSessionModal] = useState(false);
   const [savedQuizId, setSavedQuizId] = useState(null);
-  const [showAiPanel, setShowAiPanel] = useState(false);
+  const [showAiPanel, setShowAiPanel] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    return new URLSearchParams(window.location.search).get('ai') === '1';
+  });
   const [quizSource, setQuizSource] = useState(null);
   const [isQuizLaunched, setIsQuizLaunched] = useState(false);
 
@@ -422,15 +427,7 @@ const MixedTypeQuizEditor = () => {
       <div className="container mx-auto px-3 sm:px-4 lg:px-6 py-4 sm:py-6 lg:py-8">
         {/* Page Header with Navigation */}
         <div className="mb-6 sm:mb-8 lg:mb-10">
-          <div className="flex items-center justify-between">
-            <button
-              onClick={() => navigate('/quiz-library')}
-              className="flex items-center space-x-2 text-gray-600 hover:text-gray-900 transition-colors"
-            >
-              <ArrowLeft className="w-4 h-4 sm:w-5 sm:h-5" />
-              <span className="text-sm sm:text-base font-medium">Back to Library</span>
-            </button>
-            
+          <div className="flex items-center justify-end">
             <div className="flex items-center space-x-3">
               <button
                 type="button"
@@ -491,7 +488,7 @@ const MixedTypeQuizEditor = () => {
             </div>
           </div>
           
-          <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-gray-900 mb-3 sm:mb-4 mt-4">
+          <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-gray-900 mb-3 sm:mb-4 mt-1">
             Create Mixed Type Quiz
           </h1>
           <p className="text-sm sm:text-base lg:text-lg text-gray-600 max-w-2xl">

@@ -14,6 +14,7 @@ import QuizStructureModal from '../components/QuizStructureModal';
 import InfoRecap from '../components/Host/InfoRecap';
 import SessionLaunchBanner from '../components/Host/SessionLaunchBanner';
 import PageHeaderCard from '../components/Host/PageHeaderCard';
+import AiQuizGeneratorPanel from '../components/AiQuizGeneratorPanel';
 import { SurfaceCard } from '../components/marketing/SurfaceCard';
 
 const launchOptions = [
@@ -64,6 +65,9 @@ const HostLaunch = () => {
   const [showCopyPasteModal, setShowCopyPasteModal] = useState(false);
   const [showImportModal, setShowImportModal] = useState(false);
   const [showQuizStructureModal, setShowQuizStructureModal] = useState(false);
+  const [showAiPanel, setShowAiPanel] = useState(
+    () => new URLSearchParams(window.location.search).get('ai') === '1'
+  );
   const panelRef = useRef(null);
 
   useEffect(() => {
@@ -98,7 +102,7 @@ const HostLaunch = () => {
   };
 
   const handleAiClick = () => {
-    navigate('/create/mixed-type', { state: { openAiPanel: true } });
+    setShowAiPanel(true);
   };
 
   return (
@@ -192,6 +196,11 @@ const HostLaunch = () => {
         isOpen={showImportModal}
         onClose={() => setShowImportModal(false)}
         onCreateQuiz={(route) => navigate(route)}
+      />
+
+      <AiQuizGeneratorPanel
+        isOpen={showAiPanel}
+        onClose={() => setShowAiPanel(false)}
       />
     </div>
   );

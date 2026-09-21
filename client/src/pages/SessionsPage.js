@@ -19,6 +19,7 @@ import { useHostData } from '../contexts/HostDataContext';
 import { useHybridAlert } from '../contexts/HybridAlertContext';
 import { sessionsAPI } from '../services/api';
 import PageHeaderCard from '../components/Host/PageHeaderCard';
+import EndSessionButton from '../components/Host/EndSessionButton';
 import {
   formatSessionActivityHistoryLine,
   parseSessionActivities,
@@ -356,7 +357,12 @@ const SessionCard = ({ session, onCopyCode, onDelete }) => {
 
   return (
     <article className="bg-white dark:bg-[#3A2E2A] rounded-2xl p-6 shadow-lg border border-[#6D415F]/20">
-      <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
+      <div className={clsx(
+        'flex gap-4',
+        isActive
+          ? 'flex-row items-start justify-between'
+          : 'flex-col lg:flex-row lg:items-start lg:justify-between'
+      )}>
         <div className="flex-1 min-w-0">
           <div className="flex flex-wrap items-center gap-3 mb-3">
             <h2 className="text-xl font-bold text-[#2E1F2A] dark:text-white truncate">
@@ -398,16 +404,23 @@ const SessionCard = ({ session, onCopyCode, onDelete }) => {
           </div>
         </div>
 
-        {!isActive && onDelete && (
-          <button
-            type="button"
-            onClick={() => onDelete(session)}
-            className="shrink-0 p-2 rounded-xl text-gray-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-500/10 transition-colors"
-            aria-label="Delete session"
-            title="Delete session"
-          >
-            <Trash2 className="w-5 h-5" />
-          </button>
+        {isActive ? (
+          <EndSessionButton
+            className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-red-500 text-white text-sm font-semibold hover:bg-red-600 transition-colors"
+            labelClassName=""
+          />
+        ) : (
+          onDelete && (
+            <button
+              type="button"
+              onClick={() => onDelete(session)}
+              className="shrink-0 p-2 rounded-xl text-gray-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-500/10 transition-colors"
+              aria-label="Delete session"
+              title="Delete session"
+            >
+              <Trash2 className="w-5 h-5" />
+            </button>
+          )
         )}
       </div>
 

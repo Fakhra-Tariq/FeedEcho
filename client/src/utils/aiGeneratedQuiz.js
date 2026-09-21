@@ -143,6 +143,43 @@ export function normalizeAiQuestionsForQuizType(questions, quizType) {
   });
 }
 
+const REFUSAL_TEXT_RE =
+  /only able to help|cannot assist|please provide a valid|not related to creating quiz|does not provide a clear topic|please describe a specific quiz topic/i;
+
+function optionText(option) {
+  if (typeof option === 'string') return option.trim();
+  return String(option?.text || '').trim();
+}
+
+function isRealGeneratedQuestion(question) {
+  if (!question || typeof question !== 'object') return false;
+  const text = String(question.questionText || question.question || '').trim();
+  if (!text || REFUSAL_TEXT_RE.test(text)) return false;
+
+  const type = String(question.type || '').trim();
+  if (type === 'multiple-choice' || type === 'mcq') {
+    const options = Array.isArray(question.options) ? question.options.map(optionText).filter(Boolean) : [];
+    return options.length >= 2;
+  }
+  if (type === 'true-false' || type === 'trueFalse') {
+    const answer = question.correctAnswer;
+    return answer === true || answer === false || answer === 'true' || answer === 'false';
+  }
+  if (type === 'short-answer' || type === 'shortAnswer') {
+    return String(question.sampleAnswer || question.correctAnswer || '').trim().length > 0;
+  }
+  return text.length > 0;
+}
+
+/** True only when the AI payload is a usable quiz, not a refusal or empty shell. */
+export function isUsableAiQuizResponse(data) {
+  if (!data || typeof data !== 'object') return false;
+  if (data.error || (data.message && !data.questions?.length)) return false;
+  const questions = Array.isArray(data.questions) ? data.questions : [];
+  if (!questions.length) return false;
+  return questions.every(isRealGeneratedQuestion);
+}
+
 export function buildEditingQuizFromAiResponse(data) {
   const quizType = data.type || 'Mixed Type';
   const questions = normalizeAiQuestionsForQuizType(data.questions || [], quizType);

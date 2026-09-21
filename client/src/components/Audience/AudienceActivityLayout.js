@@ -10,20 +10,36 @@ export function AudienceActivityHeader({
   badge = null,
   titleIcon = null,
   participantName = 'Audience',
+  onLogoClick = null,
   children,
 }) {
+  const logo = (
+    <img
+      src="/FeedEcho-logo.png.png"
+      alt="FeedEcho"
+      className="h-40 w-auto max-w-[11rem] object-contain object-left mix-blend-multiply"
+    />
+  );
+
   return (
     <div className="bg-white border-b border-neutral-200">
       <div className={AUDIENCE_ACTIVITY_PAGE_WIDTH}>
         <div className="grid grid-cols-3 items-center gap-2 h-16">
           <div className="flex justify-start min-w-0">
-            <div className="relative flex h-16 shrink-0 items-center">
-              <img
-                src="/FeedEcho-logo.png.png"
-                alt="FeedEcho"
-                className="h-40 w-auto max-w-[11rem] object-contain object-left mix-blend-multiply"
-              />
-            </div>
+            {onLogoClick ? (
+              <button
+                type="button"
+                onClick={onLogoClick}
+                aria-label="Leave"
+                className="relative flex h-16 shrink-0 items-center cursor-pointer"
+              >
+                {logo}
+              </button>
+            ) : (
+              <div className="relative flex h-16 shrink-0 items-center">
+                {logo}
+              </div>
+            )}
           </div>
           <div className="min-w-0 flex flex-wrap items-center justify-center gap-x-2 gap-y-1">
             {titleIcon}

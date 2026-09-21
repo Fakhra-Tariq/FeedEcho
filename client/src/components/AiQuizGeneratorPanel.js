@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import clsx from 'clsx';
 import { X, Loader2, ChevronUp, ChevronDown } from 'lucide-react';
@@ -7,6 +7,7 @@ import { appToast } from '../contexts/HybridAlertContext';
 import {
   buildEditingQuizFromAiResponse,
   getQuizEditorRoute,
+  isUsableAiQuizResponse,
 } from '../utils/aiGeneratedQuiz';
 
 const QUESTION_TYPE_OPTIONS = [
@@ -23,6 +24,18 @@ const DIFFICULTY_OPTIONS = [
 
 const clampQuestionCount = (value) => Math.min(50, Math.max(1, value));
 
+const MIN_PROMPT_LENGTH = 5;
+const PROMPT_REQUIRED_MSG = 'Please enter a prompt describing what your quiz should cover.';
+const GENERATE_FAILED_MSG =
+  "Couldn't generate a quiz from that prompt. Try describing a specific topic.";
+
+const isPromptInvalid = (value) => String(value || '').trim().length < MIN_PROMPT_LENGTH;
+
+const AI_MODAL_PARAM = 'ai';
+
+const hasAiHistoryFlag = (search) =>
+  new URLSearchParams(search || '').get(AI_MODAL_PARAM) === '1';
+
 const AiQuizGeneratorPanel = ({ isOpen, onClose, onApplyGeneratedQuiz }) => {
   const navigate = useNavigate();
   const location = useLocation();
@@ -34,6 +47,29 @@ const AiQuizGeneratorPanel = ({ isOpen, onClose, onApplyGeneratedQuiz }) => {
   const [numberOfQuestions, setNumberOfQuestions] = useState(5);
   const [isGenerating, setIsGenerating] = useState(false);
   const [errorMessage, setErrorMessage] = useState(null);
+  const [questionTypeError, setQuestionTypeError] = useState(null);
+  const onCloseRef = useRef(onClose);
+  const historyEntryRef = useRef('idle');
+  const promptRef = useRef(null);
+  const formScrollRef = useRef(null);
+  onCloseRef.current = onClose;
+
+  const showPromptError = (message) => {
+    setErrorMessage(message);
+    const scrollToPrompt = () => {
+      formScrollRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
+      promptRef.current?.focus();
+    };
+    requestAnimationFrame(scrollToPrompt);
+  };
+
+  const handlePromptChange = (event) => {
+    const next = event.target.value;
+    setPrompt(next);
+    if (!isPromptInvalid(next)) {
+      setErrorMessage(null);
+    }
+  };
 
   useEffect(() => {
     if (isOpen) {
@@ -49,7 +85,60 @@ const AiQuizGeneratorPanel = ({ isOpen, onClose, onApplyGeneratedQuiz }) => {
     return () => clearTimeout(timer);
   }, [isOpen]);
 
+  // One history entry while the modal is open so browser Back closes it in place.
+  useEffect(() => {
+    if (!isOpen) {
+      historyEntryRef.current = 'idle';
+      return;
+    }
+    if (hasAiHistoryFlag(location.search)) {
+      historyEntryRef.current = 'active';
+      return;
+    }
+    if (historyEntryRef.current === 'pending' || historyEntryRef.current === 'active') return;
+    historyEntryRef.current = 'pending';
+    const params = new URLSearchParams(location.search);
+    params.set(AI_MODAL_PARAM, '1');
+    navigate(
+      { pathname: location.pathname, search: `?${params.toString()}` },
+      { replace: false }
+    );
+  }, [isOpen, location.pathname, location.search, navigate]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    if (historyEntryRef.current !== 'active') return;
+    if (hasAiHistoryFlag(location.search)) return;
+    historyEntryRef.current = 'idle';
+    onCloseRef.current?.();
+  }, [isOpen, location.search]);
+
+  const dismissModal = () => {
+    const hadFlag = hasAiHistoryFlag(window.location.search);
+    historyEntryRef.current = 'idle';
+    onCloseRef.current?.();
+    if (hadFlag) {
+      navigate(-1);
+    }
+  };
+
+  const clearAiFlagByReplace = (nextPath) => {
+    if (nextPath) {
+      navigate(nextPath, { replace: hasAiHistoryFlag(window.location.search) });
+      return;
+    }
+    if (!hasAiHistoryFlag(window.location.search)) return;
+    const params = new URLSearchParams(location.search);
+    params.delete(AI_MODAL_PARAM);
+    const search = params.toString();
+    navigate(
+      { pathname: location.pathname, search: search ? `?${search}` : '' },
+      { replace: true }
+    );
+  };
+
   const toggleQuestionType = (value) => {
+    setQuestionTypeError(null);
     setQuestionTypes((prev) => {
       if (prev.includes(value)) {
         if (prev.length === 1) return prev;
@@ -87,28 +176,33 @@ const AiQuizGeneratorPanel = ({ isOpen, onClose, onApplyGeneratedQuiz }) => {
   const applyGeneratedQuiz = (data) => {
     const quiz = buildEditingQuizFromAiResponse(data);
     const route = getQuizEditorRoute(quiz.type);
+    const hadFlag = hasAiHistoryFlag(window.location.search);
+    historyEntryRef.current = 'idle';
 
     if (location.pathname === route) {
       onApplyGeneratedQuiz?.(quiz);
-      onClose();
+      onCloseRef.current?.();
+      clearAiFlagByReplace();
       return;
     }
 
     localStorage.setItem('editingQuiz', JSON.stringify(quiz));
-    onClose();
-    navigate(route);
+    onCloseRef.current?.();
+    navigate(route, { replace: hadFlag });
   };
 
   const handleGenerate = async () => {
+    if (isGenerating) return;
+
     const trimmedPrompt = prompt.trim();
 
-    if (!trimmedPrompt) {
-      setErrorMessage('Please enter a prompt describing what your quiz should cover.');
+    if (isPromptInvalid(prompt)) {
+      showPromptError(PROMPT_REQUIRED_MSG);
       return;
     }
 
     if (!questionTypes.length) {
-      setErrorMessage('Please select at least one question type.');
+      setQuestionTypeError('Please select at least one question type.');
       return;
     }
 
@@ -117,6 +211,7 @@ const AiQuizGeneratorPanel = ({ isOpen, onClose, onApplyGeneratedQuiz }) => {
 
     setIsGenerating(true);
     setErrorMessage(null);
+    setQuestionTypeError(null);
 
     try {
       const response = await quizzesAPI.generateAi({
@@ -126,21 +221,31 @@ const AiQuizGeneratorPanel = ({ isOpen, onClose, onApplyGeneratedQuiz }) => {
         numberOfQuestions: count,
       });
 
-      const data = response.data?.data;
+      const payload = response.data;
+      const data = payload?.data;
 
-      if (data?.message && !data?.questions?.length) {
-        onClose();
-        appToast.info(data.message);
+      if (
+        !payload?.success ||
+        data?.error ||
+        payload?.error ||
+        !isUsableAiQuizResponse(data)
+      ) {
+        showPromptError(GENERATE_FAILED_MSG);
         return;
       }
 
-      if (data?.questions?.length) {
-        applyGeneratedQuiz(data);
+      applyGeneratedQuiz(data);
+    } catch (error) {
+      const status = error.response?.status;
+      const apiError = error.response?.data?.data?.error || error.response?.data?.error;
+      if (status === 400) {
+        showPromptError(PROMPT_REQUIRED_MSG);
         return;
       }
-
-      setErrorMessage('No questions were returned. Try adjusting your prompt or settings.');
-    } catch {
+      if (apiError) {
+        showPromptError(GENERATE_FAILED_MSG);
+        return;
+      }
       appToast.error('Failed to generate quiz, please try again.');
     } finally {
       setIsGenerating(false);
@@ -175,7 +280,7 @@ const AiQuizGeneratorPanel = ({ isOpen, onClose, onApplyGeneratedQuiz }) => {
         </div>
         <button
           type="button"
-          onClick={onClose}
+          onClick={dismissModal}
           className="p-2 rounded-lg text-text/60 hover:text-primary hover:bg-primary/10 transition-colors shrink-0"
           aria-label="Close AI quiz assistant"
         >
@@ -184,7 +289,7 @@ const AiQuizGeneratorPanel = ({ isOpen, onClose, onApplyGeneratedQuiz }) => {
       </div>
 
       {/* Form */}
-      <div className="flex-1 min-h-0 overflow-y-auto px-5 py-5 space-y-6">
+      <div ref={formScrollRef} className="flex-1 min-h-0 overflow-y-auto px-5 py-5 space-y-6">
         {/* Prompt */}
         <div>
           <label htmlFor="ai-prompt" className="block text-sm font-semibold text-text mb-2">
@@ -192,12 +297,24 @@ const AiQuizGeneratorPanel = ({ isOpen, onClose, onApplyGeneratedQuiz }) => {
           </label>
           <textarea
             id="ai-prompt"
+            ref={promptRef}
             value={prompt}
-            onChange={(e) => setPrompt(e.target.value)}
+            onChange={handlePromptChange}
             placeholder="e.g. Object-oriented programming: classes, objects, inheritance and polymorphism"
             rows={4}
-            className="w-full px-4 py-3 text-sm text-text border border-primary/15 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary resize-none bg-white placeholder:text-text/40"
+            aria-invalid={Boolean(errorMessage)}
+            className={clsx(
+              'w-full px-4 py-3 text-sm text-text rounded-xl focus:outline-none focus:ring-2 resize-none bg-white placeholder:text-text/40',
+              errorMessage
+                ? 'border border-red-400 focus:ring-red-200 focus:border-red-500'
+                : 'border border-primary/15 focus:ring-primary/20 focus:border-primary'
+            )}
           />
+          {errorMessage && (
+            <div className="mt-2 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+              {errorMessage}
+            </div>
+          )}
         </div>
 
         {/* Question type */}
@@ -227,6 +344,11 @@ const AiQuizGeneratorPanel = ({ isOpen, onClose, onApplyGeneratedQuiz }) => {
               );
             })}
           </div>
+          {questionTypeError && (
+            <div className="mt-2 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+              {questionTypeError}
+            </div>
+          )}
         </div>
 
         {/* Difficulty */}
@@ -292,12 +414,6 @@ const AiQuizGeneratorPanel = ({ isOpen, onClose, onApplyGeneratedQuiz }) => {
             </div>
           </div>
         </div>
-
-        {errorMessage && (
-          <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-            {errorMessage}
-          </div>
-        )}
       </div>
 
       {/* Footer */}

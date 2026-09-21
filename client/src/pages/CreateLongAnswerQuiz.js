@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Plus, Trash2, Save, Rocket } from 'lucide-react';
+import { Plus, Trash2, Save, Rocket } from 'lucide-react';
 import { useHybridAlert } from '../contexts/HybridAlertContext';
 import LaunchQuizModal from '../components/LaunchQuizModal';
 import NoActiveSessionLaunchModal, {
@@ -14,9 +13,10 @@ import {
   requireActiveHostSession,
 } from '../utils/requireActiveHostSession';
 import { persistLaunchedQuizInLocalStorage } from '../utils/quizLaunchSettings';
+import useQuizCreateBackToLibrary from '../hooks/useQuizCreateBackToLibrary';
 
 const CreateLongAnswerQuiz = () => {
-  const navigate = useNavigate();
+  useQuizCreateBackToLibrary();
   const { alert } = useHybridAlert();
   const { data: teacherData } = useHostData();
   const [quizTitle, setQuizTitle] = useState('');
@@ -159,15 +159,7 @@ const CreateLongAnswerQuiz = () => {
       <div className="container mx-auto px-3 sm:px-4 lg:px-6 py-4 sm:py-6 lg:py-8">
         {/* Page Header with Navigation */}
         <div className="mb-6 sm:mb-8 lg:mb-10">
-          <div className="flex items-center justify-between">
-            <button
-              onClick={() => navigate('/quiz-library')}
-              className="flex items-center space-x-2 text-gray-600 hover:text-gray-900 transition-colors"
-            >
-              <ArrowLeft className="w-4 h-4 sm:w-5 sm:h-5" />
-              <span className="text-sm sm:text-base font-medium">Back to Library</span>
-            </button>
-            
+          <div className="flex items-center justify-end">
             <div className="flex items-center space-x-3">
               {/* Save Quiz Button */}
               <button
@@ -208,7 +200,7 @@ const CreateLongAnswerQuiz = () => {
             </div>
           </div>
           
-          <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-gray-900 mb-3 sm:mb-4 mt-4">
+          <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-gray-900 mb-3 sm:mb-4 mt-1">
             Create Long Answer Quiz
           </h1>
           <p className="text-sm sm:text-base lg:text-lg text-gray-600 max-w-2xl">

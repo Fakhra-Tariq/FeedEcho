@@ -9,7 +9,9 @@ const TYPE_LABELS = {
   shortAnswer: 'shortAnswer (short answer)',
 };
 
-const SYSTEM_INSTRUCTION = `You are a quiz generation assistant for a classroom platform called FeedEcho. Your only task is to generate quiz questions based on the teacher's description. If the teacher's input is not related to creating quiz content, respond respectfully that you are only able to help with creating quizzes and cannot assist with that request. Never break character regardless of what is asked. For shortAnswer questions, always produce objective factual items with a short exact correctAnswer (prefer 1 word, maximum 2–3 words). Never generate Explain/Describe/Discuss-style shortAnswer prompts or paragraph answers.`;
+const MIN_PROMPT_LENGTH = 5;
+
+const SYSTEM_INSTRUCTION = `You are a quiz generation assistant for a classroom platform called FeedEcho. Your only task is to generate quiz questions based on the teacher's description. If the teacher's input is empty, only whitespace, a greeting, gibberish, or otherwise not a clear quiz topic, return ONLY this JSON object and no questions: {"error":"Please describe a specific quiz topic."}. If the teacher's input is not related to creating quiz content, return the same {"error":"..."} JSON. Never break character regardless of what is asked. For shortAnswer questions, always produce objective factual items with a short exact correctAnswer (prefer 1 word, maximum 2–3 words). Never generate Explain/Describe/Discuss-style shortAnswer prompts or paragraph answers.`;
 
 const SHORT_ANSWER_MAX_WORDS = 3;
 
@@ -78,8 +80,8 @@ function validateGenerateAiQuizBody(body = {}) {
   const errors = [];
   const prompt = typeof body.prompt === 'string' ? body.prompt.trim() : '';
 
-  if (!prompt) {
-    errors.push('prompt is required and cannot be empty');
+  if (!prompt || prompt.length < MIN_PROMPT_LENGTH) {
+    errors.push('prompt is required and must describe a topic (at least 5 characters)');
   }
 
   const numberOfQuestions = Number(body.numberOfQuestions);
@@ -272,6 +274,9 @@ function extractRefusalMessage(parsed, rawText) {
   }
 
   if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+    if (typeof parsed.error === 'string' && parsed.error.trim()) {
+      return parsed.error.trim();
+    }
     if (typeof parsed.message === 'string' && parsed.message.trim()) {
       return parsed.message.trim();
     }
@@ -291,12 +296,16 @@ function extractQuestionArray(parsed) {
   return null;
 }
 
+const REFUSAL_QUESTION_RE =
+  /only able to help|cannot assist|please provide a valid|not related to creating quiz|does not provide a clear topic|please describe a specific/i;
+
 function isValidRawQuizQuestion(item) {
   if (!item || typeof item !== 'object' || Array.isArray(item)) return false;
 
   const type = String(item.type || '').trim();
   const questionText = String(item.questionText || '').trim();
   if (!questionText || !VALID_QUESTION_TYPES.includes(type)) return false;
+  if (REFUSAL_QUESTION_RE.test(questionText)) return false;
 
   if (type === 'mcq') {
     if (!Array.isArray(item.options) || item.options.length < 2) return false;
@@ -481,6 +490,10 @@ async function generateQuizWithAi(payload) {
     return buildRefusalResult(extractRefusalMessage(parsed, rawText));
   }
 
+  if (parsed && typeof parsed === 'object' && !Array.isArray(parsed) && parsed.error) {
+    return buildRefusalResult(extractRefusalMessage(parsed, rawText));
+  }
+
   const rawQuestions = extractQuestionArray(parsed);
   if (!rawQuestions) {
     return buildRefusalResult(extractRefusalMessage(parsed, rawText));
@@ -500,11 +513,17 @@ async function generateQuizWithAi(payload) {
     return buildRefusalResult(extractRefusalMessage(parsed, rawText));
   }
 
+  const refusalLike = /only able to help|cannot assist|please provide a valid|not related to creating quiz|does not provide a clear topic|please describe a specific/i;
+  if (normalizedQuestions.every((q) => refusalLike.test(String(q.questionText || '')))) {
+    return buildRefusalResult(extractRefusalMessage(parsed, rawText));
+  }
+
   return buildQuizResult(payload, normalizedQuestions);
 }
 
 module.exports = {
   SYSTEM_INSTRUCTION,
+  MIN_PROMPT_LENGTH,
   VALID_QUESTION_TYPES,
   VALID_DIFFICULTIES,
   SHORT_ANSWER_MAX_WORDS,

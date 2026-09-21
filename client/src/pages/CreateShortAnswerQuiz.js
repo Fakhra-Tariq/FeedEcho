@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Plus, Trash2, Save, Rocket } from 'lucide-react';
+import { Plus, Trash2, Save, Rocket } from 'lucide-react';
 import { useHybridAlert } from '../contexts/HybridAlertContext';
 import LaunchQuizModal from '../components/LaunchQuizModal';
 import NoActiveSessionLaunchModal, {
@@ -16,9 +15,10 @@ import {
   requireActiveHostSession,
 } from '../utils/requireActiveHostSession';
 import { persistLaunchedQuizInLocalStorage } from '../utils/quizLaunchSettings';
+import useQuizCreateBackToLibrary from '../hooks/useQuizCreateBackToLibrary';
 
 const CreateShortAnswerQuiz = () => {
-  const navigate = useNavigate();
+  useQuizCreateBackToLibrary();
   const { alert } = useHybridAlert();
   const { data: teacherData } = useHostData();
   const [quizTitle, setQuizTitle] = useState('');
@@ -148,15 +148,7 @@ const CreateShortAnswerQuiz = () => {
       <div className="container mx-auto px-3 sm:px-4 lg:px-6 py-2 sm:py-3 lg:py-4">
         {/* Page Header with Navigation */}
         <div className="mb-2 sm:mb-3 lg:mb-4">
-          <div className="flex items-center justify-between">
-            <button
-              onClick={() => navigate('/quiz-library')}
-              className="flex items-center space-x-2 text-gray-600 hover:text-gray-900 transition-colors"
-            >
-              <ArrowLeft className="w-4 h-4 sm:w-5 sm:h-5" />
-              <span className="text-sm sm:text-base font-medium">Back to Library</span>
-            </button>
-            
+          <div className="flex items-center justify-end">
             <div className="flex items-center space-x-3">
               {/* Save Quiz Button */}
               <button
@@ -197,7 +189,7 @@ const CreateShortAnswerQuiz = () => {
             </div>
           </div>
           
-          <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-gray-900 mb-1 sm:mb-2 mt-2">
+          <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-gray-900 mb-1 sm:mb-2 mt-1">
             Create Short Answer Quiz
           </h1>
           <p className="text-sm sm:text-base lg:text-lg text-gray-600 max-w-2xl">

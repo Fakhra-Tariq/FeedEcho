@@ -17,7 +17,6 @@ import {
   FileText,
   X,
   Copy,
-  AlertCircle,
 } from 'lucide-react';
 import clsx from 'clsx';
 import { useHostData } from '../contexts/HostDataContext';
@@ -26,10 +25,11 @@ import { useHybridAlert } from '../contexts/HybridAlertContext';
 import { toParticipantCount } from '../utils/toParticipantCount';
 import { copyToClipboard } from '../utils/copyToClipboard';
 import PageHeaderCard from '../components/Host/PageHeaderCard';
+import EndSessionButton from '../components/Host/EndSessionButton';
 
 const HostDashboard = () => {
   const navigate = useNavigate();
-  const { data, endActiveSession, incrementParticipantCount, createSession, endStandaloneSession } = useHostData();
+  const { data, incrementParticipantCount, createSession } = useHostData();
   const { alert } = useHybridAlert();
 
   const recentActivity = data.activityLog.slice(0, 6);
@@ -50,7 +50,6 @@ const HostDashboard = () => {
   const [sessionName, setSessionName] = useState('');
   const [showCreatedPopup, setShowCreatedPopup] = useState(false);
   const [createdSessionData, setCreatedSessionData] = useState(null);
-  const [showEndConfirmModal, setShowEndConfirmModal] = useState(false);
 
   const handleCreateSession = async () => {
     if (!sessionName.trim()) {
@@ -84,31 +83,6 @@ const HostDashboard = () => {
       alert.toast.success('Code copied to clipboard!');
     } else {
       alert.toast.error('Could not copy code. Please copy it manually.');
-    }
-  };
-
-  const handleEndSession = async () => {
-    if (activeSession?.type === 'session' && activeSession?.sessionId) {
-      try {
-        await endStandaloneSession(activeSession.sessionId);
-        setShowEndConfirmModal(false);
-        if (alert?.toast?.success) {
-          alert.toast.success('Session ended successfully');
-        }
-      } catch (error) {
-        if (alert?.toast?.error) {
-          alert.toast.error(error?.message || 'Failed to end session');
-        }
-      }
-    } else {
-      try {
-        await endActiveSession();
-        setShowEndConfirmModal(false);
-      } catch (error) {
-        if (alert?.toast?.error) {
-          alert.toast.error(error?.message || 'Failed to end session');
-        }
-      }
     }
   };
 
@@ -167,6 +141,7 @@ const HostDashboard = () => {
 
   return (
     <div className="space-y-8 animate-fade-in">
+      <div className="flex flex-col gap-3">
       {/* Header Section */}
       <PageHeaderCard
         icon={Rocket}
@@ -192,58 +167,49 @@ const HostDashboard = () => {
 
       {/* Session Bar - shown when any session is active */}
       {activeSession && (
-        <div className="bg-white dark:bg-[#3A2E2A] rounded-2xl p-6 shadow-lg border border-[#6D415F]/30">
+        <div className="bg-white dark:bg-[#3A2E2A] rounded-2xl px-6 py-4 shadow-lg border border-[#6D415F]/30">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-            <div className="flex-1">
-              <div className="flex items-center gap-3 mb-2">
-                <div className="w-10 h-10 bg-[#6D415F]/10 rounded-full flex items-center justify-center">
-                  <Activity className="w-5 h-5 text-[#6D415F]" />
-                </div>
-                <div>
-                  <p className="text-xs font-semibold text-[#6D415F] uppercase tracking-widest">Active Session</p>
-                  <h3 className="text-lg font-bold text-[#2E1F2A] dark:text-white">
-                    {activeSession.sessionName || 'Session'}
-                  </h3>
-                </div>
+            <div className="flex items-center gap-3 min-w-0 flex-1">
+              <div className="w-10 h-10 bg-[#6D415F]/10 rounded-full flex items-center justify-center shrink-0">
+                <Activity className="w-5 h-5 text-[#6D415F]" />
               </div>
-              <div className="flex flex-wrap items-center gap-x-4 gap-y-2 ml-13">
-                <div className="flex items-center gap-2">
-                  <span className="text-sm text-[#5A4A55] dark:text-white/70">Code:</span>
-                  <span className="text-xl font-bold text-[#6D415F]">{activeSession.joinCode}</span>
-                  <button
-                    type="button"
-                    onClick={(e) => handleCopyCode(activeSession.joinCode, e)}
-                    className="p-1 hover:bg-[#6D415F]/10 rounded transition-colors"
-                    title="Copy code"
-                    aria-label="Copy session code"
-                  >
-                    <Copy className="w-4 h-4 text-[#6D415F]" />
-                  </button>
-                </div>
-                {activeActivityLabel ? (
-                  <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#6D415F]/10 text-[#6D415F] text-sm font-semibold">
-                    <span className="w-2 h-2 rounded-full bg-[#6D415F] animate-pulse" aria-hidden />
-                    {activeActivityLabel}
-                  </span>
-                ) : (
-                  <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-gray-100 text-gray-600 text-sm font-semibold">
-                    No Active Activity
-                  </span>
-                )}
-                <div className="flex items-center gap-2">
-                  <Users className="w-4 h-4 text-[#6D415F]" />
-                  <span className="text-sm text-[#5A4A55] dark:text-white/70">{toParticipantCount(activeSession.participants)} participants</span>
+              <div className="min-w-0">
+                <h3 className="text-lg font-bold text-[#2E1F2A] dark:text-white">
+                  {activeSession.sessionName || 'Session'}
+                </h3>
+                <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm text-[#5A4A55] dark:text-white/70">Code:</span>
+                    <span className="text-xl font-bold text-[#6D415F]">{activeSession.joinCode}</span>
+                    <button
+                      type="button"
+                      onClick={(e) => handleCopyCode(activeSession.joinCode, e)}
+                      className="p-1 hover:bg-[#6D415F]/10 rounded transition-colors"
+                      title="Copy code"
+                      aria-label="Copy session code"
+                    >
+                      <Copy className="w-4 h-4 text-[#6D415F]" />
+                    </button>
+                  </div>
+                  {activeActivityLabel ? (
+                    <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#6D415F]/10 text-[#6D415F] text-sm font-semibold">
+                      <span className="w-2 h-2 rounded-full bg-[#6D415F] animate-pulse" aria-hidden />
+                      {activeActivityLabel}
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-gray-100 text-gray-600 text-sm font-semibold">
+                      No Active Activity
+                    </span>
+                  )}
                 </div>
               </div>
             </div>
-            <div className="flex items-center gap-3">
-              <button
-                onClick={() => setShowEndConfirmModal(true)}
-                className="flex items-center gap-2 px-4 py-2 rounded-xl bg-red-500 text-white font-semibold hover:bg-red-600 transition-colors"
-              >
-                <X className="w-4 h-4" />
-                <span className="hidden sm:inline">End Session</span>
-              </button>
+            <div className="flex items-center gap-5 shrink-0">
+              <div className="flex items-center gap-2">
+                <Users className="w-4 h-4 text-[#6D415F]" />
+                <span className="text-sm text-[#5A4A55] dark:text-white/70">{toParticipantCount(activeSession.participants)} participants</span>
+              </div>
+              <EndSessionButton />
             </div>
           </div>
         </div>
@@ -268,6 +234,7 @@ const HostDashboard = () => {
             <div className="absolute top-0 right-0 w-20 h-20 bg-gradient-to-br from-[#6D415F]/10 to-transparent rounded-full -mr-10 -mt-10" />
           </button>
         ))}
+      </div>
       </div>
 
       {/* Main Content Grid */}
@@ -383,36 +350,6 @@ const HostDashboard = () => {
                 className="flex-1 px-4 py-3 rounded-xl border border-gray-300 dark:border-white/20 text-[#2E1F2A] dark:text-white font-semibold hover:bg-gray-50 dark:hover:bg-white/10 transition-colors"
               >
                 Done
-              </button>
-            </div>
-          </div>
-        </div>,
-        document.body
-      )}
-
-      {/* End Session Confirmation Modal */}
-      {showEndConfirmModal && createPortal(
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[9999] p-4">
-          <div className="bg-white dark:bg-[#3A2E2A] rounded-2xl p-6 w-full max-w-md shadow-2xl text-center">
-            <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
-              <AlertCircle className="w-8 h-8 text-red-500" />
-            </div>
-            <h2 className="text-2xl font-bold text-[#2E1F2A] dark:text-white mb-2">End Session?</h2>
-            <p className="text-[#5A4A55] dark:text-white/70 mb-6">
-              Are you sure you want to end this session? This action cannot be undone.
-            </p>
-            <div className="flex gap-3">
-              <button
-                onClick={() => setShowEndConfirmModal(false)}
-                className="flex-1 px-4 py-3 rounded-xl border border-gray-300 dark:border-white/20 text-[#2E1F2A] dark:text-white font-semibold hover:bg-gray-50 dark:hover:bg-white/10 transition-colors"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleEndSession}
-                className="flex-1 px-4 py-3 rounded-xl bg-red-500 text-white font-semibold hover:bg-red-600 transition-colors"
-              >
-                End Session
               </button>
             </div>
           </div>
