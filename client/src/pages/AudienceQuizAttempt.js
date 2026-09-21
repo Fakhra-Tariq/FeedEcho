@@ -172,6 +172,9 @@ const AudienceQuizAttempt = ({
   const shellClass = embedded
     ? 'min-h-0 bg-background'
     : 'min-h-screen bg-gradient-to-br from-orange-50 via-white to-purple-50';
+  const quizPageWidthClass = embedded
+    ? 'max-w-4xl mx-auto px-4'
+    : 'w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8';
 
   const applyQuizTimer = (quizData, joinedAtIso = null, { forceSpaceRace = false } = {}) => {
     const treatAsSpaceRace =
@@ -2337,12 +2340,15 @@ const AudienceQuizAttempt = ({
       {/* Quiz Info Header */}
       {!embedded && (
       <div className="bg-white border-b border-neutral-200">
-        <div className="max-w-4xl mx-auto px-4 py-3">
-          <div className="grid grid-cols-3 items-center gap-2">
+        <div className={quizPageWidthClass}>
+          <div className="grid grid-cols-3 items-center gap-2 h-16">
             <div className="flex justify-start min-w-0">
-              <div className="leading-none">
-                <p className="font-bold italic text-[#6D415F] text-base">FeedEcho</p>
-                <p className="text-[11px] text-gray-500 mt-0.5">The loop of learning</p>
+              <div className="relative flex h-16 shrink-0 items-center">
+                <img
+                  src="/FeedEcho-logo.png.png"
+                  alt="FeedEcho"
+                  className="h-40 w-auto max-w-[11rem] object-contain object-left mix-blend-multiply"
+                />
               </div>
             </div>
             <div className="min-w-0 flex flex-wrap items-center justify-center gap-x-2 gap-y-1">
@@ -2350,7 +2356,7 @@ const AudienceQuizAttempt = ({
                 {quiz.title}
               </h1>
               <span
-                className="px-2 py-0.5 rounded-full text-xs font-medium whitespace-nowrap"
+                className="px-2 py-0.5 rounded-full text-xs font-medium whitespace-nowrap text-rose-purple"
                 style={{ backgroundColor: '#F1E5EB', color: '#6D415F' }}
               >
                 {quiz.type}
@@ -2417,7 +2423,7 @@ const AudienceQuizAttempt = ({
       )}
 
       {/* Quiz Content — single card: progress, question, options, and nav are siblings */}
-      <div className="max-w-4xl mx-auto px-4 py-4">
+      <div className={`${quizPageWidthClass} py-4`}>
         <div
           key={currentQuestionId || `q-${currentQuestion}`}
           className="bg-white rounded-2xl shadow-soft border border-neutral-200 p-4 sm:p-5"
@@ -2438,8 +2444,11 @@ const AudienceQuizAttempt = ({
           </div>
 
           <div className="mt-4 flex items-start gap-3">
-            <div className="w-8 h-8 rounded-full bg-[#F1E5EB] flex items-center justify-center flex-shrink-0">
-              <span className="text-[#6D415F] font-semibold text-sm">
+            <div
+              className="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 bg-[#F1E5EB]"
+              style={{ backgroundColor: '#F1E5EB' }}
+            >
+              <span className="font-semibold text-sm text-rose-purple" style={{ color: '#6D415F' }}>
                 {currentQuestion + 1}
               </span>
             </div>
@@ -2491,14 +2500,18 @@ const AudienceQuizAttempt = ({
                   pointerEvents: optionLocked ? 'none' : 'auto',
                   opacity: optionLocked ? 0.5 : 1,
                   cursor: optionLocked ? 'not-allowed' : 'pointer',
-                }}
-                className={`flex items-center py-3 px-4 rounded-xl border-[1.5px] transition-all ${
-                  optionLocked
-                    ? 'border-gray-200 bg-gray-50'
+                  border: optionLocked
+                    ? '1.5px solid #e5e5e5'
                     : isTeamSelected || isSelected
-                    ? 'border-[#6D415F] bg-[#F1E5EB]'
-                    : 'border-neutral-300 bg-white hover:border-neutral-400'
-                }`}
+                    ? '2px solid #6D415F'
+                    : '1.5px solid #d4d4d4',
+                  backgroundColor: optionLocked
+                    ? '#f9fafb'
+                    : isTeamSelected || isSelected
+                    ? '#F1E5EB'
+                    : '#ffffff',
+                }}
+                className="flex items-center py-3 px-4 rounded-xl transition-all"
               >
                 <input
                   type="radio"
@@ -2510,8 +2523,28 @@ const AudienceQuizAttempt = ({
                     if (optionLocked) return;
                     handleAnswerChange(currentQuestion, optionText);
                   }}
-                  className="w-4 h-4 accent-[#6D415F] text-[#6D415F] border-neutral-300"
+                  className="sr-only"
                 />
+                <span
+                  aria-hidden="true"
+                  className="w-4 h-4 rounded-full shrink-0 flex items-center justify-center"
+                  style={{
+                    border: `2px solid ${isSelected || isTeamSelected ? '#6D415F' : '#d4d4d4'}`,
+                    backgroundColor: '#ffffff',
+                  }}
+                >
+                  {(isSelected || isTeamSelected) && (
+                    <span
+                      style={{
+                        width: 8,
+                        height: 8,
+                        borderRadius: '50%',
+                        backgroundColor: '#6D415F',
+                        display: 'block',
+                      }}
+                    />
+                  )}
+                </span>
                 <span className="ml-3 text-text">{optionText}</span>
               </label>
               );
@@ -2538,14 +2571,18 @@ const AudienceQuizAttempt = ({
                       pointerEvents: optionLocked ? 'none' : 'auto',
                       opacity: optionLocked ? 0.5 : 1,
                       cursor: optionLocked ? 'not-allowed' : 'pointer',
-                    }}
-                    className={`flex items-center py-3 px-4 rounded-xl border-[1.5px] transition-all ${
-                      optionLocked
-                        ? 'border-gray-200 bg-gray-50'
+                      border: optionLocked
+                        ? '1.5px solid #e5e5e5'
                         : isTeamSelected || isSelected
-                        ? 'border-[#6D415F] bg-[#F1E5EB]'
-                        : 'border-neutral-300 bg-white hover:border-neutral-400'
-                    }`}
+                        ? '2px solid #6D415F'
+                        : '1.5px solid #d4d4d4',
+                      backgroundColor: optionLocked
+                        ? '#f9fafb'
+                        : isTeamSelected || isSelected
+                        ? '#F1E5EB'
+                        : '#ffffff',
+                    }}
+                    className="flex items-center py-3 px-4 rounded-xl transition-all"
                   >
                     <input
                       type="radio"
@@ -2557,8 +2594,28 @@ const AudienceQuizAttempt = ({
                         if (optionLocked) return;
                         handleAnswerChange(currentQuestion, option);
                       }}
-                      className="w-4 h-4 accent-[#6D415F] text-[#6D415F] border-neutral-300"
+                      className="sr-only"
                     />
+                    <span
+                      aria-hidden="true"
+                      className="w-4 h-4 rounded-full shrink-0 flex items-center justify-center"
+                      style={{
+                        border: `2px solid ${isSelected || isTeamSelected ? '#6D415F' : '#d4d4d4'}`,
+                        backgroundColor: '#ffffff',
+                      }}
+                    >
+                      {(isSelected || isTeamSelected) && (
+                        <span
+                          style={{
+                            width: 8,
+                            height: 8,
+                            borderRadius: '50%',
+                            backgroundColor: '#6D415F',
+                            display: 'block',
+                          }}
+                        />
+                      )}
+                    </span>
                     <span className="ml-3 text-text">{option}</span>
                   </label>
                   );

@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, Rocket, AlertCircle } from 'lucide-react';
+import { ArrowLeft, Rocket, AlertCircle, Users } from 'lucide-react';
 import { onValue, ref as dbRef, off } from 'firebase/database';
 import { db } from '../firebase';
 import { sessionsAPI, spaceRacesAPI } from '../services/api';
@@ -357,6 +357,55 @@ export default function AudienceSpaceRacePage() {
 
   const resolvedTeamId = participant?.teamId;
 
+  const spaceRaceQuizTitle = useMemo(() => {
+    const candidates = [
+      raceData?.quiz?.title,
+      raceData?.quizTitle,
+      raceData?.quiz?.name,
+    ];
+    for (const value of candidates) {
+      if (value && String(value).trim()) return String(value).trim();
+    }
+    try {
+      const teamId = participant?.teamId ?? raceData?.teamId ?? 'default';
+      const cacheKeys = [`spaceRaceQuiz_team_${teamId}`, 'spaceRaceQuiz'];
+      for (const key of cacheKeys) {
+        const raw = localStorage.getItem(key);
+        if (!raw) continue;
+        const parsed = JSON.parse(raw);
+        if (parsed?.title && String(parsed.title).trim()) {
+          return String(parsed.title).trim();
+        }
+      }
+    } catch {
+      // ignore cache parse errors
+    }
+    if (raceData?.title && String(raceData.title).trim()) {
+      return String(raceData.title).trim();
+    }
+    return 'Quiz';
+  }, [raceData, participant?.teamId]);
+
+  const headerParticipantName = useMemo(() => {
+    if (participant?.name && String(participant.name).trim()) {
+      return String(participant.name).trim();
+    }
+    try {
+      const raw =
+        localStorage.getItem('spaceRaceParticipant') ||
+        sessionStorage.getItem('spaceRaceParticipant');
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (parsed?.name && String(parsed.name).trim()) {
+          return String(parsed.name).trim();
+        }
+      }
+    } catch {
+      // ignore
+    }
+    return (sessionStorage.getItem('studentName') || '').trim() || 'Audience';
+  }, [participant?.name]);
+
   if (showTeamSelection) {
     const maxStudentsPerTeam = raceData?.settings?.studentsPerTeam || 5;
     const handleTeamSelectionLeave = () => {
@@ -427,21 +476,62 @@ export default function AudienceSpaceRacePage() {
     <>
       <style>{`.quiz-embed-root { min-height: 100%; } .quiz-embed-root > div { min-height: 100% !important; }`}</style>
       <div className="flex flex-col h-screen min-h-screen overflow-hidden bg-background">
-        <div className="flex-shrink-0 bg-white border-b border-neutral-200 px-4 h-14 flex items-center justify-between">
-          <button
-            type="button"
-            onClick={handleLeave}
-            className="flex items-center gap-2 text-text/70 hover:text-text text-sm"
-          >
-            <ArrowLeft className="w-4 h-4" />
-            Leave
-          </button>
-          <div className="flex items-center gap-2 text-text">
-            <Rocket className="w-5 h-5 text-primary" />
-            <span className="font-semibold">Space Race</span>
+        {isQuizView ? (
+          <div className="flex-shrink-0 bg-white border-b border-neutral-200 px-4">
+            <div className="grid grid-cols-3 items-center gap-2 h-16">
+              <div className="flex justify-start min-w-0">
+                <div className="relative flex h-16 shrink-0 items-center">
+                  <img
+                    src="/FeedEcho-logo.png.png"
+                    alt="FeedEcho"
+                    className="h-40 w-auto max-w-[11rem] object-contain object-left mix-blend-multiply"
+                  />
+                </div>
+              </div>
+              <div className="min-w-0 flex flex-wrap items-center justify-center gap-x-2 gap-y-1">
+                <h1 className="text-sm sm:text-base font-bold text-gray-900 text-center leading-tight break-words">
+                  {spaceRaceQuizTitle}
+                </h1>
+                <span
+                  className="px-2 py-0.5 rounded-full text-xs font-medium whitespace-nowrap text-rose-purple"
+                  style={{ backgroundColor: '#F1E5EB', color: '#6D415F' }}
+                >
+                  Space Race
+                </span>
+              </div>
+              <div className="flex justify-end min-w-0 items-center gap-3">
+                <button
+                  type="button"
+                  onClick={handleLeave}
+                  className="inline-flex items-center gap-1 text-xs text-text/45 hover:text-text shrink-0"
+                >
+                  <ArrowLeft className="w-3 h-3" />
+                  Leave
+                </button>
+                <div className="flex items-center gap-1.5 text-text-light min-w-0">
+                  <Users className="w-4 h-4 shrink-0" />
+                  <span className="text-sm truncate">{headerParticipantName}</span>
+                </div>
+              </div>
+            </div>
           </div>
-          <div className="w-16" />
-        </div>
+        ) : (
+          <div className="flex-shrink-0 bg-white border-b border-neutral-200 px-4 h-14 flex items-center justify-between">
+            <button
+              type="button"
+              onClick={handleLeave}
+              className="flex items-center gap-2 text-text/70 hover:text-text text-sm"
+            >
+              <ArrowLeft className="w-4 h-4" />
+              Leave
+            </button>
+            <div className="flex items-center gap-2 text-text">
+              <Rocket className="w-5 h-5 text-primary" />
+              <span className="font-semibold">Space Race</span>
+            </div>
+            <div className="w-16" />
+          </div>
+        )}
 
         <div className="flex-1 min-h-0 flex flex-col md:flex-row overflow-hidden">
           <div className="w-full md:flex-1 flex flex-col min-w-0 min-h-0 overflow-hidden border-r border-neutral-200">

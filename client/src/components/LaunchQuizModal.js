@@ -14,7 +14,7 @@ import {
 
 const LaunchQuizModal = ({ isOpen, onClose, onLaunch, quiz, existingAccessCode }) => {
   const { alert } = useHybridAlert();
-
+  
   const [timeLimit, setTimeLimit] = useState(null);
   const [timePerStudent, setTimePerStudent] = useState(null);
   const [shuffleQuestions, setShuffleQuestions] = useState(false);
@@ -85,7 +85,7 @@ const LaunchQuizModal = ({ isOpen, onClose, onLaunch, quiz, existingAccessCode }
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <div
+      <div 
         className="absolute inset-0 bg-purple-50/80 backdrop-blur-sm"
         onClick={onClose}
         role="presentation"
@@ -111,7 +111,7 @@ const LaunchQuizModal = ({ isOpen, onClose, onLaunch, quiz, existingAccessCode }
             <MinuteStepperField
               label="Quiz live for"
               description="How long the quiz remains live and joinable"
-              value={timeLimit}
+                    value={timeLimit}
               onChange={setTimeLimit}
               presets={QUIZ_TIME_PRESETS}
             />
@@ -119,7 +119,7 @@ const LaunchQuizModal = ({ isOpen, onClose, onLaunch, quiz, existingAccessCode }
             <MinuteStepperField
               label="Each audience member gets up to"
               description="Time each audience member has to attempt the quiz after joining"
-              value={timePerStudent}
+                    value={timePerStudent}
               onChange={setTimePerStudent}
               presets={QUIZ_TIME_PRESETS}
             />
