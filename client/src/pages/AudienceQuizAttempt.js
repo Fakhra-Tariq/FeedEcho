@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Clock, Send, CheckCircle, AlertCircle, ChevronRight, Users } from 'lucide-react';
+import { ArrowLeft, Clock, Send, CheckCircle, AlertCircle, ChevronRight } from 'lucide-react';
 import { useHybridAlert } from '../contexts/HybridAlertContext';
 import { spaceRacesAPI } from '../services/api';
 import {
@@ -28,6 +28,11 @@ import { ref as dbRef, onValue, get, off } from 'firebase/database';
 import { db } from '../firebase';
 import { useRtdbValue } from '../hooks/useRtdb';
 import GuestProgressLoginBanner from '../components/Audience/GuestProgressLoginBanner';
+import {
+  AudienceActivityHeader,
+  AudienceActivityCard,
+  AUDIENCE_ACTIVITY_PAGE_WIDTH,
+} from '../components/Audience/AudienceActivityLayout';
 
 const AudienceQuizAttempt = ({
   embedded = false,
@@ -174,7 +179,7 @@ const AudienceQuizAttempt = ({
     : 'min-h-screen bg-gradient-to-br from-orange-50 via-white to-purple-50';
   const quizPageWidthClass = embedded
     ? 'max-w-4xl mx-auto px-4'
-    : 'w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8';
+    : AUDIENCE_ACTIVITY_PAGE_WIDTH;
 
   const applyQuizTimer = (quizData, joinedAtIso = null, { forceSpaceRace = false } = {}) => {
     const treatAsSpaceRace =
@@ -2339,36 +2344,11 @@ const AudienceQuizAttempt = ({
     <div className={shellClass}>
       {/* Quiz Info Header */}
       {!embedded && (
-      <div className="bg-white border-b border-neutral-200">
-        <div className={quizPageWidthClass}>
-          <div className="grid grid-cols-3 items-center gap-2 h-16">
-            <div className="flex justify-start min-w-0">
-              <div className="relative flex h-16 shrink-0 items-center">
-                <img
-                  src="/FeedEcho-logo.png.png"
-                  alt="FeedEcho"
-                  className="h-40 w-auto max-w-[11rem] object-contain object-left mix-blend-multiply"
-                />
-              </div>
-            </div>
-            <div className="min-w-0 flex flex-wrap items-center justify-center gap-x-2 gap-y-1">
-              <h1 className="text-sm sm:text-base font-bold text-gray-900 text-center leading-tight break-words">
-                {quiz.title}
-              </h1>
-              <span
-                className="px-2 py-0.5 rounded-full text-xs font-medium whitespace-nowrap text-rose-purple"
-                style={{ backgroundColor: '#F1E5EB', color: '#6D415F' }}
-              >
-                {quiz.type}
-              </span>
-            </div>
-            <div className="flex justify-end min-w-0">
-              <div className="flex items-center gap-1.5 text-text-light min-w-0">
-                <Users className="w-4 h-4 shrink-0" />
-                <span className="text-sm truncate">{studentSession?.studentName || 'Audience'}</span>
-              </div>
-            </div>
-          </div>
+      <AudienceActivityHeader
+        title={quiz.title}
+        badge={quiz.type}
+        participantName={studentSession?.studentName || 'Audience'}
+      >
           {/* Duration notice + single live countdown (header shows Duration label only) */}
           {(isSpaceRace || (quiz.launchSettings && (quiz.launchSettings.timePerStudentMinutes || quiz.launchSettings.quizAvailabilityMinutes || quiz.launchSettings.timeLimit || quiz.launchSettings.countdown))) && (
             <div className="mt-2 px-3 py-2 rounded-lg border bg-primary/10 border-primary/20">
@@ -2402,8 +2382,7 @@ const AudienceQuizAttempt = ({
               </div>
             </div>
           )}
-        </div>
-      </div>
+      </AudienceActivityHeader>
       )}
 
       {!embedded && <GuestProgressLoginBanner />}
@@ -2424,10 +2403,7 @@ const AudienceQuizAttempt = ({
 
       {/* Quiz Content — single card: progress, question, options, and nav are siblings */}
       <div className={`${quizPageWidthClass} py-4`}>
-        <div
-          key={currentQuestionId || `q-${currentQuestion}`}
-          className="bg-white rounded-2xl shadow-soft border border-neutral-200 p-4 sm:p-5"
-        >
+        <AudienceActivityCard key={currentQuestionId || `q-${currentQuestion}`}>
           <div className="flex items-center justify-between">
             <span className="text-sm text-text-light">
               Question {currentQuestion + 1} of {quiz.questions.length}
@@ -2741,7 +2717,7 @@ const AudienceQuizAttempt = ({
               </button>
             )}
           </div>
-        </div>
+        </AudienceActivityCard>
       </div>
     </div>
   );

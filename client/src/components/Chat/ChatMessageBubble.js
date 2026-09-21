@@ -24,7 +24,7 @@ export default function ChatMessageBubble({
 
   return (
     <div className={clsx('flex', isOwn ? 'justify-end' : 'justify-start')}>
-      <div className="max-w-[80%] sm:max-w-md">
+      <div className="max-w-[80%] min-w-0">
         <div
           className={clsx(
             'flex items-center gap-1.5 mb-1',

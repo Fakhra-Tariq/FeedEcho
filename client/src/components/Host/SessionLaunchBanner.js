@@ -6,6 +6,7 @@ import { useHostData } from '../../contexts/HostDataContext';
 import { useHybridAlert } from '../../contexts/HybridAlertContext';
 import { copyToClipboard } from '../../utils/copyToClipboard';
 import { getSessionActivityLabel } from '../../utils/sessionActivityLabel';
+import { GUEST_LOGIN_BANNER_BG_CLASS } from '../Audience/GuestProgressLoginBanner';
 
 /**
  * Compact session-status strip for content-creation pages.
@@ -62,17 +63,16 @@ export default function SessionLaunchBanner({ className = '' }) {
     <>
       <div
         className={clsx(
-          'flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm border',
-          isActive
-            ? 'bg-emerald-50 border-emerald-200 text-emerald-800'
-            : 'bg-[#F7EFE1] border-[#E0C89C] text-[#6B4E24]',
+          'flex items-center gap-2 px-3 py-2 rounded-lg text-sm border border-primary/20',
+          GUEST_LOGIN_BANNER_BG_CLASS,
+          'text-primary lg:-mt-5 [&+*]:!mt-3',
           className
         )}
         role="status"
       >
         {isActive ? (
           <>
-            <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" aria-hidden="true" />
+            <CheckCircle2 className="w-4 h-4 text-primary shrink-0" aria-hidden="true" />
             <span>
               Launching to session:{' '}
               <span className="font-semibold tracking-wider">{sessionCode || '—'}</span>
@@ -82,7 +82,7 @@ export default function SessionLaunchBanner({ className = '' }) {
           </>
         ) : (
           <>
-            <AlertTriangle className="w-4 h-4 text-[#A87A38] shrink-0" aria-hidden="true" />
+            <AlertTriangle className="w-4 h-4 text-primary shrink-0" aria-hidden="true" />
             <span className="flex-1 min-w-0">
               You&apos;ll need an active session to launch this.{' '}
               <button

@@ -1,10 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, Send, CheckCircle, Users } from 'lucide-react';
+import { ArrowLeft, Send, CheckCircle } from 'lucide-react';
 import { useHybridAlert } from '../contexts/HybridAlertContext';
 import { exitTicketsAPI } from '../services/api';
 import { getStoredAudienceSession } from '../utils/audienceSession';
 import GuestProgressLoginBanner from '../components/Audience/GuestProgressLoginBanner';
+import {
+  AudienceActivityHeader,
+  AudienceActivityContent,
+  AudienceActivityCard,
+} from '../components/Audience/AudienceActivityLayout';
 
 const AudienceExitTicket = () => {
   const navigate = useNavigate();
@@ -120,12 +125,12 @@ const AudienceExitTicket = () => {
     switch (question.type) {
       case 'likert':
         return (
-          <div className="space-y-3">
-            <label className="block text-sm font-medium text-gray-700 mb-3">
+          <div className="space-y-2.5">
+            <label className="block text-sm font-medium text-text">
               Rate your agreement:
             </label>
-            <div className="space-y-2">
-              {["Strongly Agree", "Agree", "Neutral", "Disagree", "Strongly Disagree"].map((option, optionIndex) => (
+            <div className="space-y-2.5">
+              {["Strongly Agree", "Agree", "Neutral", "Disagree", "Strongly Disagree"].map((option) => (
                 <label key={option} className="flex items-center space-x-3 cursor-pointer">
                   <input
                     type="radio"
@@ -135,7 +140,7 @@ const AudienceExitTicket = () => {
                     onChange={(e) => handleAnswerChange(index, e.target.value)}
                     className="w-4 h-4 text-primary focus:ring-primary border-gray-300"
                   />
-                  <span className="text-sm text-gray-700">{option}</span>
+                  <span className="text-sm text-text">{option}</span>
                 </label>
               ))}
             </div>
@@ -144,11 +149,11 @@ const AudienceExitTicket = () => {
       
       case 'multiple_choice':
         return (
-          <div className="space-y-3">
-            <label className="block text-sm font-medium text-gray-700 mb-3">
+          <div className="space-y-2.5">
+            <label className="block text-sm font-medium text-text">
               Choose your answer:
             </label>
-            <div className="space-y-2">
+            <div className="space-y-2.5">
               {question.options?.map((option) => (
                 <label key={option} className="flex items-center space-x-3 cursor-pointer">
                   <input
@@ -159,7 +164,7 @@ const AudienceExitTicket = () => {
                     onChange={(e) => handleAnswerChange(index, e.target.value)}
                     className="w-4 h-4 text-primary focus:ring-primary border-gray-300"
                   />
-                  <span className="text-sm text-gray-700">{option}</span>
+                  <span className="text-sm text-text">{option}</span>
                 </label>
               ))}
             </div>
@@ -168,11 +173,11 @@ const AudienceExitTicket = () => {
       
       case 'true_false':
         return (
-          <div className="space-y-3">
-            <label className="block text-sm font-medium text-gray-700 mb-3">
+          <div className="space-y-2.5">
+            <label className="block text-sm font-medium text-text">
               Select your answer:
             </label>
-            <div className="space-y-2">
+            <div className="space-y-2.5">
               {['True', 'False'].map((option) => (
                 <label key={option} className="flex items-center space-x-3 cursor-pointer">
                   <input
@@ -183,7 +188,7 @@ const AudienceExitTicket = () => {
                     onChange={(e) => handleAnswerChange(index, e.target.value)}
                     className="w-4 h-4 text-primary focus:ring-primary border-gray-300"
                   />
-                  <span className="text-sm text-gray-700">{option}</span>
+                  <span className="text-sm text-text">{option}</span>
                 </label>
               ))}
             </div>
@@ -194,18 +199,18 @@ const AudienceExitTicket = () => {
       default:
         return (
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-3">
+            <label className="block text-sm font-medium text-text">
               Your response:
             </label>
             <textarea
               value={answer}
               onChange={(e) => handleAnswerChange(index, e.target.value)}
               placeholder="Enter your response here..."
-              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary resize-none"
+              className="mt-2 w-full px-4 py-3 border-[1.5px] border-neutral-300 rounded-xl focus:ring-2 focus:ring-[#6D415F] focus:border-[#6D415F] transition-colors text-text resize-none bg-white"
               rows={4}
               maxLength={500}
             />
-            <p className="text-xs text-gray-500 mt-1">
+            <p className="text-xs text-text-light mt-2">
               {answer.length}/500 characters
             </p>
           </div>
@@ -258,82 +263,54 @@ const AudienceExitTicket = () => {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-orange-50 via-white to-purple-50">
-      <div className="bg-white border-b border-neutral-200">
-        <div className="max-w-4xl mx-auto px-4 py-4">
-          <div className="grid grid-cols-3 items-center gap-2 sm:gap-4">
-            <div className="flex justify-start min-w-0">
-              <img
-                src="/FeedEcho-logo.png.png"
-                alt="FeedEcho"
-                className="h-24 sm:h-32 w-auto max-w-full object-contain object-left mix-blend-multiply"
-              />
-            </div>
-            <div className="min-w-0 flex flex-wrap items-center justify-center gap-x-2 gap-y-1">
-              <h1 className="text-sm sm:text-xl font-semibold text-text text-center leading-tight break-words">
-                {exitTicket?.title}
-              </h1>
-            </div>
-            <div className="flex justify-end min-w-0">
-              <div className="flex items-center space-x-2 text-text-light min-w-0">
-                <Users className="w-4 h-4 shrink-0" />
-                <span className="text-sm truncate">{participantDisplayName}</span>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
+      <AudienceActivityHeader
+        title={exitTicket?.title}
+        participantName={participantDisplayName}
+      />
 
       <GuestProgressLoginBanner />
 
-      <div className="container mx-auto px-4 py-8">
-        {/* Exit Ticket Form */}
-        <div className="max-w-2xl mx-auto">
-          <div className="bg-white rounded-3xl shadow-soft border border-primary/10 p-8">
-            <form onSubmit={handleSubmit} className="space-y-6">
-              {/* Exit Ticket Content */}
-              <div className="bg-gray-50 rounded-xl p-6">
-                {/* Questions */}
-                <div className="space-y-8">
-                  {exitTicket?.questions?.map((question, index) => (
-                    <div key={index} className="border-b border-gray-200 pb-6 last:border-0">
-                      <div className="mb-4">
-                        <h3 className="text-lg font-medium text-text mb-2">
-                          Question {index + 1}
-                        </h3>
-                        <p className="text-text-light">
-                          {question.prompt}
-                        </p>
-                      </div>
-
-                      {/* Question Input */}
-                      {renderQuestionInput(question, index)}
-                    </div>
-                  ))}
+      <AudienceActivityContent>
+        <AudienceActivityCard>
+          <form onSubmit={handleSubmit}>
+            {exitTicket?.questions?.map((question, index) => (
+              <div key={index} className={index === 0 ? '' : 'mt-4'}>
+                <h3 className="text-sm text-text-light">
+                  Question {index + 1}
+                </h3>
+                <p className="mt-4 text-base sm:text-lg font-semibold text-text leading-snug">
+                  {question.prompt}
+                </p>
+                <div className="mt-4">
+                  {renderQuestionInput(question, index)}
                 </div>
               </div>
+            ))}
 
-              {/* Submit Button */}
-              <button
-                type="submit"
-                disabled={isSubmitting}
-                className="w-full flex items-center justify-center space-x-2 px-6 py-4 bg-gradient-to-r from-primary to-primary/80 text-white rounded-xl hover:from-primary/90 hover:to-primary/70 transition-all duration-300 font-semibold shadow-soft hover:shadow-soft-lg disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
-              >
-                {isSubmitting ? (
-                  <>
-                    <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                    <span>Submitting...</span>
-                  </>
-                ) : (
-                  <>
-                    <Send className="w-5 h-5" />
-                    <span>Submit Response</span>
-                  </>
-                )}
-              </button>
-            </form>
-          </div>
-        </div>
-      </div>
+            <button
+              type="submit"
+              disabled={isSubmitting}
+              className={`mt-4 w-full flex items-center justify-center space-x-2 px-5 py-2.5 rounded-xl font-bold transition-all ${
+                isSubmitting
+                  ? 'bg-neutral-200 text-neutral-400 cursor-not-allowed'
+                  : 'bg-[#6D415F] text-white hover:bg-[#5c3650]'
+              }`}
+            >
+              {isSubmitting ? (
+                <>
+                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                  <span>Submitting...</span>
+                </>
+              ) : (
+                <>
+                  <Send className="w-4 h-4" />
+                  <span>Submit Response</span>
+                </>
+              )}
+            </button>
+          </form>
+        </AudienceActivityCard>
+      </AudienceActivityContent>
     </div>
   );
 };

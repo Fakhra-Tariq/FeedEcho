@@ -5,8 +5,11 @@ import { getStoredAudienceSession } from '../../utils/audienceSession';
 
 const DISMISS_KEY = 'feedecho_guest_progress_login_banner_dismissed';
 
+/** Same tint as the guest login banner strip. */
+export const GUEST_LOGIN_BANNER_BG_CLASS = 'bg-[#F1E5EB]';
+
 /** Guest-only prompt to log in so activity can be saved to progress history. */
-export default function GuestProgressLoginBanner() {
+export default function GuestProgressLoginBanner({ contentClassName } = {}) {
   const isLoggedIn = Boolean(getStoredAudienceSession());
   const [dismissed, setDismissed] = useState(() => {
     try {
@@ -28,8 +31,13 @@ export default function GuestProgressLoginBanner() {
   };
 
   return (
-    <div className="bg-[#F1E5EB]">
-      <div className="max-w-4xl mx-auto px-4 py-2 flex items-center justify-between gap-3">
+    <div className={GUEST_LOGIN_BANNER_BG_CLASS}>
+      <div
+        className={
+          contentClassName ||
+          'max-w-4xl mx-auto px-4 py-2 flex items-center justify-between gap-3'
+        }
+      >
         <p className="text-sm text-text min-w-0">
           Log in to save this to your progress history.{' '}
           <Link

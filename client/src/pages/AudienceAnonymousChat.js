@@ -1,11 +1,21 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
-import { ArrowLeft, Send, MessageSquare, Users, AlertCircle } from 'lucide-react';
+import { useSearchParams } from 'react-router-dom';
+import { Send, MessageSquare, Users, AlertCircle } from 'lucide-react';
 import { useHybridAlert } from '../contexts/HybridAlertContext';
 import { anonymousChatAPI } from '../services/api';
 import { useRtdbList, useRtdbValue, RTDB_EMPTY_LIST } from '../hooks/useRtdb';
 import { toParticipantCount } from '../utils/toParticipantCount';
+import { getStoredAudienceSession } from '../utils/audienceSession';
 import ChatMessageBubble from '../components/Chat/ChatMessageBubble';
+import GuestProgressLoginBanner, {
+  GUEST_LOGIN_BANNER_BG_CLASS,
+} from '../components/Audience/GuestProgressLoginBanner';
+import {
+  AudienceActivityHeader,
+  AudienceActivityContent,
+  AudienceActivityCard,
+  AUDIENCE_ACTIVITY_PAGE_WIDTH,
+} from '../components/Audience/AudienceActivityLayout';
 
 const getOrCreateChatParticipantId = (sessionCode) => {
   const storageKey = `chatParticipant_${sessionCode}`;
@@ -21,7 +31,6 @@ const isChatSessionEnded = (session) =>
   Boolean(session && (session.status === 'ended' || session.isActive === false));
 
 const AudienceAnonymousChat = () => {
-  const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const { alert } = useHybridAlert();
   const [sessionCode, setSessionCode] = useState('');
@@ -219,121 +228,100 @@ const AudienceAnonymousChat = () => {
   };
 
   const showJoinForm = !showActiveChat;
+  const participantDisplayName =
+    (typeof window !== 'undefined' ? (sessionStorage.getItem('studentName') || '').trim() : '') ||
+    getStoredAudienceSession()?.name ||
+    'Audience';
 
   return (
-    <div className="min-h-screen bg-background flex flex-col">
-      <div className="bg-white border-b border-gray-200 px-4 py-3">
-        <div className="flex items-center justify-between max-w-4xl mx-auto">
-          <button
-            onClick={() => navigate('/audience/join')}
-            className="flex items-center space-x-2 text-gray-600 hover:text-gray-900 transition-colors"
-          >
-            <ArrowLeft className="w-5 h-5" />
-            <span>Back</span>
-          </button>
-          <div className="flex items-center space-x-2">
-            <MessageSquare className="w-5 h-5 text-primary" />
-            <h1 className="text-lg font-semibold text-text">Anonymous Chat</h1>
-          </div>
-          <div className="w-20" />
-        </div>
-      </div>
+    <div className="min-h-screen bg-gradient-to-br from-orange-50 via-white to-purple-50">
+      <AudienceActivityHeader
+        title={showActiveChat && chatSession?.title ? chatSession.title : 'Anonymous Chat'}
+        titleIcon={<MessageSquare className="w-4 h-4 shrink-0 text-[#6D415F]" />}
+        participantName={participantDisplayName}
+      />
 
-      <div className="flex-1 flex items-center justify-center p-4">
+      <GuestProgressLoginBanner
+        contentClassName={`${AUDIENCE_ACTIVITY_PAGE_WIDTH} py-2 flex items-center justify-between gap-3`}
+      />
+
+      <AudienceActivityContent>
         {showJoinForm ? (
-          <div className="w-full max-w-md">
-            <div className="bg-white rounded-xl shadow-lg p-6">
-              <div className="text-center mb-6">
-                <div className="w-16 h-16 bg-primary/10 rounded-full flex items-center justify-center mx-auto mb-4">
-                  <MessageSquare className="w-8 h-8 text-primary" />
-                </div>
-                <h2 className="text-2xl font-bold text-text mb-2">
-                  {isChatEnded ? 'Chat Ended' : 'Join Anonymous Chat'}
-                </h2>
-                <p className="text-text-light">
-                  {isChatEnded
-                    ? 'This live chat has ended. Ask your host for a new session code if you still have questions.'
-                    : 'Enter the session code to join the chat'}
-                </p>
+          <AudienceActivityCard>
+            <div className="text-center">
+              <div className="w-16 h-16 bg-primary/10 rounded-full flex items-center justify-center mx-auto">
+                <MessageSquare className="w-8 h-8 text-primary" />
               </div>
-
-              {joinError && (
-                <div className="mb-4 rounded-lg border border-orange-200 bg-orange-50 px-4 py-3 text-sm text-orange-800">
-                  {joinError}
-                </div>
-              )}
-
-              {!isChatEnded && (
-                <div className="space-y-4">
-                  <div>
-                    <label className="block text-sm font-medium text-text-light mb-2">Session Code</label>
-                    <input
-                      type="text"
-                      value={sessionCode}
-                      onChange={(e) => setSessionCode(e.target.value.toUpperCase())}
-                      placeholder="Enter 6-character code"
-                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary bg-white text-text font-mono text-center text-lg"
-                      maxLength={6}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter') {
-                          e.preventDefault();
-                          handleJoinChat();
-                        }
-                      }}
-                    />
-                  </div>
-
-                  <button
-                    onClick={handleJoinChat}
-                    disabled={!sessionCode.trim() || isJoining}
-                    className="w-full px-4 py-3 bg-primary text-white rounded-lg hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-medium"
-                  >
-                    {isJoining ? 'Joining...' : 'Join Chat'}
-                  </button>
-                </div>
-              )}
+              <h2 className="mt-4 text-2xl font-bold text-text">
+                {isChatEnded ? 'Chat Ended' : 'Join Anonymous Chat'}
+              </h2>
+              <p className="mt-2 text-text-light">
+                {isChatEnded
+                  ? 'This live chat has ended. Ask your host for a new session code if you still have questions.'
+                  : 'Enter the session code to join the chat'}
+              </p>
             </div>
-          </div>
+
+            {joinError && (
+              <div className="mt-4 rounded-lg border border-orange-200 bg-orange-50 px-4 py-3 text-sm text-orange-800">
+                {joinError}
+              </div>
+            )}
+
+            {!isChatEnded && (
+              <div className="mt-4">
+                <label className="block text-sm font-medium text-text-light">Session Code</label>
+                <input
+                  type="text"
+                  value={sessionCode}
+                  onChange={(e) => setSessionCode(e.target.value.toUpperCase())}
+                  placeholder="Enter 6-character code"
+                  className="mt-2 w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary bg-white text-text font-mono text-center text-lg"
+                  maxLength={6}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      handleJoinChat();
+                    }
+                  }}
+                />
+                <button
+                  onClick={handleJoinChat}
+                  disabled={!sessionCode.trim() || isJoining}
+                  className="mt-4 w-full px-4 py-3 bg-primary text-white rounded-lg hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-medium"
+                >
+                  {isJoining ? 'Joining...' : 'Join Chat'}
+                </button>
+              </div>
+            )}
+          </AudienceActivityCard>
         ) : (
-          <div className="w-full max-w-4xl bg-white rounded-xl shadow-lg h-[600px] flex flex-col">
-            <div className="p-4 border-b border-gray-200">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h3 className="font-semibold text-text">{chatSession.title}</h3>
-                  <p className="text-sm text-text-light">
-                    Session Code: <span className="font-mono font-bold">{chatSession.joinCode}</span>
-                  </p>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <Users className="w-4 h-4 text-gray-400" />
-                  <span className="text-sm text-text-light">{participantCount} participants</span>
-                </div>
+          <AudienceActivityCard className="flex flex-col min-h-[28rem] h-[min(600px,calc(100vh-11rem))]">
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+              <div className="flex items-center space-x-2">
+                <Users className="w-4 h-4 text-gray-400" />
+                <span className="text-sm text-text-light">{participantCount} participants</span>
               </div>
-
-              <div className="mt-3">
-                {canSendMessages ? (
-                  <div className="flex items-center space-x-2 text-green-600 text-sm">
-                    <div className="w-2 h-2 bg-green-500 rounded-full" />
-                    <span>Chat is active - You can send messages</span>
-                  </div>
-                ) : (
-                  <div className="flex items-center space-x-2 text-orange-600 text-sm">
-                    <AlertCircle className="w-4 h-4" />
-                    <span>Waiting for host to enable chat...</span>
-                  </div>
-                )}
-              </div>
+              {canSendMessages ? (
+                <div className={`inline-flex items-center space-x-2 ${GUEST_LOGIN_BANNER_BG_CLASS} text-primary text-sm rounded-full px-2.5`}>
+                  <div className="w-2 h-2 bg-primary rounded-full" />
+                  <span>Chat is active - You can send messages</span>
+                </div>
+              ) : (
+                <div className={`inline-flex items-center space-x-2 ${GUEST_LOGIN_BANNER_BG_CLASS} text-primary text-sm rounded-full px-2.5`}>
+                  <AlertCircle className="w-4 h-4" />
+                  <span>Waiting for host to enable chat...</span>
+                </div>
+              )}
             </div>
 
-            <div className="flex-1 overflow-y-auto p-4 space-y-3">
+            <div className="chat-messages-scroll mt-4 flex-1 min-h-0 overflow-y-auto space-y-3 px-4 py-3">
               {visibleMessages.length === 0 ? (
                 <div className="text-center py-8">
                   <MessageSquare className="w-12 h-12 text-gray-300 mx-auto mb-4" />
-                  <p className="text-text-light">
-                    {canSendMessages
-                      ? 'Be the first to send a message!'
-                      : 'Waiting for host to enable chat...'}
-                  </p>
+                  {canSendMessages ? (
+                    <p className="text-text-light">Be the first to send a message!</p>
+                  ) : null}
                 </div>
               ) : (
                 visibleMessages.map((msg) => {
@@ -354,40 +342,35 @@ const AudienceAnonymousChat = () => {
             </div>
 
             {canSendMessages ? (
-              <div className="p-4 border-t border-gray-200">
-                <div className="flex space-x-2">
-                  <input
-                    type="text"
-                    value={message}
-                    onChange={(e) => setMessage(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key !== 'Enter') return;
-                      e.preventDefault();
-                      handleSendMessage();
-                    }}
-                    placeholder="Type your message..."
-                    className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary bg-white text-text"
-                  />
-                  <button
-                    onClick={handleSendMessage}
-                    disabled={!message.trim() || isSending}
-                    className="px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                  >
-                    <Send className="w-5 h-5" />
-                  </button>
-                </div>
+              <div className="mt-4 flex space-x-2">
+                <input
+                  type="text"
+                  value={message}
+                  onChange={(e) => setMessage(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key !== 'Enter') return;
+                    e.preventDefault();
+                    handleSendMessage();
+                  }}
+                  placeholder="Type your message..."
+                  className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary bg-white text-text"
+                />
+                <button
+                  onClick={handleSendMessage}
+                  disabled={!message.trim() || isSending}
+                  className={`px-4 py-2 rounded-lg transition-colors ${
+                    !message.trim() || isSending
+                      ? 'bg-neutral-200 text-neutral-400 cursor-not-allowed'
+                      : 'bg-[#6D415F] text-white hover:bg-[#5c3650]'
+                  }`}
+                >
+                  <Send className="w-5 h-5" />
+                </button>
               </div>
-            ) : (
-              <div className="p-4 border-t border-gray-200">
-                <div className="text-center text-gray-500 text-sm">
-                  <AlertCircle className="w-5 h-5 mx-auto mb-2" />
-                  <p>Waiting for host to enable chat...</p>
-                </div>
-              </div>
-            )}
-          </div>
+            ) : null}
+          </AudienceActivityCard>
         )}
-      </div>
+      </AudienceActivityContent>
     </div>
   );
 };

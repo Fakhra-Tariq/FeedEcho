@@ -17,6 +17,7 @@ const LaunchQuizModal = ({ isOpen, onClose, onLaunch, quiz, existingAccessCode }
   
   const [timeLimit, setTimeLimit] = useState(null);
   const [timePerStudent, setTimePerStudent] = useState(null);
+  const [liveTimeHint, setLiveTimeHint] = useState(false);
   const [shuffleQuestions, setShuffleQuestions] = useState(false);
   const [shuffleAnswers, setShuffleAnswers] = useState(false);
   const [showFinalScore, setShowFinalScore] = useState(true);
@@ -24,6 +25,23 @@ const LaunchQuizModal = ({ isOpen, onClose, onLaunch, quiz, existingAccessCode }
   const [showLaunchedModal, setShowLaunchedModal] = useState(false);
   const [accessCode, setAccessCode] = useState('');
   const [launching, setLaunching] = useState(false);
+
+  const handleLiveTimeChange = (next) => {
+    setTimeLimit(next);
+    if (next != null && timePerStudent != null && next < timePerStudent) {
+      setTimePerStudent(next);
+      setLiveTimeHint(true);
+      return;
+    }
+    setLiveTimeHint(false);
+  };
+
+  const handleAttemptTimeChange = (next) => {
+    setTimePerStudent(next);
+    if (next != null && timeLimit != null && next > timeLimit) {
+      setTimeLimit(next);
+    }
+  };
 
   const handleLaunch = async () => {
     if (!existingAccessCode) {
@@ -111,16 +129,17 @@ const LaunchQuizModal = ({ isOpen, onClose, onLaunch, quiz, existingAccessCode }
             <MinuteStepperField
               label="Quiz live for"
               description="How long the quiz remains live and joinable"
-                    value={timeLimit}
-              onChange={setTimeLimit}
+              value={timeLimit}
+              onChange={handleLiveTimeChange}
               presets={QUIZ_TIME_PRESETS}
+              hint={liveTimeHint ? 'Live time cannot be less than attempt time.' : null}
             />
 
             <MinuteStepperField
               label="Each audience member gets up to"
               description="Time each audience member has to attempt the quiz after joining"
-                    value={timePerStudent}
-              onChange={setTimePerStudent}
+              value={timePerStudent}
+              onChange={handleAttemptTimeChange}
               presets={QUIZ_TIME_PRESETS}
             />
 
@@ -179,7 +198,7 @@ const LaunchQuizModal = ({ isOpen, onClose, onLaunch, quiz, existingAccessCode }
   );
 };
 
-const MinuteStepperField = ({ label, description, value, onChange, presets }) => {
+const MinuteStepperField = ({ label, description, value, onChange, presets, hint = null }) => {
   const clampMinutes = (raw) => {
     if (raw === null || raw === undefined || raw === '') return null;
     const parsed = Number.parseInt(String(raw).trim(), 10);
@@ -274,6 +293,9 @@ const MinuteStepperField = ({ label, description, value, onChange, presets }) =>
       </div>
 
       <p className="text-xs text-gray-500 mt-1">{description}</p>
+      {hint ? (
+        <p className="text-xs text-[#6D415F] mt-1">{hint}</p>
+      ) : null}
     </div>
   );
 };
