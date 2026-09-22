@@ -339,19 +339,19 @@ export default function SpaceRaceHistory() {
     <div className="min-h-screen bg-background">
       <div className="bg-white shadow-sm" style={{ borderBottom: '1px solid #E8E0F0' }}>
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between max-md:flex-col max-md:items-start max-md:gap-3">
             <button
               type="button"
               onClick={() => navigate('/audience/home')}
-              className="flex items-center space-x-2 hover:opacity-80 transition-opacity text-primary"
+              className="flex items-center space-x-2 hover:opacity-80 transition-opacity text-primary max-md:min-h-11"
             >
-              <ArrowLeft className="w-5 h-5" />
+              <ArrowLeft className="w-5 h-5 shrink-0" />
               <span>Back to Dashboard</span>
             </button>
-            <h1 className="text-2xl font-bold" style={{ color: '#1a1a1a' }}>
+            <h1 className="text-2xl font-bold max-md:text-xl" style={{ color: '#1a1a1a' }}>
               Space Race History
             </h1>
-            <div className="w-32" />
+            <div className="w-32 max-md:hidden" />
           </div>
         </div>
       </div>

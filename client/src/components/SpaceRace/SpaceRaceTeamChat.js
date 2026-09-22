@@ -76,6 +76,7 @@ export default function SpaceRaceTeamChat({
   compactHeader = false,
   dockedEdge = false,
   hideSyncNotice = false,
+  headerAction = null,
 }) {
   const { alert } = useHybridAlert();
   const [message, setMessage] = useState('');
@@ -541,25 +542,28 @@ export default function SpaceRaceTeamChat({
     <div
       className={
         dockedEdge
-          ? 'h-full flex flex-col overflow-hidden bg-white rounded-tl-[16px] rounded-bl-[16px] shadow-[-8px_0_20px_-6px_rgba(46,31,42,0.18)]'
+          ? 'h-full flex flex-col overflow-hidden bg-white max-md:rounded-none max-md:shadow-none md:rounded-tl-[16px] md:rounded-bl-[16px] md:shadow-[-8px_0_20px_-6px_rgba(46,31,42,0.18)]'
           : 'h-full flex flex-col overflow-hidden bg-white border-l border-gray-200'
       }
     >
       <div
         className={
           dockedEdge
-            ? 'flex-shrink-0 h-16 flex flex-col justify-center bg-primary px-4 text-white'
+            ? 'flex-shrink-0 min-h-16 flex items-center justify-between gap-2 bg-primary px-4 py-2 text-white'
             : compactHeader
-            ? 'flex-shrink-0 bg-primary px-4 py-2 text-white'
-            : 'flex-shrink-0 bg-primary px-4 py-3 text-white'
+            ? 'flex-shrink-0 bg-primary px-4 py-2 text-white flex items-center justify-between gap-2'
+            : 'flex-shrink-0 bg-primary px-4 py-3 text-white flex items-center justify-between gap-2'
         }
       >
-        <h3 className={compactHeader ? 'font-semibold text-sm' : 'font-semibold text-lg'}>
-          {teamName} Chat
-        </h3>
-        <p className={compactHeader ? 'text-white/80 text-xs' : 'text-white/80 text-sm'}>
-          Team chat - only your team members can see these messages
-        </p>
+        <div className="min-w-0">
+          <h3 className={compactHeader ? 'font-semibold text-sm truncate' : 'font-semibold text-lg truncate'}>
+            {teamName} Chat
+          </h3>
+          <p className={`${compactHeader ? 'text-white/80 text-xs' : 'text-white/80 text-sm'} truncate`}>
+            Team chat - only your team members can see these messages
+          </p>
+        </div>
+        {headerAction}
       </div>
 
       <div className="flex-1 min-h-0 overflow-y-auto p-4 space-y-2 bg-[#f0ebe8]">
@@ -622,7 +626,7 @@ export default function SpaceRaceTeamChat({
         </p>
       )}
 
-      <div className="flex-shrink-0 p-4 bg-white border-t border-gray-200">
+      <div className="flex-shrink-0 p-3 md:p-4 bg-white border-t border-gray-200">
         {pendingAttachment && (
           <div className="mb-2">
             {pendingAttachmentType === 'image' && pendingAttachment.previewUrl ? (
@@ -659,7 +663,7 @@ export default function SpaceRaceTeamChat({
             )}
           </div>
         )}
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 min-w-0">
           <input
             ref={imageInputRef}
             type="file"
@@ -678,7 +682,7 @@ export default function SpaceRaceTeamChat({
             type="button"
             onClick={() => imageInputRef.current?.click()}
             disabled={isUploading || isSending}
-            className="p-2 text-gray-500 hover:text-primary rounded-lg hover:bg-gray-100 transition-colors"
+            className="p-2 min-h-11 min-w-11 inline-flex items-center justify-center text-gray-500 hover:text-primary rounded-lg hover:bg-gray-100 transition-colors shrink-0"
             title="Share image"
           >
             <ImageIcon className="w-5 h-5" />
@@ -687,7 +691,7 @@ export default function SpaceRaceTeamChat({
             type="button"
             onClick={() => fileInputRef.current?.click()}
             disabled={isUploading || isSending}
-            className="p-2 text-gray-500 hover:text-primary rounded-lg hover:bg-gray-100 transition-colors"
+            className="p-2 min-h-11 min-w-11 inline-flex items-center justify-center text-gray-500 hover:text-primary rounded-lg hover:bg-gray-100 transition-colors shrink-0"
             title="Share file"
           >
             <Paperclip className="w-5 h-5" />
@@ -704,14 +708,14 @@ export default function SpaceRaceTeamChat({
             }}
             onPaste={handlePaste}
             placeholder={pendingAttachment ? 'Add a caption...' : 'Message your team...'}
-            className="flex-1 px-4 py-3 border border-gray-300 rounded-full focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary text-text"
+            className="flex-1 min-w-0 min-h-11 px-4 py-3 border border-gray-300 rounded-full focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary text-text"
             disabled={isSending || isUploading}
           />
           <button
             type="button"
             onClick={handleSendComposer}
             disabled={(!message.trim() && !pendingAttachment) || isSending || isUploading}
-            className="w-11 h-11 bg-primary rounded-full flex items-center justify-center hover:bg-primary/90 disabled:opacity-50 transition-colors"
+            className="w-11 h-11 shrink-0 bg-primary rounded-full flex items-center justify-center hover:bg-primary/90 disabled:opacity-50 transition-colors"
           >
             <Send className="w-5 h-5 text-white" />
           </button>

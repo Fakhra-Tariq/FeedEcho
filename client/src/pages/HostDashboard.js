@@ -168,49 +168,45 @@ const HostDashboard = () => {
       {/* Session Bar - shown when any session is active */}
       {activeSession && (
         <div className="bg-white dark:bg-[#3A2E2A] rounded-2xl px-4 sm:px-6 py-4 shadow-lg border border-[#6D415F]/30 max-w-full">
-          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
-            <div className="flex items-center gap-3 min-w-0 flex-1">
-              <div className="w-10 h-10 bg-[#6D415F]/10 rounded-full flex items-center justify-center shrink-0">
-                <Activity className="w-5 h-5 text-[#6D415F]" />
-              </div>
-              <div className="min-w-0">
-                <h3 className="text-lg font-bold text-[#2E1F2A] dark:text-white break-words">
-                  {activeSession.sessionName || 'Session'}
-                </h3>
-                <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
-                  <div className="flex items-center gap-2">
-                    <span className="text-sm text-[#5A4A55] dark:text-white/70">Code:</span>
-                    <span className="text-xl font-bold text-[#6D415F]">{activeSession.joinCode}</span>
-                    <button
-                      type="button"
-                      onClick={(e) => handleCopyCode(activeSession.joinCode, e)}
-                      className="min-h-11 min-w-11 inline-flex items-center justify-center hover:bg-[#6D415F]/10 rounded transition-colors"
-                      title="Copy code"
-                      aria-label="Copy session code"
-                    >
-                      <Copy className="w-4 h-4 text-[#6D415F]" />
-                    </button>
-                  </div>
-                  {activeActivityLabel ? (
-                    <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#6D415F]/10 text-[#6D415F] text-sm font-semibold">
-                      <span className="w-2 h-2 rounded-full bg-[#6D415F] animate-pulse" aria-hidden />
-                      {activeActivityLabel}
-                    </span>
-                  ) : (
-                    <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-gray-100 text-gray-600 text-sm font-semibold">
-                      No Active Activity
-                    </span>
-                  )}
-                </div>
-              </div>
+          <div className="grid grid-cols-[auto_minmax(0,1fr)] items-center gap-x-3 gap-y-2.5 md:grid-cols-[auto_minmax(0,1fr)_auto] md:gap-y-0 md:gap-x-3">
+            <div className="w-10 h-10 bg-[#6D415F]/10 rounded-full flex items-center justify-center shrink-0 row-start-1 col-start-1 md:row-span-2 md:self-center">
+              <Activity className="w-5 h-5 text-[#6D415F]" />
             </div>
-            <div className="flex flex-wrap items-center gap-3 sm:gap-5">
+            <h3 className="text-lg font-bold text-[#2E1F2A] dark:text-white break-words min-w-0 row-start-1 col-start-2 self-center">
+              {activeSession.sessionName || 'Session'}
+            </h3>
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-1 min-w-0 col-span-2 row-start-2 md:col-span-1 md:col-start-2 md:row-start-2 md:gap-x-4 md:gap-y-2">
+              <div className="flex items-center gap-2 shrink-0">
+                <span className="text-sm text-[#5A4A55] dark:text-white/70">Code:</span>
+                <span className="text-xl font-bold text-[#6D415F]">{activeSession.joinCode}</span>
+                <button
+                  type="button"
+                  onClick={(e) => handleCopyCode(activeSession.joinCode, e)}
+                  className="min-h-11 min-w-11 inline-flex items-center justify-center hover:bg-[#6D415F]/10 rounded transition-colors"
+                  title="Copy code"
+                  aria-label="Copy session code"
+                >
+                  <Copy className="w-4 h-4 text-[#6D415F]" />
+                </button>
+              </div>
+              {activeActivityLabel ? (
+                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#6D415F]/10 text-[#6D415F] text-sm font-semibold whitespace-nowrap">
+                  <span className="w-2 h-2 rounded-full bg-[#6D415F] animate-pulse" aria-hidden />
+                  {activeActivityLabel}
+                </span>
+              ) : (
+                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-gray-100 text-gray-600 text-sm font-semibold whitespace-nowrap">
+                  No Active Activity
+                </span>
+              )}
+            </div>
+            <div className="flex items-center justify-between gap-3 min-w-0 col-span-2 row-start-3 max-[360px]:flex-col max-[360px]:items-stretch sm:gap-5 md:col-span-1 md:col-start-3 md:row-start-1 md:row-span-2 md:self-center md:justify-self-end md:justify-start md:flex-wrap">
               <div className="flex items-center gap-2 min-w-0">
                 <Users className="w-4 h-4 text-[#6D415F] shrink-0" />
                 <span className="text-sm text-[#5A4A55] dark:text-white/70">{toParticipantCount(activeSession.participants)} participants</span>
               </div>
               <EndSessionButton
-                className="flex items-center justify-center gap-2 min-h-11 px-4 py-2.5 rounded-xl bg-red-500 text-white font-semibold hover:bg-red-600 transition-colors"
+                className="flex items-center justify-center gap-2 min-h-11 px-4 py-2.5 rounded-xl bg-red-500 text-white font-semibold hover:bg-red-600 transition-colors max-[360px]:w-full"
                 labelClassName=""
               />
             </div>

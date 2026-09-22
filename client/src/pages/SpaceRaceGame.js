@@ -120,7 +120,7 @@ export default function SpaceRaceGame() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-indigo-900 via-purple-900 to-pink-900">
+    <div className="min-h-screen bg-gradient-to-b from-indigo-900 via-purple-900 to-pink-900 overflow-x-hidden">
       {/* Stars background effect */}
       <div className="fixed inset-0 overflow-hidden pointer-events-none">
         {[...Array(20)].map((_, i) => (
@@ -140,11 +140,11 @@ export default function SpaceRaceGame() {
       {/* Header */}
       <div className="relative z-10 bg-black/20 backdrop-blur-sm border-b border-white/10">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between h-16">
-            <div className="flex items-center space-x-4">
+          <div className="flex flex-col gap-3 py-3 min-[481px]:flex-row min-[481px]:items-center min-[481px]:justify-between min-[481px]:h-16 min-[481px]:py-0 min-[481px]:gap-0">
+            <div className="flex flex-wrap items-center gap-3 min-w-0">
               <button
                 onClick={handleLeaveRace}
-                className="flex items-center space-x-2 text-white/80 hover:text-white transition-colors"
+                className="flex items-center space-x-2 text-white/80 hover:text-white transition-colors min-h-11"
               >
                 <ArrowLeft className="h-5 w-5" />
                 <span>Leave Race</span>
@@ -155,8 +155,8 @@ export default function SpaceRaceGame() {
                 <h1 className="text-xl font-semibold text-white">Space Race</h1>
               </div>
             </div>
-            <div className="flex items-center space-x-3">
-              <div className="text-sm text-white/80">
+            <div className="flex flex-wrap items-center gap-3 min-w-0">
+              <div className="text-sm text-white/80 min-w-0 break-words">
                 Welcome, <span className="font-medium text-white">{participantData?.name}</span>
               </div>
               {participantData?.teamId && (
@@ -184,7 +184,7 @@ export default function SpaceRaceGame() {
                 {teams.map((team) => (
                   <div key={team.id} className="space-y-3">
                     {/* Team Header */}
-                    <div className="flex items-center justify-between">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
                       <div className="flex items-center space-x-3">
                         <div className={`w-6 h-6 rounded-full ${team.color}`}></div>
                         <span className="text-white font-semibold text-lg">{team.name}</span>

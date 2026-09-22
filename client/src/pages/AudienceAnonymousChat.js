@@ -239,7 +239,9 @@ const AudienceAnonymousChat = () => {
         title={showActiveChat && chatSession?.title ? chatSession.title : 'Anonymous Chat'}
         titleIcon={<MessageSquare className="w-4 h-4 shrink-0 text-[#6D415F]" />}
         participantName={participantDisplayName}
+        className="fixed inset-x-0 top-0 z-30"
       />
+      <div className="h-12 min-[481px]:h-16 shrink-0" aria-hidden="true" />
 
       <GuestProgressLoginBanner
         contentClassName={`${AUDIENCE_ACTIVITY_PAGE_WIDTH} py-2 flex items-center justify-between gap-2 min-w-0`}

@@ -575,36 +575,36 @@ export default function CreateExitTicketPage() {
             </div>
 
             <div className="flex flex-col gap-2 sm:flex-row sm:justify-between">
-              <div className="flex flex-wrap gap-2">
+              <div className="grid grid-cols-2 gap-2 w-full max-sm:items-start sm:flex sm:w-auto sm:flex-wrap">
                 <button
                   onClick={() => goToStep(2)}
-                  className="min-h-11 px-4 py-2 border border-gray-300 text-text-light rounded-lg hover:bg-gray-50 transition-colors flex-1 sm:flex-none"
+                  className="min-h-11 px-4 py-2 border border-gray-300 text-text-light rounded-lg hover:bg-gray-50 transition-colors inline-flex items-center justify-center min-w-0 w-full sm:w-auto sm:flex-none"
                 >
                   Back to Edit
                 </button>
                 <button
                   onClick={goBack}
-                  className="min-h-11 px-4 py-2 border border-gray-300 text-text-light rounded-lg hover:bg-gray-50 transition-colors flex-1 sm:flex-none"
+                  className="min-h-11 px-4 py-2 border border-gray-300 text-text-light rounded-lg hover:bg-gray-50 transition-colors inline-flex items-center justify-center min-w-0 w-full sm:w-auto sm:flex-none"
                 >
                   Cancel
                 </button>
               </div>
-              <div className="flex flex-wrap gap-2">
+              <div className="grid grid-cols-2 gap-2 w-full max-sm:items-start sm:flex sm:w-auto sm:flex-wrap">
                 <button
                   onClick={handleSaveDraft}
                   disabled={isSaving}
-                  className="min-h-11 px-4 py-2 border border-gray-300 text-text-light rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex-1 sm:flex-none"
+                  className="min-h-11 px-4 py-2 border border-gray-300 text-text-light rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center justify-center text-center min-w-0 w-full sm:w-auto sm:flex-none"
                 >
                   {isSaving ? 'Saving...' : 'Save as Draft'}
                 </button>
-                <div className="flex flex-col items-stretch sm:items-end flex-1 sm:flex-none">
+                <div className="flex flex-col items-stretch min-w-0 w-full sm:w-auto sm:flex-none sm:items-end">
                   <button
                     onClick={handleLaunch}
                     disabled={isSaving || !isFormValid}
-                    className="min-h-11 px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed w-full"
+                    className="min-h-11 px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center justify-center text-center w-full"
                   >
                     {isSaving ? 'Launching...' : 'Launch Exit Ticket'}
-                    <Sparkles className="w-4 h-4 ml-2 inline" />
+                    <Sparkles className="w-4 h-4 ml-2 inline shrink-0" />
                   </button>
                   <LaunchRequiresSessionHint />
                 </div>

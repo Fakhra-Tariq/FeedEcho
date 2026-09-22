@@ -20,17 +20,16 @@ import PageHeaderCard from '../components/Host/PageHeaderCard';
 import HeaderCardStats from '../components/Host/HeaderCardStats';
 import ListFilterBar from '../components/Host/ListFilterBar';
 import { toParticipantCount } from '../utils/toParticipantCount';
+import {
+  DURATION_MISMATCH_MSG,
+  isJoinShorterThanQuiz,
+  quizDurationMinutes,
+} from '../utils/spaceRaceDuration';
 
 const RACES_PAGE_SIZE = 5;
 
 const SPACE_RACE_QUIZ_COUNTDOWNS = [30, 60, 120, 300, 600, 900, 1200, 1800];
 const SPACE_RACE_JOIN_MINUTES = [5, 10, 15, 20, 30, 45, 60];
-const DURATION_MISMATCH_MSG = 'Join Duration must be equal to or greater than Quiz Duration';
-
-const quizDurationMinutes = (countdownSeconds) => Number(countdownSeconds) / 60;
-
-const isJoinShorterThanQuiz = (joinMinutes, countdownSeconds) =>
-  Number(joinMinutes) < quizDurationMinutes(countdownSeconds);
 
 const snapJoinUpToQuiz = (countdownSeconds) => {
   const needed = quizDurationMinutes(countdownSeconds);
@@ -965,7 +964,7 @@ export default function HostSpaceRace() {
   };
 
 return (
-  <div className="px-6 pb-6 space-y-4">
+  <div className="px-0 md:px-6 pb-6 space-y-4 overflow-x-hidden max-w-full">
     <SessionLaunchBanner />
 
     <PageHeaderCard
@@ -984,11 +983,11 @@ return (
       }
       subtitle="Gamified quiz competitions with team leaderboards"
       actions={
-        <>
+        <div className="flex flex-col gap-2 w-full min-[481px]:flex-row min-[481px]:w-auto min-[481px]:items-center">
           {activeRace && (
             <button
               onClick={() => handleEnd(resolveRaceId(activeRace))}
-              className="inline-flex items-center px-3 py-2 bg-white/20 text-white text-sm rounded-lg hover:bg-white/30 transition-colors"
+              className="inline-flex items-center justify-center min-h-11 px-3 py-2 bg-white/20 text-white text-sm rounded-lg hover:bg-white/30 transition-colors w-full min-[481px]:w-auto"
               title="End Race"
             >
               <Square className="w-4 h-4 mr-1" />
@@ -997,12 +996,12 @@ return (
           )}
           <button
             onClick={handleOpenCreateModal}
-            className="flex items-center gap-2 px-4 py-2 bg-white text-[#6D415F] rounded-lg font-semibold hover:bg-white/90 shadow-lg transition-colors"
+            className="flex items-center justify-center gap-2 min-h-11 px-4 py-2 bg-white text-[#6D415F] rounded-lg font-semibold hover:bg-white/90 shadow-lg transition-colors w-full min-[481px]:w-auto"
           >
             <Plus className="w-4 h-4" />
             Create Race
           </button>
-        </>
+        </div>
       }
     >
       <HeaderCardStats
@@ -1025,11 +1024,11 @@ return (
 
       <div className="grid gap-4">
         {visibleRaces.map(race => (
-          <div key={race.id} className="bg-white rounded-lg border border-gray-200 p-6">
-            <div className="flex items-start justify-between">
-              <div className="flex-1">
-                <div className="flex items-center space-x-3 mb-2">
-                  <h3 className="text-lg font-semibold text-text">{race.title}</h3>
+          <div key={race.id} className="bg-white rounded-lg border border-gray-200 p-4 md:p-6 max-w-full min-w-0">
+            <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+              <div className="flex-1 min-w-0">
+                <div className="flex flex-wrap items-center gap-2 md:gap-3 mb-2">
+                  <h3 className="text-lg font-semibold text-text break-words min-w-0">{race.title}</h3>
                   {(() => {
                     const status = getRaceStatus(race);
                     const badgeClasses =
@@ -1053,8 +1052,8 @@ return (
                     );
                   })()}
                 </div>
-                <p className="text-text-light mb-4">{race.description || 'Live Space Race session'}</p>
-                <div className="flex items-center space-x-6 text-sm text-text-light">
+                <p className="text-text-light mb-4 break-words">{race.description || 'Live Space Race session'}</p>
+                <div className="flex flex-wrap items-center gap-x-4 gap-y-2 md:gap-x-6 text-sm text-text-light">
                   <div className="flex items-center space-x-1">
                     <Users className="w-4 h-4" />
                     <span>{toParticipantCount(race.participantsCount, race.participants)} participants</span>
@@ -1098,12 +1097,12 @@ return (
                   </div>
                 )}
               </div>
-              <div className="flex items-center space-x-2 ml-4">
+              <div className="flex flex-wrap items-center gap-2 md:ml-4 shrink-0">
                 {/* Start button for draft races */}
                 {getRaceStatus(race) === 'draft' && (
                   <button
                     onClick={() => handleStart(race.id)}
-                    className="inline-flex items-center px-3 py-1.5 bg-[#6D415F] text-white text-sm rounded-lg hover:bg-[#5a364d] transition-colors"
+                    className="inline-flex items-center justify-center min-h-11 px-3 py-1.5 bg-[#6D415F] text-white text-sm rounded-lg hover:bg-[#5a364d] transition-colors"
                   >
                     <Play className="w-4 h-4 mr-1" />
                     Launch
@@ -1114,7 +1113,7 @@ return (
                 {getRaceStatus(race) === 'active' && (
                   <button
                     onClick={() => handleEnd(resolveRaceId(race))}
-                    className="inline-flex items-center px-3 py-1.5 bg-[#6D415F] text-white text-sm rounded-lg hover:bg-[#5a364d] transition-colors"
+                    className="inline-flex items-center justify-center min-h-11 px-3 py-1.5 bg-[#6D415F] text-white text-sm rounded-lg hover:bg-[#5a364d] transition-colors"
                     title="End Race"
                   >
                     <Square className="w-4 h-4 mr-1" />
@@ -1125,7 +1124,7 @@ return (
                 {/* Settings button for all races */}
                 <button 
                   onClick={() => setSettingsRace(race)}
-                  className="p-2 text-[#6D415F] hover:bg-[#6D415F]/10 rounded-lg transition-colors"
+                  className="min-h-11 min-w-11 p-2 text-[#6D415F] hover:bg-[#6D415F]/10 rounded-lg transition-colors inline-flex items-center justify-center"
                   title="Race Settings"
                 >
                   <Settings className="w-4 h-4" />
@@ -1135,7 +1134,7 @@ return (
                 {(race.status === 'completed' || race.status === 'ended' || race.status === 'active') && (
                   <button 
                     onClick={() => navigate(`/host/space-race/${race.id}/display`)}
-                    className="p-2 text-[#6D415F] hover:bg-[#6D415F]/10 rounded-lg transition-colors"
+                    className="min-h-11 min-w-11 p-2 text-[#6D415F] hover:bg-[#6D415F]/10 rounded-lg transition-colors inline-flex items-center justify-center"
                     title="View Race Display - See who won and final results"
                   >
                     <Monitor className="w-4 h-4" />
@@ -1181,31 +1180,32 @@ return (
       )}
 
       {showCreate && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+        <div className="fixed inset-0 bg-black bg-opacity-50 z-50 overflow-y-auto">
+          <div className="flex min-h-full items-center justify-center p-3 sm:p-4">
+          <div className="bg-white rounded-xl max-w-4xl w-full max-h-[calc(100dvh-1.5rem)] overflow-y-auto overflow-x-hidden">
             {/* Header with step indicators */}
-            <div className="p-6 border-b border-gray-200">
-              <h2 className="text-xl font-semibold text-text mb-4">Launch Space Race</h2>
-              <div className="flex items-center justify-between">
-                <div className={`flex items-center space-x-2 ${currentStep === 1 ? 'text-[#6D415F]' : 'text-gray-400'}`}>
-                  <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium ${currentStep === 1 ? 'bg-[#6D415F] text-white' : 'bg-gray-200'}`}>
+            <div className="px-4 sm:px-6 py-4 border-b border-gray-200">
+              <h2 className="text-xl font-semibold text-text mb-3">Launch Space Race</h2>
+              <div className="flex items-center justify-between gap-2 min-w-0">
+                <div className={`flex items-center space-x-2 min-w-0 ${currentStep === 1 ? 'text-[#6D415F]' : 'text-gray-400'}`}>
+                  <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium shrink-0 ${currentStep === 1 ? 'bg-[#6D415F] text-white' : 'bg-gray-200'}`}>
                     1
                   </div>
-                  <span className="font-medium">Choose Quiz</span>
+                  <span className="font-medium text-sm sm:text-base truncate">Choose Quiz</span>
                 </div>
-                <div className={`flex-1 h-0.5 ${currentStep === 2 ? 'bg-[#6D415F]' : 'bg-gray-200'}`}></div>
-                <div className={`flex items-center space-x-2 ${currentStep === 2 ? 'text-[#6D415F]' : 'text-gray-400'}`}>
-                  <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium ${currentStep === 2 ? 'bg-[#6D415F] text-white' : 'bg-gray-200'}`}>
+                <div className={`flex-1 h-0.5 min-w-[0.75rem] ${currentStep === 2 ? 'bg-[#6D415F]' : 'bg-gray-200'}`}></div>
+                <div className={`flex items-center space-x-2 min-w-0 ${currentStep === 2 ? 'text-[#6D415F]' : 'text-gray-400'}`}>
+                  <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium shrink-0 ${currentStep === 2 ? 'bg-[#6D415F] text-white' : 'bg-gray-200'}`}>
                     2
                   </div>
-                  <span className="font-medium">Settings</span>
+                  <span className="font-medium text-sm sm:text-base truncate">Settings</span>
                 </div>
               </div>
             </div>
 
             {/* Step 1: Choose Quiz */}
             {currentStep === 1 && (
-              <div className="p-6">
+              <div className="p-4 sm:p-6">
                 <h3 className="text-lg font-medium text-text mb-4">Select a Quiz</h3>
                 {fetchingQuizzes ? (
                   <div className="flex flex-col items-center justify-center py-12">
@@ -1218,15 +1218,15 @@ return (
                       <div
                         key={quiz.id}
                         onClick={() => handleQuizSelect(quiz.id)}
-                        className={`p-4 border rounded-lg cursor-pointer transition-colors ${
+                        className={`p-4 min-h-11 border rounded-lg cursor-pointer transition-colors ${
                           selectedQuizId === quiz.id
                             ? 'border-primary bg-primary/5'
                             : 'border-gray-200 hover:border-gray-300'
                         }`}
                       >
-                        <div className="flex items-center justify-between">
-                          <div>
-                            <h4 className="font-medium text-text">{quiz.title}</h4>
+                        <div className="flex items-center justify-between gap-3 min-w-0">
+                          <div className="min-w-0">
+                            <h4 className="font-medium text-text break-words">{quiz.title}</h4>
                             <p className="text-sm text-text-light">
                               {quiz.questionCount || quiz.questions?.length || 0} questions • {quiz.status}
                             </p>
@@ -1251,89 +1251,115 @@ return (
 
             {/* Step 2: Settings */}
             {currentStep === 2 && (
-              <div className="p-6">
-                <h3 className="text-lg font-medium text-text mb-4">Space Race Settings</h3>
-                <div className="grid grid-cols-2 gap-8">
-                  {/* Left Side */}
-                  <div className="space-y-4">
-                    <div>
-                      <label className="block text-sm font-medium text-text-light mb-1">Number of Teams</label>
-                      <input
-                        type="number"
-                        min="2"
-                        max="10"
-                        value={launchSettings.numberOfTeams}
-                        onChange={(e) => setLaunchSettings({...launchSettings, numberOfTeams: parseInt(e.target.value) || 2})}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary bg-white text-text"
-                      />
-                    </div>
-                    
-                    <div>
-                      <label className="block text-sm font-medium text-text-light mb-1">Team Assignment</label>
-                      <div className="space-y-2">
-                        <label className="flex items-center space-x-3">
-                          <input
-                            type="radio"
-                            name="teamAssignment"
-                            value="auto-assign"
-                            checked={launchSettings.teamAssignment === 'auto-assign'}
-                            onChange={(e) => setLaunchSettings({...launchSettings, teamAssignment: e.target.value})}
-                            className="w-4 h-4 text-[#6D415F] focus:ring-[#6D415F]"
-                          />
-                          <span className="text-sm text-text">Auto-assign</span>
-                        </label>
-                        <label className="flex items-center space-x-3">
-                          <input
-                            type="radio"
-                            name="teamAssignment"
-                            value="student-choice"
-                            checked={launchSettings.teamAssignment === 'student-choice'}
-                            onChange={(e) => setLaunchSettings({...launchSettings, teamAssignment: e.target.value})}
-                            className="w-4 h-4 text-[#6D415F] focus:ring-[#6D415F]"
-                          />
-                          <span className="text-sm text-text">Audience Choice</span>
-                        </label>
-                      </div>
-                    </div>
+              <div className="px-4 sm:px-6 py-4">
+                <h3 className="text-lg font-medium text-text mb-3">Space Race Settings</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-4 items-start">
+                  <div className="max-md:order-1">
+                    <label className="block text-sm font-medium text-text-light mb-1">Number of Teams</label>
+                    <input
+                      type="number"
+                      min="2"
+                      max="10"
+                      value={launchSettings.numberOfTeams}
+                      onChange={(e) => setLaunchSettings({...launchSettings, numberOfTeams: parseInt(e.target.value) || 2})}
+                      className="w-full h-10 px-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary bg-white text-text"
+                    />
+                  </div>
 
-                    {/* Show participants per team field only when student choice is selected */}
-                    {launchSettings.teamAssignment === 'student-choice' && (
-                      <div>
-                        <label className="block text-sm font-medium text-text-light mb-1">Number of participants per team</label>
-                        <select
-                          value={launchSettings.studentsPerTeam}
-                          onChange={(e) => setLaunchSettings({...launchSettings, studentsPerTeam: parseInt(e.target.value)})}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#6D415F] focus:border-[#6D415F] bg-white text-text"
-                        >
-                          {[1, 2, 3, 4, 5, 6].map(num => (
-                            <option key={num} value={num}>{num}</option>
-                          ))}
-                        </select>
-                        <p className="text-xs text-gray-500 mt-1">Maximum audience members allowed per team</p>
-                      </div>
-                    )}
+                  <div className={`${launchSettings.teamAssignment === 'student-choice' ? 'md:row-span-3' : 'md:row-span-2'} max-md:order-5 max-md:row-span-1`}>
+                    <label className="block text-sm font-medium text-text-light mb-1">Quiz Options</label>
+                    <div className="space-y-2.5">
+                      <label className="flex items-center space-x-3 max-md:min-h-11">
+                        <input
+                          type="checkbox"
+                          checked={launchSettings.shuffleQuestions}
+                          onChange={(e) => setLaunchSettings({...launchSettings, shuffleQuestions: e.target.checked})}
+                          className="w-4 h-4 text-[#6D415F] border-gray-300 rounded focus:ring-[#6D415F]"
+                        />
+                        <span className="text-sm text-text">Shuffle Questions</span>
+                      </label>
+                      <label className="flex items-center space-x-3 max-md:min-h-11">
+                        <input
+                          type="checkbox"
+                          checked={launchSettings.shuffleAnswers}
+                          onChange={(e) => setLaunchSettings({...launchSettings, shuffleAnswers: e.target.checked})}
+                          className="w-4 h-4 text-[#6D415F] border-gray-300 rounded focus:ring-[#6D415F]"
+                        />
+                        <span className="text-sm text-text">Shuffle Answers</span>
+                      </label>
+                      <label className="flex items-center space-x-3 max-md:min-h-11">
+                        <input
+                          type="checkbox"
+                          checked={launchSettings.showQuestionFeedback}
+                          onChange={(e) => setLaunchSettings({...launchSettings, showQuestionFeedback: e.target.checked})}
+                          className="w-4 h-4 text-[#6D415F] border-gray-300 rounded focus:ring-[#6D415F]"
+                        />
+                        <span className="text-sm text-text">Show Question Feedback</span>
+                      </label>
+                      <label className="flex items-center space-x-3 max-md:min-h-11">
+                        <input
+                          type="checkbox"
+                          checked={launchSettings.showFinalScore}
+                          onChange={(e) => setLaunchSettings({...launchSettings, showFinalScore: e.target.checked})}
+                          className="w-4 h-4 text-[#6D415F] border-gray-300 rounded focus:ring-[#6D415F]"
+                        />
+                        <span className="text-sm text-text">Show Final Score</span>
+                      </label>
+                    </div>
+                  </div>
 
-                    <div>
-                      <label className="block text-sm font-medium text-text-light mb-1">Race Icon</label>
+                  <div className="max-md:order-2">
+                    <label className="block text-sm font-medium text-text-light mb-1">Team Assignment</label>
+                    <div className="space-y-2">
+                      <label className="flex items-center space-x-3 max-md:min-h-11">
+                        <input
+                          type="radio"
+                          name="teamAssignment"
+                          value="auto-assign"
+                          checked={launchSettings.teamAssignment === 'auto-assign'}
+                          onChange={(e) => setLaunchSettings({...launchSettings, teamAssignment: e.target.value})}
+                          className="w-4 h-4 text-[#6D415F] focus:ring-[#6D415F]"
+                        />
+                        <span className="text-sm text-text">Auto-assign</span>
+                      </label>
+                      <label className="flex items-center space-x-3 max-md:min-h-11">
+                        <input
+                          type="radio"
+                          name="teamAssignment"
+                          value="student-choice"
+                          checked={launchSettings.teamAssignment === 'student-choice'}
+                          onChange={(e) => setLaunchSettings({...launchSettings, teamAssignment: e.target.value})}
+                          className="w-4 h-4 text-[#6D415F] focus:ring-[#6D415F]"
+                        />
+                        <span className="text-sm text-text">Audience Choice</span>
+                      </label>
+                    </div>
+                  </div>
+
+                  {launchSettings.teamAssignment === 'student-choice' && (
+                    <div className="max-md:order-3">
+                      <label className="block text-sm font-medium text-text-light mb-1">Number of participants per team</label>
                       <select
-                        value={launchSettings.icon}
-                        onChange={(e) => setLaunchSettings({...launchSettings, icon: e.target.value})}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary bg-white text-text"
+                        value={launchSettings.studentsPerTeam}
+                        onChange={(e) => setLaunchSettings({...launchSettings, studentsPerTeam: parseInt(e.target.value)})}
+                        className="w-full h-10 px-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#6D415F] focus:border-[#6D415F] bg-white text-text"
                       >
-                        <option value="rocket">🚀 Rocket</option>
-                        <option value="trophy">🏆 Trophy</option>
-                        <option value="star">⭐ Star</option>
-                        <option value="flag">🚩 Flag</option>
+                        {[1, 2, 3, 4, 5, 6].map(num => (
+                          <option key={num} value={num}>{num}</option>
+                        ))}
                       </select>
+                      <p className="text-xs text-gray-500 mt-1">Maximum audience members allowed per team</p>
                     </div>
+                  )}
 
-                    <div className="grid grid-cols-2 gap-4">
+                  <div className="max-md:order-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div>
                         <label className="block text-sm font-medium text-text-light mb-1">Quiz Duration</label>
                         <select
                           value={launchSettings.countdown}
                           onChange={handleQuizDurationChange}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary bg-white text-text"
+                          className="w-full h-10 px-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary bg-white text-text"
                         >
                           <option value="30" disabled={quizDurationMinutes(30) > launchSettings.joinDuration}>30 seconds</option>
                           <option value="60" disabled={quizDurationMinutes(60) > launchSettings.joinDuration}>1 minute</option>
@@ -1352,7 +1378,7 @@ return (
                         <select
                           value={launchSettings.joinDuration}
                           onChange={handleJoinDurationChange}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary bg-white text-text"
+                          className="w-full h-10 px-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary bg-white text-text"
                         >
                           <option value="5" disabled={isJoinShorterThanQuiz(5, launchSettings.countdown)}>5 minutes</option>
                           <option value="10" disabled={isJoinShorterThanQuiz(10, launchSettings.countdown)}>10 minutes</option>
@@ -1370,67 +1396,41 @@ return (
                     )}
                   </div>
 
-                  {/* Right Side - Toggles */}
-                  <div className="space-y-3">
-                    <label className="flex items-center space-x-3">
-                      <input
-                        type="checkbox"
-                        checked={launchSettings.shuffleQuestions}
-                        onChange={(e) => setLaunchSettings({...launchSettings, shuffleQuestions: e.target.checked})}
-                        className="w-4 h-4 text-[#6D415F] border-gray-300 rounded focus:ring-[#6D415F]"
-                      />
-                      <span className="text-sm text-text">Shuffle Questions</span>
-                    </label>
-                    <label className="flex items-center space-x-3">
-                      <input
-                        type="checkbox"
-                        checked={launchSettings.shuffleAnswers}
-                        onChange={(e) => setLaunchSettings({...launchSettings, shuffleAnswers: e.target.checked})}
-                        className="w-4 h-4 text-[#6D415F] border-gray-300 rounded focus:ring-[#6D415F]"
-                      />
-                      <span className="text-sm text-text">Shuffle Answers</span>
-                    </label>
-                    <label className="flex items-center space-x-3">
-                      <input
-                        type="checkbox"
-                        checked={launchSettings.showQuestionFeedback}
-                        onChange={(e) => setLaunchSettings({...launchSettings, showQuestionFeedback: e.target.checked})}
-                        className="w-4 h-4 text-[#6D415F] border-gray-300 rounded focus:ring-[#6D415F]"
-                      />
-                      <span className="text-sm text-text">Show Question Feedback</span>
-                    </label>
-                    <label className="flex items-center space-x-3">
-                      <input
-                        type="checkbox"
-                        checked={launchSettings.showFinalScore}
-                        onChange={(e) => setLaunchSettings({...launchSettings, showFinalScore: e.target.checked})}
-                        className="w-4 h-4 text-[#6D415F] border-gray-300 rounded focus:ring-[#6D415F]"
-                      />
-                      <span className="text-sm text-text">Show Final Score</span>
-                    </label>
+                  <div className="max-md:order-6">
+                    <label className="block text-sm font-medium text-text-light mb-1">Race Icon</label>
+                    <select
+                      value={launchSettings.icon}
+                      onChange={(e) => setLaunchSettings({...launchSettings, icon: e.target.value})}
+                      className="w-full h-10 px-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary bg-white text-text"
+                    >
+                      <option value="rocket">🚀 Rocket</option>
+                      <option value="trophy">🏆 Trophy</option>
+                      <option value="star">⭐ Star</option>
+                      <option value="flag">🚩 Flag</option>
+                    </select>
                   </div>
                 </div>
               </div>
             )}
 
             {/* Footer Buttons */}
-            <div className="p-6 border-t border-gray-200 flex items-start justify-between gap-3 flex-wrap">
-                <div>
+            <div className="sticky bottom-0 bg-white px-4 sm:px-6 py-4 border-t border-gray-200 flex flex-col-reverse md:flex-row items-stretch md:items-start justify-between gap-3">
+                <div className="max-md:w-full">
                   {currentStep === 2 && (
                     <button
                       type="button"
                       onClick={handlePreviousStep}
-                      className="px-4 py-2 text-text-light bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
+                      className="px-4 py-2 min-h-11 max-md:w-full text-text-light bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
                     >
                       Previous
                     </button>
                   )}
                 </div>
-                <div className="flex items-start gap-3 flex-wrap">
+                <div className="flex flex-col-reverse md:flex-row items-stretch md:items-start gap-3 max-md:w-full">
                 <button
                   type="button"
                   onClick={() => setShowCreate(false)}
-                  className="px-4 py-2 text-text-light bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
+                  className="px-4 py-2 min-h-11 max-md:w-full text-text-light bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
                 >
                   Cancel
                 </button>
@@ -1439,7 +1439,7 @@ return (
                     type="button"
                     onClick={handleNextStep}
                     disabled={!selectedQuizId}
-                    className="px-4 py-2 bg-[#6D415F] text-white rounded-lg hover:bg-[#6D415F]/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                    className="px-4 py-2 min-h-11 max-md:w-full bg-[#6D415F] text-white rounded-lg hover:bg-[#6D415F]/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                   >
                     Next
                   </button>
@@ -1450,16 +1450,16 @@ return (
                       type="button"
                       onClick={handleSaveRace}
                       disabled={isCreating}
-                      className="inline-flex items-center px-4 py-2 bg-gray-200 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-300 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                      className="inline-flex items-center justify-center min-h-11 max-md:w-full px-4 py-2 bg-gray-200 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-300 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                     >
                       {isCreating ? 'Saving...' : 'Save as Draft'}
                     </button>
-                    <div className="flex flex-col items-center">
+                    <div className="flex flex-col items-center max-md:w-full">
                       <button
                         type="button"
                         onClick={handleStartRace}
                         disabled={isCreating}
-                        className="px-4 py-2 bg-[#6D415F] text-white rounded-lg hover:bg-[#6D415F]/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                        className="px-4 py-2 min-h-11 max-md:w-full bg-[#6D415F] text-white rounded-lg hover:bg-[#6D415F]/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                       >
                         {isCreating ? 'Launching...' : 'Launch'}
                       </button>
@@ -1469,6 +1469,7 @@ return (
                 )}
                 </div>
             </div>
+          </div>
           </div>
         </div>
       )}

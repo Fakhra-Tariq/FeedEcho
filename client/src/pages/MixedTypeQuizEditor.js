@@ -424,24 +424,24 @@ const MixedTypeQuizEditor = () => {
   return (
     <div className="min-h-screen bg-gradient-to-br from-orange-50 via-white to-purple-50 overflow-x-hidden max-w-full">
       {!showAiPanel && (
-      <div className="w-full max-w-full py-4 sm:py-6 lg:py-8">
+      <div className="w-full max-w-full py-4 sm:py-6 lg:py-8 max-md:px-4 max-md:pt-8 max-md:pb-6">
         {/* Page Header with Navigation */}
         <div className="mb-6 sm:mb-8 lg:mb-10">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
             <div className="min-w-0">
-              <h1 className="text-[clamp(1.375rem,5vw,2.25rem)] font-bold text-gray-900 mb-2 sm:mb-4 break-words">
+              <h1 className="text-[clamp(1.375rem,5vw,2.25rem)] font-bold text-gray-900 mb-2 sm:mb-4 break-words max-md:text-xl">
                 Create Mixed Type Quiz
               </h1>
               <p className="text-sm sm:text-base lg:text-lg text-gray-600 max-w-2xl">
                 Add your quiz title and start creating questions with different types
               </p>
             </div>
-            <div className="flex flex-wrap items-stretch gap-2 w-full sm:w-auto sm:justify-end">
+            <div className="flex flex-wrap items-stretch gap-2 w-full sm:w-auto sm:justify-end max-md:flex-col">
               <button
                 type="button"
                 onClick={() => setShowAiPanel(true)}
                 className={clsx(
-                  'flex items-center justify-center space-x-2 min-h-11 px-4 sm:px-5 py-2 sm:py-3 rounded-xl font-medium text-sm sm:text-base shadow-sm hover:shadow-md transition-all flex-1 sm:flex-none',
+                  'flex items-center justify-center space-x-2 min-h-11 px-4 sm:px-5 py-2 sm:py-3 rounded-xl font-medium text-sm sm:text-base shadow-sm hover:shadow-md transition-all flex-1 sm:flex-none max-md:flex-none max-md:w-full min-w-0',
                   showAiPanel
                     ? 'bg-primary/10 text-primary border border-primary/20'
                     : 'bg-white text-primary border border-primary/20 hover:bg-primary/5'
@@ -455,7 +455,7 @@ const MixedTypeQuizEditor = () => {
               <button
                 onClick={saveQuiz}
                 disabled={isQuizSaved}
-                className={`flex items-center justify-center space-x-2 min-h-11 px-4 sm:px-6 py-2 sm:py-3 rounded-xl font-medium text-sm sm:text-base shadow-sm hover:shadow-md transition-all flex-1 sm:flex-none ${
+                className={`flex items-center justify-center space-x-2 min-h-11 px-4 sm:px-6 py-2 sm:py-3 rounded-xl font-medium text-sm sm:text-base shadow-sm hover:shadow-md transition-all flex-1 sm:flex-none max-md:flex-none max-md:w-full min-w-0 ${
                   isQuizSaved 
                     ? 'bg-purple-100 text-purple-700 border border-purple-300 cursor-not-allowed' 
                     : 'bg-[#6D415F] text-white hover:bg-[#5A344D]'
@@ -476,7 +476,7 @@ const MixedTypeQuizEditor = () => {
 
               {/* Launch Quiz Button - Secondary, appears after saving */}
               {isQuizSaved && (
-                <div className="flex flex-col items-stretch flex-1 sm:flex-none min-w-[10rem]">
+                <div className="flex flex-col items-stretch flex-1 sm:flex-none min-w-[10rem] max-md:min-w-0 max-md:w-full">
                   <button
                     onClick={launchQuiz}
                     disabled={isQuizLaunched}
@@ -516,7 +516,7 @@ const MixedTypeQuizEditor = () => {
 
         {/* Questions Section */}
         <div className="space-y-6 sm:space-y-8">
-          <h2 className="text-xl sm:text-2xl lg:text-3xl font-bold text-gray-900">
+          <h2 className="text-xl sm:text-2xl lg:text-3xl font-bold text-gray-900 max-md:text-lg">
             Questions
           </h2>
 

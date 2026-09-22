@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { Clock, Rocket } from 'lucide-react';
+import { Clock, Rocket, MessageCircle, ChevronUp, X } from 'lucide-react';
 import { AudienceActivityHeader, AUDIENCE_ACTIVITY_PAGE_WIDTH } from '../components/Audience/AudienceActivityLayout';
 import GuestProgressLoginBanner from '../components/Audience/GuestProgressLoginBanner';
 import { onValue, ref as dbRef, off } from 'firebase/database';
@@ -80,6 +80,7 @@ export default function AudienceSpaceRacePage() {
   const [pendingJoin, setPendingJoin] = useState(null);
   const [participants, setParticipants] = useState([]);
   const [quizTimerLabel, setQuizTimerLabel] = useState(null);
+  const [mobileChatOpen, setMobileChatOpen] = useState(false);
 
   const activeRaceId = routeRaceId || raceData?.id || raceData?.raceId;
   const activeQuizId =
@@ -359,6 +360,7 @@ export default function AudienceSpaceRacePage() {
   }, [raceData]);
 
   const resolvedTeamId = participant?.teamId;
+  const hasTeamChat = resolvedTeamId != null && resolvedTeamId !== '';
 
   const spaceRaceQuizTitle = useMemo(() => {
     const candidates = [
@@ -476,7 +478,7 @@ export default function AudienceSpaceRacePage() {
   }
 
   return (
-    <div className="flex flex-col md:flex-row h-screen max-h-screen overflow-hidden bg-background">
+    <div className="flex flex-col md:flex-row h-[100dvh] max-h-[100dvh] overflow-hidden overflow-x-hidden bg-background">
       <div className="w-full md:flex-1 flex flex-col min-w-0 min-h-0 overflow-hidden">
         <div className="flex-shrink-0">
           <div className="h-16 overflow-hidden">
@@ -500,7 +502,7 @@ export default function AudienceSpaceRacePage() {
           />
         </div>
         {isQuizView ? (
-          <div className="flex-1 min-h-0 overflow-y-auto bg-background">
+          <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden bg-background">
             <SpaceRaceGamePanel
               raceId={activeRaceId}
               participant={participant}
@@ -522,7 +524,7 @@ export default function AudienceSpaceRacePage() {
             />
           </div>
         ) : (
-          <div className="flex-1 min-h-0 overflow-y-auto bg-background">
+          <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden bg-background">
             <SpaceRaceGamePanel
               raceId={activeRaceId}
               participant={participant}
@@ -531,10 +533,40 @@ export default function AudienceSpaceRacePage() {
             />
           </div>
         )}
+        {hasTeamChat && (
+          <button
+            type="button"
+            className={`md:hidden flex-shrink-0 min-h-11 px-4 bg-primary text-white flex items-center justify-between gap-2 ${
+              mobileChatOpen ? 'hidden' : ''
+            }`}
+            onClick={() => setMobileChatOpen(true)}
+          >
+            <span className="inline-flex items-center gap-2 font-medium">
+              <MessageCircle className="w-4 h-4" />
+              Team Chat
+            </span>
+            <ChevronUp className="w-5 h-5" />
+          </button>
+        )}
       </div>
 
-      <div className="w-full md:w-[34%] xl:w-[32%] flex-shrink-0 h-[45vh] md:h-full min-h-0 overflow-hidden">
-        {resolvedTeamId != null && resolvedTeamId !== '' ? (
+      {mobileChatOpen && hasTeamChat && (
+        <button
+          type="button"
+          aria-label="Close team chat overlay"
+          className="md:hidden fixed inset-0 z-30 bg-black/40"
+          onClick={() => setMobileChatOpen(false)}
+        />
+      )}
+
+      <div
+        className={`flex-shrink-0 min-h-0 overflow-hidden ${
+          hasTeamChat ? '' : 'max-md:hidden'
+        } max-md:fixed max-md:inset-x-0 max-md:bottom-0 max-md:z-40 ${
+          mobileChatOpen ? 'max-md:h-[min(75vh,32rem)]' : 'max-md:h-0'
+        } md:relative md:h-full md:w-[34%] xl:w-[32%]`}
+      >
+        {hasTeamChat ? (
           <SpaceRaceTeamChat
             raceId={activeRaceId}
             teamId={resolvedTeamId}
@@ -542,9 +574,19 @@ export default function AudienceSpaceRacePage() {
             compactHeader
             dockedEdge
             hideSyncNotice
+            headerAction={
+              <button
+                type="button"
+                onClick={() => setMobileChatOpen(false)}
+                className="md:hidden min-h-11 min-w-11 inline-flex items-center justify-center rounded-lg hover:bg-white/10 shrink-0"
+                aria-label="Close team chat"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            }
           />
         ) : (
-          <div className="h-full flex items-center justify-center bg-white rounded-tl-[16px] rounded-bl-[16px] shadow-[-8px_0_20px_-6px_rgba(46,31,42,0.18)] text-text/60 text-sm p-4 text-center">
+          <div className="h-full flex items-center justify-center bg-white md:rounded-tl-[16px] md:rounded-bl-[16px] md:shadow-[-8px_0_20px_-6px_rgba(46,31,42,0.18)] text-text/60 text-sm p-4 text-center">
             Join a team to unlock team chat
           </div>
         )}

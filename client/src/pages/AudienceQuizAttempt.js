@@ -185,7 +185,7 @@ const AudienceQuizAttempt = ({
     ? 'min-h-0 bg-background'
     : 'min-h-screen bg-gradient-to-br from-orange-50 via-white to-purple-50';
   const quizPageWidthClass = embedded
-    ? 'max-w-4xl mx-auto px-4'
+    ? 'max-w-4xl mx-auto px-3 sm:px-4 overflow-x-hidden'
     : AUDIENCE_ACTIVITY_PAGE_WIDTH;
 
   const applyQuizTimer = (quizData, joinedAtIso = null, { forceSpaceRace = false } = {}) => {
@@ -2412,7 +2412,7 @@ const AudienceQuizAttempt = ({
         <AudienceActivityCard
           key={currentQuestionId || `q-${currentQuestion}`}
         >
-          <div className="flex items-center justify-between shrink-0">
+          <div className={`flex items-center justify-between shrink-0 ${isSpaceRace ? 'gap-2 min-w-0' : ''}`}>
             <span className="text-sm text-text-light">
               Question {currentQuestion + 1} of {quiz.questions.length}
             </span>
@@ -2436,7 +2436,7 @@ const AudienceQuizAttempt = ({
                 {currentQuestion + 1}
               </span>
             </div>
-            <h3 className="text-base sm:text-lg font-semibold text-text flex-1 leading-snug">
+            <h3 className={`text-base sm:text-lg font-semibold text-text flex-1 leading-snug ${isSpaceRace ? 'min-w-0 break-words' : ''}`}>
               {question.questionText}
             </h3>
           </div>
@@ -2495,7 +2495,9 @@ const AudienceQuizAttempt = ({
                     ? '#F1E5EB'
                     : '#ffffff',
                 }}
-                className="flex items-center py-3 px-4 rounded-xl transition-all"
+                className={`flex items-center py-3 px-4 rounded-xl transition-all ${
+                  isSpaceRace ? 'min-h-11 min-w-0' : ''
+                }`}
               >
                 <input
                   type="radio"
@@ -2529,7 +2531,7 @@ const AudienceQuizAttempt = ({
                     />
                   )}
                 </span>
-                <span className="ml-3 text-text">{optionText}</span>
+                <span className={`ml-3 text-text ${isSpaceRace ? 'min-w-0 break-words' : ''}`}>{optionText}</span>
               </label>
               );
             })}
@@ -2566,7 +2568,9 @@ const AudienceQuizAttempt = ({
                         ? '#F1E5EB'
                         : '#ffffff',
                     }}
-                    className="flex items-center py-3 px-4 rounded-xl transition-all"
+                    className={`flex items-center py-3 px-4 rounded-xl transition-all ${
+                      isSpaceRace ? 'min-h-11 min-w-0' : ''
+                    }`}
                   >
                     <input
                       type="radio"
@@ -2634,7 +2638,7 @@ const AudienceQuizAttempt = ({
           </div>
 
           {isSpaceRace && !isCurrentQuestionSubmitted && (
-            <div className="mt-4 shrink-0">
+            <div className={`mt-4 shrink-0 ${isSpaceRace ? 'max-md:w-full' : ''}`}>
               <button
                 type="button"
                 onClick={handleSubmitTeamAnswer}
@@ -2642,7 +2646,9 @@ const AudienceQuizAttempt = ({
                   isSubmittingQuestion ||
                   !(displaySelectedOption && String(displaySelectedOption).trim())
                 }
-                className={`px-5 py-2.5 rounded-lg font-semibold text-white flex items-center gap-2 transition-all ${
+                className={`px-5 py-2.5 min-h-11 rounded-lg font-semibold text-white flex items-center justify-center gap-2 transition-all ${
+                  isSpaceRace ? 'max-md:w-full' : ''
+                } ${
                   isSubmittingQuestion ||
                   !(displaySelectedOption && String(displaySelectedOption).trim())
                     ? 'bg-neutral-200 text-neutral-400 cursor-not-allowed'
@@ -2654,11 +2660,17 @@ const AudienceQuizAttempt = ({
             </div>
           )}
 
-          <div className="flex items-center justify-between mt-5 shrink-0">
+          <div
+            className={`flex items-center justify-between mt-5 shrink-0 ${
+              isSpaceRace ? 'flex-wrap gap-2' : ''
+            }`}
+          >
             <button
               onClick={() => setCurrentQuestion(currentQuestion - 1)}
               disabled={currentQuestion === 0}
-              className={`flex items-center space-x-2 px-5 py-2.5 rounded-xl font-medium transition-all ${
+              className={`flex items-center justify-center space-x-2 px-5 py-2.5 min-h-11 rounded-xl font-medium transition-all ${
+                isSpaceRace ? 'max-md:flex-1' : ''
+              } ${
                 currentQuestion === 0
                   ? 'bg-neutral-200 text-neutral-400 cursor-not-allowed'
                   : 'bg-white border-[1.5px] border-[#6D415F] text-[#6D415F] hover:bg-[#F1E5EB]'
@@ -2674,7 +2686,7 @@ const AudienceQuizAttempt = ({
                   <button
                     type="button"
                     onClick={() => setIsSubmitted(true)}
-                    className="px-5 py-2.5 rounded-lg font-bold text-white bg-[#6D415F] hover:bg-[#5c3650] transition-all"
+                    className="px-5 py-2.5 min-h-11 max-md:flex-1 rounded-lg font-bold text-white bg-[#6D415F] hover:bg-[#5c3650] transition-all"
                   >
                     Finish
                   </button>
@@ -2682,7 +2694,7 @@ const AudienceQuizAttempt = ({
                   <button
                     type="button"
                     onClick={() => setCurrentQuestion(currentQuestion + 1)}
-                    className="px-5 py-2.5 rounded-lg font-bold text-white bg-[#6D415F] hover:bg-[#5c3650] transition-all"
+                    className="px-5 py-2.5 min-h-11 max-md:flex-1 rounded-lg font-bold text-white bg-[#6D415F] hover:bg-[#5c3650] transition-all"
                   >
                     Next →
                   </button>

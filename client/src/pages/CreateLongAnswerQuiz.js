@@ -156,16 +156,16 @@ const CreateLongAnswerQuiz = () => {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-orange-50 via-white to-purple-50">
-      <div className="container mx-auto px-3 sm:px-4 lg:px-6 py-4 sm:py-6 lg:py-8">
+      <div className="container mx-auto px-3 sm:px-4 lg:px-6 py-4 sm:py-6 lg:py-8 max-md:px-4 max-md:pt-8">
         {/* Page Header with Navigation */}
         <div className="mb-6 sm:mb-8 lg:mb-10">
-          <div className="flex items-center justify-end">
-            <div className="flex items-center space-x-3">
+          <div className="flex items-center justify-end max-md:justify-stretch">
+            <div className="flex items-center space-x-3 max-md:flex-col max-md:items-stretch max-md:space-x-0 max-md:gap-2 max-md:w-full">
               {/* Save Quiz Button */}
               <button
                 onClick={saveQuiz}
                 disabled={isQuizSaved}
-                className={`flex items-center space-x-2 px-4 sm:px-6 py-2 sm:py-3 rounded-xl font-medium text-sm sm:text-base shadow-sm hover:shadow-md transition-all ${
+                className={`flex items-center space-x-2 px-4 sm:px-6 py-2 sm:py-3 rounded-xl font-medium text-sm sm:text-base shadow-sm hover:shadow-md transition-all max-md:w-full max-md:min-h-11 max-md:justify-center ${
                   isQuizSaved 
                     ? 'bg-purple-100 text-purple-700 border border-purple-300 cursor-not-allowed' 
                     : 'bg-[#6D415F] text-white hover:bg-[#5A344D]'
@@ -186,10 +186,10 @@ const CreateLongAnswerQuiz = () => {
 
               {/* Launch Quiz Button - Secondary, appears after saving */}
               {isQuizSaved && (
-                <div className="flex flex-col items-end">
+                <div className="flex flex-col items-end max-md:items-stretch max-md:w-full">
                   <button
                     onClick={launchQuiz}
-                    className="flex items-center space-x-2 px-4 sm:px-6 py-2 sm:py-3 bg-[#6D415F] text-white rounded-xl hover:bg-[#5A344D] transition-colors font-medium text-sm sm:text-base shadow-sm hover:shadow-md"
+                    className="flex items-center space-x-2 px-4 sm:px-6 py-2 sm:py-3 bg-[#6D415F] text-white rounded-xl hover:bg-[#5A344D] transition-colors font-medium text-sm sm:text-base shadow-sm hover:shadow-md max-md:w-full max-md:min-h-11 max-md:justify-center"
                   >
                     <Rocket className="w-4 h-4 sm:w-5 sm:h-5" />
                     <span>Launch Quiz</span>
@@ -200,7 +200,7 @@ const CreateLongAnswerQuiz = () => {
             </div>
           </div>
           
-          <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-gray-900 mb-3 sm:mb-4 mt-1">
+          <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-gray-900 mb-3 sm:mb-4 mt-1 max-md:text-xl">
             Create Long Answer Quiz
           </h1>
           <p className="text-sm sm:text-base lg:text-lg text-gray-600 max-w-2xl">
@@ -227,7 +227,7 @@ const CreateLongAnswerQuiz = () => {
 
         {/* Questions Section */}
         <div className="space-y-6 sm:space-y-8">
-          <h2 className="text-xl sm:text-2xl lg:text-3xl font-bold text-gray-900">
+          <h2 className="text-xl sm:text-2xl lg:text-3xl font-bold text-gray-900 max-md:text-lg">
             Questions
           </h2>
 

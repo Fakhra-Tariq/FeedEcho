@@ -134,15 +134,22 @@ const readScoreValue = (value) => {
   return Number.isFinite(parsed) ? parsed : 0;
 };
 
+const normalizeTeamId = (value) => {
+  if (value == null || value === '') return null;
+  const teamId = Number(String(value).replace(/^team_/i, ''));
+  return Number.isFinite(teamId) && teamId > 0 ? teamId : null;
+};
+
 const normalizeTeamScores = (raw) => {
-  // Accept {1: 20}, {team_1: {score}}, or array entries — RTDB uses team_N keys.
+  // Accept {1: 20}, {team_1: {score}}, or Firebase array-shaped nodes.
   const out = {};
   if (!raw) return out;
 
   if (Array.isArray(raw)) {
-    raw.forEach((entry) => {
-      const teamId = Number(entry?.teamId);
-      if (!Number.isFinite(teamId)) return;
+    raw.forEach((entry, index) => {
+      if (entry == null) return;
+      const teamId = normalizeTeamId(entry?.teamId ?? index);
+      if (teamId == null) return;
       out[teamId] = readScoreValue(entry);
     });
     return out;
@@ -150,8 +157,8 @@ const normalizeTeamScores = (raw) => {
 
   if (typeof raw === 'object') {
     Object.entries(raw).forEach(([k, v]) => {
-      const teamId = Number(String(k).replace(/^team_/, ''));
-      if (!Number.isFinite(teamId)) return;
+      const teamId = normalizeTeamId(k);
+      if (teamId == null) return;
       out[teamId] = readScoreValue(v);
     });
   }
@@ -169,11 +176,55 @@ const getTeamScoreFromMap = (scoresMap, teamScoresRaw, teamId) => {
       teamScoresRaw[String(teamId)] ??
       teamScoresRaw[`team_${teamId}`] ??
       teamScoresRaw[`team_${String(teamId)}`];
-    const parsed = readScoreValue(direct);
-    if (parsed > 0) return parsed;
+    if (direct != null) return readScoreValue(direct);
   }
 
   return typeof fromMap === 'number' ? fromMap : 0;
+};
+
+/** Live score from submitted team lock nodes (same 0–100 rule as the server). */
+const scoreFromTeamSelection = (selectionRoot, teamId, totalQuestions) => {
+  const n = Number(totalQuestions) || 0;
+  if (!selectionRoot || typeof selectionRoot !== 'object' || n <= 0) return 0;
+
+  const node =
+    selectionRoot[`team_${teamId}`] ??
+    selectionRoot[teamId] ??
+    selectionRoot[String(teamId)];
+  if (!node || typeof node !== 'object') return 0;
+
+  const seen = new Set();
+  let correctCount = 0;
+  Object.entries(node).forEach(([key, value]) => {
+    if (!value || !String(key).startsWith('question_')) return;
+    if (value.submitted !== true && value.submitted !== 'true') return;
+    const questionId = String(key).slice('question_'.length);
+    if (!questionId || seen.has(questionId)) return;
+    seen.add(questionId);
+    if (value.isCorrect === true) correctCount += 1;
+  });
+
+  return Math.round((correctCount / n) * 100);
+};
+
+const questionsForScoringFromRace = (raceData, teamScoresRaw) => {
+  const fromQuiz =
+    raceData?.quiz?.questions?.length ||
+    raceData?.quizQuestions?.length ||
+    Number(raceData?.questionsCount) ||
+    Number(raceData?.questionCount) ||
+    0;
+  if (fromQuiz > 0) return fromQuiz;
+
+  if (!teamScoresRaw || typeof teamScoresRaw !== 'object') return 0;
+  const values = Array.isArray(teamScoresRaw)
+    ? teamScoresRaw.filter(Boolean)
+    : Object.values(teamScoresRaw);
+  for (const value of values) {
+    const n = Number(value?.totalQuestions);
+    if (Number.isFinite(n) && n > 0) return n;
+  }
+  return 0;
 };
 
 // Join duration timer component - shows time students have to join
@@ -299,6 +350,11 @@ export default function HostSpaceRaceDisplay() {
     { enabled: Boolean(raceId) }
   );
 
+  const { value: teamSelectionsRaw } = useRtdbValue(
+    raceId ? `space_race_team_selection/${raceId}` : null,
+    { enabled: Boolean(raceId) }
+  );
+
   const { list: participantList } = useRtdbList(
     raceId ? `space_race_participants/${raceId}` : null,
     { enabled: Boolean(raceId) }
@@ -312,7 +368,16 @@ export default function HostSpaceRaceDisplay() {
   // Authoritative team scores from space_race_team_scores/{raceId}
   const teamScores = useMemo(() => normalizeTeamScores(teamScoresRaw), [teamScoresRaw]);
 
-  const participants = useMemo(() => participantList || [], [participantList]);
+  const participants = useMemo(
+    () =>
+      (participantList || []).map((p) => ({
+        ...p,
+        teamId: normalizeTeamId(p.teamId ?? p.team),
+        name: p.name || p.studentName || p.displayName || 'Unknown',
+        score: Number(p.score) || 0,
+      })),
+    [participantList]
+  );
 
   const isLoading = raceLoading && !raceData;
 
@@ -321,23 +386,22 @@ export default function HostSpaceRaceDisplay() {
     raceData?.quiz?.questions?.length ||
     raceData?.quizQuestions?.length ||
     0;
+  const questionsForScoring = questionsForScoringFromRace(raceData, teamScoresRaw) || totalQuestions;
   const maxPossibleScore = 100;
 
   const getTeamParticipants = (teamId) => {
     return participants
-      .filter((p) => String(p.teamId) === String(teamId))
+      .filter((p) => p.teamId != null && String(p.teamId) === String(teamId))
       .sort((a, b) => (b.score || 0) - (a.score || 0));
   };
 
-  /** Prefer RTDB team score; fall back to shared member score if node lagging. */
+  /** Live score: max of RTDB team node, submitted locks, and shared member scores. */
   const resolveTeamScore = (teamId) => {
     const fromRtdb = getTeamScoreFromMap(teamScores, teamScoresRaw, teamId);
-    if (fromRtdb > 0) return fromRtdb;
-
+    const fromSelection = scoreFromTeamSelection(teamSelectionsRaw, teamId, questionsForScoring);
     const members = getTeamParticipants(teamId);
-    if (members.length === 0) return fromRtdb;
-    // All teammates share the same team score on participants
-    return members.reduce((max, m) => Math.max(max, Number(m.score) || 0), 0);
+    const fromMembers = members.reduce((max, m) => Math.max(max, Number(m.score) || 0), 0);
+    return Math.max(fromRtdb, fromSelection, fromMembers);
   };
 
   const toggleTeamMembers = (teamId) => {
@@ -381,29 +445,23 @@ export default function HostSpaceRaceDisplay() {
 
   const teamPositions = Array.from({ length: teamCount }, (_, i) => {
     const teamId = i + 1;
-    return { teamId, score: resolveTeamScore(teamId) };
-  }).sort((a, b) => b.score - a.score);
+    return { teamId, score: Math.round(resolveTeamScore(teamId)) };
+  });
+  const leadingScore = teamPositions.reduce((max, pos) => Math.max(max, pos.score), 0);
+  const leadingTeamCount = teamPositions.filter((pos) => pos.score === leadingScore).length;
 
   return (
-    <div className="min-h-screen bg-gray-50 text-text">
+    <div className="min-h-screen bg-gray-50 text-text overflow-x-hidden">
       {/* Header - match teacher layout theme */}
       <div className="bg-white shadow-sm border-b border-gray-200">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between h-16">
-            <div className="flex items-center gap-4">
-              <Link
-                to="/host/space-race"
-                className="flex items-center gap-2 text-text-light hover:text-text transition-colors text-sm"
-              >
-                <ArrowLeft className="h-4 w-4" />
-                <span>Race control</span>
-              </Link>
-              <span className="h-6 w-px bg-gray-200" />
-              <h1 className="text-lg font-semibold text-text">{raceData.title}</h1>
+          <div className="flex flex-col gap-2 py-3 sm:flex-row sm:items-center sm:justify-between sm:h-16 sm:py-0">
+            <div className="flex items-center gap-4 min-w-0">
+              <h1 className="text-lg font-semibold text-text break-words min-w-0">{raceData.title}</h1>
             </div>
-            <div className="flex items-center gap-4">
+            <div className="flex items-center gap-4 shrink-0">
               <div className="flex items-center gap-2 text-sm">
-                <Clock className="h-4 w-4 text-text-light" />
+                <Clock className="h-4 w-4 text-text-light shrink-0" />
                 <span className="text-text-light">Join Time:</span>
                 <span className="font-medium text-text">
                   <JoinDurationTimer raceData={raceData} />
@@ -415,10 +473,10 @@ export default function HostSpaceRaceDisplay() {
       </div>
 
       {/* Rockets board inside a card, same card style as rest of app */}
-      <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
-        <div className="bg-white rounded-lg shadow border border-gray-200 p-8">
+      <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-6 md:py-10">
+        <div className="bg-white rounded-lg shadow border border-gray-200 p-4 md:p-8">
           <div className="text-center mb-8">
-            <h2 className="text-2xl font-bold text-text mb-1">Space Race</h2>
+            <h2 className="text-xl md:text-2xl font-bold text-text mb-1">Space Race</h2>
             <p className="text-text-light">
               Watch your teams compete in real-time
               {totalQuestions > 0 ? ` · ${totalQuestions} questions` : ''}
@@ -428,7 +486,7 @@ export default function HostSpaceRaceDisplay() {
           <div className="space-y-8">
             {Array.from({ length: teamCount }).map((_, index) => {
               const teamId = index + 1;
-              const teamScore = Math.round(resolveTeamScore(teamId));
+              const teamScore = teamPositions[index]?.score ?? Math.round(resolveTeamScore(teamId));
               const percentage =
                 maxPossibleScore > 0
                   ? Math.min((teamScore / maxPossibleScore) * 100, 100)
@@ -436,16 +494,17 @@ export default function HostSpaceRaceDisplay() {
               const style = getTeamStyle(teamId);
               const teamParticipants = getTeamParticipants(teamId);
 
-              const teamRank = teamPositions.findIndex(
-                (pos) => String(pos.teamId) === String(teamId)
-              );
-              const isLeading = teamRank === 0 && teamScore > 0;
+              const isUniqueLeader =
+                teamScore > 0 && teamScore === leadingScore && leadingTeamCount === 1;
+              const isTiedLead =
+                teamScore > 0 && teamScore === leadingScore && leadingTeamCount > 1;
+              const isLeading = isUniqueLeader;
 
               return (
                 <div key={teamId} className="space-y-4">
                   {/* Team Header with Score */}
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center space-x-3">
+                  <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 min-w-0">
                       <span
                         className={`inline-flex h-3 w-3 rounded-full ${style.bg}`}
                         aria-hidden="true"
@@ -456,8 +515,11 @@ export default function HostSpaceRaceDisplay() {
                       {isLeading && (
                         <span className="text-xs font-medium text-amber-600">Leading</span>
                       )}
+                      {isTiedLead && (
+                        <span className="text-xs font-medium text-amber-600">Tied</span>
+                      )}
                     </div>
-                    <div className="flex items-center space-x-3">
+                    <div className="flex items-center gap-3 shrink-0">
                       <span className={`text-xl font-bold tabular-nums ${style.text}`}>
                         {teamScore}
                       </span>
@@ -465,7 +527,7 @@ export default function HostSpaceRaceDisplay() {
                         <button
                           onClick={() => toggleTeamMembers(teamId)}
                           className={[
-                            'flex items-center space-x-1 px-3 py-1 rounded-lg border transition-colors',
+                            'flex items-center space-x-1 px-3 py-1 min-h-11 rounded-lg border transition-colors',
                             expandedTeams.has(teamId)
                               ? `${style.softBg} ${style.softBorder} ${style.softText}`
                               : 'bg-gray-50 border-gray-200 text-text-light hover:bg-gray-100',
@@ -535,13 +597,13 @@ export default function HostSpaceRaceDisplay() {
                       {teamParticipants.map((participant, memberIndex) => (
                         <div
                           key={participant.id}
-                          className="flex items-center justify-between py-2 px-3 bg-white rounded-md border border-gray-100"
+                          className="flex items-center justify-between gap-3 py-2 px-3 bg-white rounded-md border border-gray-100 min-w-0"
                         >
-                          <div className="flex items-center space-x-3">
-                            <span className={`text-sm font-medium w-6 ${style.softText}`}>
+                          <div className="flex items-center space-x-3 min-w-0">
+                            <span className={`text-sm font-medium w-6 shrink-0 ${style.softText}`}>
                               {memberIndex + 1}.
                             </span>
-                            <span className="font-medium text-text">{participant.name}</span>
+                            <span className="font-medium text-text break-words min-w-0">{participant.name}</span>
                           </div>
                           <span className={`font-bold ${style.text}`}>
                             {Math.round(teamScore)}

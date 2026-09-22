@@ -1,7 +1,7 @@
 import React, { useCallback, useState, useEffect, useRef } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import {
-  Rocket, Pencil, Clipboard, LogOut, Briefcase, Users, GraduationCap, X, ArrowRight, Bot, ChevronDown, ChevronLeft, ChevronRight, User, Home, TrendingUp, Trash2, PenSquare
+  Rocket, Pencil, Clipboard, LogOut, Briefcase, Users, GraduationCap, X, ArrowRight, Bot, ChevronDown, ChevronLeft, ChevronRight, User, Home, TrendingUp, Trash2, PenSquare, Menu
 } from 'lucide-react';
 import { appToast } from '../contexts/HybridAlertContext';
 import { useAuth } from '../contexts/AuthContext';
@@ -154,6 +154,7 @@ const AudienceHome = () => {
   
   // New state variables for navbar features
   const [showProfileDropdown, setShowProfileDropdown] = useState(false);
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
   const profileDropdownRef = useRef(null);
   const closeProfileDropdown = useCallback(() => {
     setShowProfileDropdown(false);
@@ -674,13 +675,13 @@ const AudienceHome = () => {
       {/* Navbar */}
       <nav className="bg-white shadow-sm border-b border-gray-200 flex-shrink-0">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center h-16">
+          <div className="flex justify-between items-center h-16 min-w-0 gap-2">
             {/* Logo */}
-            <div className="flex items-center space-x-3">
+            <div className="flex items-center space-x-3 min-w-0 shrink">
               <img 
                 src="/FeedEcho-logo.png.png" 
                 alt="FeedEcho" 
-                className="h-32 w-auto object-contain mix-blend-mode: multiply"
+                className="h-32 w-auto object-contain mix-blend-mode: multiply max-md:h-12 max-md:max-w-[min(8.5rem,calc(100vw-11rem))]"
               />
             </div>
 
@@ -697,11 +698,11 @@ const AudienceHome = () => {
             </div>
 
             {/* Right Side Icons */}
-            <div className="flex items-center space-x-3">
+            <div className="flex items-center space-x-3 max-md:space-x-1 shrink-0">
               {/* Chatbot Icon */}
               <button 
                 onClick={() => setShowChatbot(!showChatbot)}
-                className="p-2 rounded-lg text-gray-600 hover:text-primary transition-colors"
+                className="p-2 rounded-lg text-gray-600 hover:text-primary transition-colors min-h-11 min-w-11 inline-flex items-center justify-center"
               >
                 <Bot className="w-5 h-5" />
               </button>
@@ -710,11 +711,11 @@ const AudienceHome = () => {
               <div className="relative" ref={profileDropdownRef}>
                 <button
                   onClick={() => setShowProfileDropdown(!showProfileDropdown)}
-                  className="flex items-center space-x-2 p-2 rounded-lg hover:bg-gray-100 transition-colors"
+                  className="flex items-center space-x-2 p-2 rounded-lg hover:bg-gray-100 transition-colors min-h-11"
                 >
                   <AudienceAvatar name={student?.name || 'Audience'} />
-                  <span className="font-medium text-text">{student?.name?.split(' ')[0] || 'Audience'}</span>
-                  <ChevronDown className="w-4 h-4 text-gray-500" />
+                  <span className="font-medium text-text max-md:max-w-[4.5rem] max-md:truncate">{student?.name?.split(' ')[0] || 'Audience'}</span>
+                  <ChevronDown className="w-4 h-4 text-gray-500 shrink-0" />
                 </button>
                 
                 {/* Profile Dropdown */}
@@ -744,25 +745,60 @@ const AudienceHome = () => {
                   </div>
                 )}
               </div>
+
+              <button
+                type="button"
+                onClick={() => setIsMenuOpen((prev) => !prev)}
+                aria-label={isMenuOpen ? 'Close menu' : 'Open menu'}
+                aria-expanded={isMenuOpen}
+                className="md:hidden min-h-11 min-w-11 p-2 rounded-lg hover:bg-neutral-100 transition-colors inline-flex items-center justify-center"
+              >
+                {isMenuOpen ? (
+                  <X className="w-6 h-6 text-neutral-600" />
+                ) : (
+                  <Menu className="w-6 h-6 text-neutral-600" />
+                )}
+              </button>
             </div>
           </div>
+
+          {isMenuOpen && (
+            <nav className="md:hidden py-3 border-t border-gray-200">
+              <div className="flex flex-col space-y-2">
+                <a
+                  href="/audience/home"
+                  className="flex items-center space-x-2 min-h-11 px-3 py-3 rounded-lg text-sm font-medium bg-[#6D415F] text-white"
+                >
+                  <Home className="w-4 h-4" />
+                  <span>Home</span>
+                </a>
+                <Link
+                  to="/audience/progress"
+                  className="flex items-center space-x-2 min-h-11 px-3 py-3 rounded-lg text-sm font-medium text-neutral-600 hover:bg-[#6D415F]/10 hover:text-[#6D415F]"
+                >
+                  <TrendingUp className="w-4 h-4" />
+                  <span>Progress</span>
+                </Link>
+              </div>
+            </nav>
+          )}
         </div>
       </nav>
 
       {/* Main Content Area */}
       <div className="flex-1 overflow-y-auto min-h-0">
-      <div className="container mx-auto p-6">
+      <div className="container mx-auto p-6 max-md:p-4">
         {/* Hero Banner */}
-        <div className="relative bg-gradient-to-r from-primary to-primary/90 text-white rounded-xl shadow-lg p-10 mb-6 overflow-hidden">
+        <div className="relative bg-gradient-to-r from-primary to-primary/90 text-white rounded-xl shadow-lg p-10 mb-6 overflow-hidden max-md:p-5">
           <div className="absolute top-0 right-0 w-full h-full bg-gradient-to-l from-black/20 to-transparent"></div>
-          <div className="relative flex items-center justify-between">
-            <div>
-              <h1 className="text-4xl font-bold mb-3">{greeting}, {student?.name?.split(' ')[0] || 'Audience'}!</h1>
-              <p className="text-lg">Welcome back to your audience dashboard. Track your progress and join live sessions.</p>
+          <div className="relative flex items-center justify-between max-md:gap-3">
+            <div className="min-w-0">
+              <h1 className="text-4xl font-bold mb-3 max-md:text-xl max-md:mb-2 break-words">{greeting}, {student?.name?.split(' ')[0] || 'Audience'}!</h1>
+              <p className="text-lg max-md:text-sm">Welcome back to your audience dashboard. Track your progress and join live sessions.</p>
             </div>
-            <div className="relative">
-              <div className="w-28 h-28 bg-black/10 rounded-full flex items-center justify-center cursor-pointer transition-all duration-200 hover:bg-black/20">
-                <Rocket className="w-14 h-14 text-white" />
+            <div className="relative shrink-0">
+              <div className="w-28 h-28 bg-black/10 rounded-full flex items-center justify-center cursor-pointer transition-all duration-200 hover:bg-black/20 max-md:w-16 max-md:h-16">
+                <Rocket className="w-14 h-14 text-white max-md:w-8 max-md:h-8" />
               </div>
             </div>
           </div>
@@ -804,14 +840,14 @@ const AudienceHome = () => {
         </div>
 
         {/* Join a Session Section */}
-        <div className="bg-white rounded-xl shadow-lg p-8 mb-6 border-2 border-primary">
-          <div className="mb-6">
-            <h3 className="text-xl font-bold text-primary mb-2">Join a Session</h3>
+        <div className="bg-white rounded-xl shadow-lg p-8 mb-6 border-2 border-primary max-md:p-4">
+          <div className="mb-6 max-md:mb-4">
+            <h3 className="text-xl font-bold text-primary mb-2 max-md:text-lg">Join a Session</h3>
             <p className="text-sm text-gray-600">Enter 6-digit code your host shared with you</p>
           </div>
           
-          <div className="flex items-center space-x-4">
-            <div className="flex space-x-2 flex-1">
+          <div className="flex items-center space-x-4 max-md:flex-col max-md:items-stretch max-md:space-x-0 max-md:gap-3">
+            <div className="flex space-x-2 flex-1 min-w-0 max-md:grid max-md:grid-cols-6 max-md:gap-1.5 max-md:space-x-0">
               {classCode.map((digit, index) => (
                 <input
                   key={index}
@@ -824,14 +860,16 @@ const AudienceHome = () => {
                   onPaste={handlePaste}
                   autoComplete="off"
                   spellCheck={false}
-                  className="w-12 h-14 bg-gray-100 text-center rounded-lg border-2 border-gray-300 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 text-xl font-bold text-primary transition-all duration-200"
+                  inputMode="text"
+                  autoCapitalize="characters"
+                  className="w-12 h-14 bg-gray-100 text-center rounded-lg border-2 border-gray-300 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 text-xl font-bold text-primary transition-all duration-200 max-md:w-full max-md:min-w-0 max-md:h-11 max-md:min-h-11"
                 />
               ))}
             </div>
             <button
               onClick={handleJoinSession}
               disabled={isJoining}
-              className="bg-primary hover:bg-primary-dark text-white px-6 py-3 rounded-full font-semibold transition-all duration-300 transform hover:scale-105 disabled:opacity-60 disabled:transform-none disabled:cursor-not-allowed"
+              className="bg-primary hover:bg-primary-dark text-white px-6 py-3 rounded-full font-semibold transition-all duration-300 transform hover:scale-105 disabled:opacity-60 disabled:transform-none disabled:cursor-not-allowed max-md:w-full max-md:min-h-11 max-md:transform-none"
             >
               {isJoining ? 'Joining...' : 'Join'}
             </button>

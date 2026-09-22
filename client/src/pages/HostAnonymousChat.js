@@ -12,6 +12,7 @@ import {
   AlertTriangle,
   Send,
   ArrowDown,
+  ArrowLeft,
 } from 'lucide-react';
 import clsx from 'clsx';
 import ChatCreatedModal from '../components/ChatCreatedModal';
@@ -44,6 +45,10 @@ export default function HostAnonymousChat() {
     sort: (a, b) => String(b.createdAt || '').localeCompare(String(a.createdAt || '')),
   });
   const [selectedChat, setSelectedChat] = useState(null);
+  const [mobileListTab, setMobileListTab] = useState('active');
+  const [mobileShowConversation, setMobileShowConversation] = useState(false);
+  const mobileListScrollRef = useRef(null);
+  const savedMobileListScrollRef = useRef(0);
   const [showCreate, setShowCreate] = useState(false);
   const [showChatCreated, setShowChatCreated] = useState(false);
   const [createdChatCode, setCreatedChatCode] = useState('');
@@ -178,6 +183,21 @@ export default function HostAnonymousChat() {
     setMessageDraft('');
   }, [selectedChatId]);
 
+  useEffect(() => {
+    if (mobileShowConversation) return;
+    const el = mobileListScrollRef.current;
+    if (!el) return;
+    el.scrollTop = savedMobileListScrollRef.current;
+  }, [mobileShowConversation]);
+
+  const handleSelectChat = (chat) => {
+    if (mobileListScrollRef.current) {
+      savedMobileListScrollRef.current = mobileListScrollRef.current.scrollTop;
+    }
+    setSelectedChat(chat);
+    setMobileShowConversation(true);
+  };
+
   // Unread tracking: chats already listed when the page loads start as read,
   // so only messages that arrive while the teacher is here light up.
   useEffect(() => {
@@ -310,6 +330,7 @@ export default function HostAnonymousChat() {
       
       // Store the created chat reference for immediate selection
       setSelectedChat(chat);
+      setMobileShowConversation(true);
       
       // Update moderation mode state to match backend
       setModerationMode(chat.moderationMode || false);
@@ -363,6 +384,7 @@ export default function HostAnonymousChat() {
 
       logActivity({ type: 'anonymousChat', title: `Ended chat: ${selectedChat.title}` });
       setSelectedChat(null);
+      setMobileShowConversation(false);
       lastMessageCountRef.current = 0;
       shouldAutoScrollRef.current = true;
       await loadChatsFromApi();
@@ -388,6 +410,7 @@ export default function HostAnonymousChat() {
         // Clear selected chat if it was the deleted one
         if (selectedChat?.id === deleteConfirmChat) {
           setSelectedChat(null);
+          setMobileShowConversation(false);
         }
         
         setDeleteConfirmChat(null);
@@ -417,7 +440,7 @@ export default function HostAnonymousChat() {
     return (
       <div
         key={chat.id}
-        onClick={() => setSelectedChat(chat)}
+        onClick={() => handleSelectChat(chat)}
         className={clsx(
           'px-3 py-3 min-h-11 rounded-xl border cursor-pointer transition-colors',
           isSelected
@@ -504,11 +527,11 @@ export default function HostAnonymousChat() {
 
   return (
     <div className="px-0 sm:px-2 lg:px-6 -mt-4 lg:-mt-5 flex flex-col gap-3 overflow-hidden overflow-x-hidden max-w-full min-h-[450px] h-[calc(100dvh-8.75rem)] lg:h-[calc(100dvh-5.75rem)] max-h-[calc(100dvh-8.75rem)] lg:max-h-[calc(100dvh-5.75rem)]">
-      <div className="shrink-0">
+      <div className={clsx('shrink-0', mobileShowConversation && 'max-md:hidden')}>
         <SessionLaunchBanner className="!mt-0" />
       </div>
 
-      <div className="shrink-0">
+      <div className={clsx('shrink-0', mobileShowConversation && 'max-md:hidden')}>
         <PageHeaderCard
         compact
         title="Anonymous Chat"
@@ -529,7 +552,7 @@ export default function HostAnonymousChat() {
             <button
               onClick={toggleModeration}
               className={clsx(
-                'inline-flex items-center justify-center min-h-11 px-4 py-2 rounded-lg text-sm font-medium border transition-colors',
+                'hidden md:inline-flex items-center justify-center min-h-11 px-4 py-2 rounded-lg text-sm font-medium border transition-colors',
                 moderationMode
                   ? 'bg-white/25 border-white/60 text-white hover:bg-white/35'
                   : 'bg-white/10 border-white/30 text-white/90 hover:bg-white/20'
@@ -551,14 +574,69 @@ export default function HostAnonymousChat() {
       </div>
 
       <div className="flex flex-col md:flex-row gap-3 md:gap-4 flex-1 min-h-0 overflow-hidden max-w-full">
-        <details
-          className="w-full md:w-[min(300px,100%)] shrink-0 min-h-0 bg-white rounded-2xl border border-primary/15 shadow-sm overflow-hidden md:flex md:flex-col md:h-full md:[&>div]:!block"
-          open
+        <aside
+          className={clsx(
+            'w-full md:w-[min(300px,100%)] shrink-0 min-h-0 bg-white rounded-2xl border border-primary/15 shadow-sm overflow-hidden flex flex-col md:h-full',
+            mobileShowConversation && 'max-md:hidden'
+          )}
         >
-          <summary className="md:hidden min-h-11 px-3 py-2 text-sm font-semibold text-text cursor-pointer list-none flex items-center justify-between select-none [&::-webkit-details-marker]:hidden">
-            Chats
-          </summary>
-          <div className="p-3 space-y-5 overflow-y-auto max-h-[12.5rem] max-[480px]:max-h-[11rem] md:max-h-none md:flex-1 min-h-0">
+          <div className="md:hidden p-3 pb-2 shrink-0">
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={() => setMobileListTab('active')}
+                className={clsx(
+                  'min-h-11 px-3 rounded-lg text-sm font-semibold transition-colors',
+                  mobileListTab === 'active'
+                    ? 'bg-[#F1E5EB] text-[#6D415F]'
+                    : 'border border-[#6D415F]/40 text-[#6D415F] bg-transparent'
+                )}
+              >
+                Active ({activeChats.length})
+              </button>
+              <button
+                type="button"
+                onClick={() => setMobileListTab('past')}
+                className={clsx(
+                  'min-h-11 px-3 rounded-lg text-sm font-semibold transition-colors',
+                  mobileListTab === 'past'
+                    ? 'bg-[#F1E5EB] text-[#6D415F]'
+                    : 'border border-[#6D415F]/40 text-[#6D415F] bg-transparent'
+                )}
+              >
+                Past ({endedChats.length})
+              </button>
+            </div>
+          </div>
+
+          <div
+            ref={mobileListScrollRef}
+            className="md:hidden p-3 pt-1 space-y-2 overflow-y-auto flex-1 min-h-0"
+          >
+            {mobileListTab === 'active' ? (
+              <>
+                {activeChats.map((chat) => renderChatItem(chat))}
+                {activeChats.length === 0 && (
+                  <div className="flex flex-col items-center text-center py-6 px-3">
+                    <MessageSquare className="w-6 h-6 text-primary/30 mb-2" />
+                    <p className="text-xs text-text-light">No active chats</p>
+                  </div>
+                )}
+              </>
+            ) : (
+              <>
+                {endedChats.map((chat) => renderChatItem(chat))}
+                {endedChats.length === 0 && (
+                  <div className="flex flex-col items-center text-center py-6 px-3">
+                    <Clock className="w-6 h-6 text-primary/30 mb-2" />
+                    <p className="text-xs text-text-light">No past chats</p>
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+
+          <div className="hidden md:block p-3 space-y-5 overflow-y-auto md:flex-1 min-h-0">
           <div>
             <h3 className="px-1 text-xs font-semibold uppercase tracking-wide text-text-light mb-2">Active Chats</h3>
             <div className="space-y-2">
@@ -585,12 +663,87 @@ export default function HostAnonymousChat() {
             </div>
           </div>
           </div>
-        </details>
+        </aside>
 
-        <section className="flex-1 min-w-0 min-h-0 flex flex-col overflow-hidden bg-white rounded-2xl border border-primary/15 shadow-sm h-full">
+        <section
+          className={clsx(
+            'flex-1 min-w-0 min-h-0 flex flex-col overflow-hidden bg-white rounded-2xl border border-primary/15 shadow-sm h-full',
+            !mobileShowConversation && 'max-md:hidden'
+          )}
+        >
           {selectedChat ? (
             <>
-              <div className="px-3 sm:px-5 py-3 border-b border-primary/10 shrink-0">
+              <div className="md:hidden px-3 pt-1 pb-2 border-b border-primary/10 shrink-0">
+                <div className="flex items-start gap-1 min-w-0">
+                  <button
+                    type="button"
+                    onClick={() => setMobileShowConversation(false)}
+                    aria-label="Back to chats"
+                    className="shrink-0 min-h-11 min-w-11 -ml-1 inline-flex items-center justify-center rounded-lg text-[#6D415F]"
+                  >
+                    <ArrowLeft className="w-5 h-5" />
+                  </button>
+                  <div className="flex-1 min-w-0 pt-1 space-y-2">
+                    <div className="flex flex-wrap items-center gap-x-2 gap-y-1 min-w-0">
+                      <h3 className="font-semibold text-text break-words min-w-0">{selectedChat.title}</h3>
+                      <span className="inline-flex items-center gap-1 text-sm text-text-light whitespace-nowrap">
+                        <Users className="w-4 h-4 shrink-0" />
+                        {selectedParticipantCount} participants
+                      </span>
+                      {selectedChat.status !== 'active' && (
+                        <span className="inline-flex items-center text-sm text-text-light">
+                          <Clock className="w-4 h-4 mr-1 shrink-0" />
+                          Ended{selectedChat.endedAt ? ` • ${new Date(selectedChat.endedAt).toLocaleDateString()}` : ''}
+                        </span>
+                      )}
+                      {selectedChat.status === 'active' && (
+                        <span className="inline-flex items-center gap-0.5 min-w-0">
+                          <span className="text-sm font-mono font-bold text-primary">
+                            {selectedChat.joinCode}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => copyJoinCode(selectedChat.joinCode)}
+                            className="min-h-11 min-w-11 inline-flex items-center justify-center p-1.5 text-text-light hover:text-primary hover:bg-primary/10 rounded-lg transition-colors"
+                            title="Copy access code"
+                          >
+                            {copiedCode === selectedChat.joinCode ? (
+                              <Check className="w-4 h-4 text-emerald-600" />
+                            ) : (
+                              <Copy className="w-4 h-4" />
+                            )}
+                          </button>
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex items-stretch gap-2">
+                      <button
+                        type="button"
+                        onClick={toggleModeration}
+                        className={clsx(
+                          'inline-flex flex-1 items-center justify-center min-h-11 px-3 py-2 rounded-lg text-sm font-medium border transition-colors',
+                          moderationMode
+                            ? 'bg-[#6D415F] border-[#6D415F] text-white'
+                            : 'bg-white border-[#6D415F]/40 text-[#6D415F]'
+                        )}
+                      >
+                        <Settings className="w-4 h-4 mr-2 shrink-0" />
+                        {moderationMode ? 'Moderation ON' : 'Moderation OFF'}
+                      </button>
+                      {selectedChat.status === 'active' && (
+                        <button
+                          type="button"
+                          onClick={handleEndChat}
+                          className="inline-flex flex-1 items-center justify-center min-h-11 px-3 py-2 bg-red-500 text-white text-sm rounded-lg hover:bg-red-600 transition-colors"
+                        >
+                          End Chat
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div className="hidden md:block px-3 sm:px-5 py-3 border-b border-primary/10 shrink-0">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <div className="flex flex-wrap items-center gap-x-2 gap-y-1 min-w-0">
                     <h3 className="font-semibold text-text break-words min-w-0">{selectedChat.title}</h3>
@@ -606,8 +759,9 @@ export default function HostAnonymousChat() {
                     )}
                   </div>
 
-                  {selectedChat.status === 'active' && (
-                    <div className="flex flex-wrap items-center gap-2">
+                  <div className="flex flex-wrap items-center gap-2">
+                      {selectedChat.status === 'active' && (
+                        <>
                       <div className="flex items-center gap-2 min-w-0 bg-background border border-primary/15 rounded-xl pl-3 pr-1.5 py-1.5">
                         <span className="text-[11px] font-medium text-text-light whitespace-nowrap">Access Code</span>
                         <span className="text-sm font-mono font-bold text-primary">
@@ -632,8 +786,9 @@ export default function HostAnonymousChat() {
                       >
                         End Chat
                       </button>
+                        </>
+                      )}
                     </div>
-                  )}
                 </div>
               </div>
 

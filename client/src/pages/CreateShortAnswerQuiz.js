@@ -145,24 +145,24 @@ const CreateShortAnswerQuiz = () => {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-orange-50 via-white to-purple-50 overflow-x-hidden max-w-full">
-      <div className="w-full max-w-full py-2 sm:py-3 lg:py-4">
+      <div className="w-full max-w-full py-2 sm:py-3 lg:py-4 max-md:px-4 max-md:pt-8 max-md:pb-4">
         {/* Page Header with Navigation */}
-        <div className="mb-2 sm:mb-3 lg:mb-4">
+        <div className="mb-2 sm:mb-3 lg:mb-4 max-md:mb-5">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
             <div className="min-w-0">
-              <h1 className="text-[clamp(1.375rem,5vw,2.25rem)] font-bold text-gray-900 mb-1 sm:mb-2 break-words">
+              <h1 className="text-[clamp(1.375rem,5vw,2.25rem)] font-bold text-gray-900 mb-1 sm:mb-2 break-words max-md:text-xl">
                 Create Short Answer Quiz
               </h1>
               <p className="text-sm sm:text-base lg:text-lg text-gray-600 max-w-2xl">
                 Add your quiz title and start creating questions
               </p>
             </div>
-            <div className="flex flex-wrap items-stretch gap-2 w-full sm:w-auto sm:justify-end">
+            <div className="flex flex-wrap items-stretch gap-2 w-full sm:w-auto sm:justify-end max-md:flex-col">
               {/* Save Quiz Button */}
               <button
                 onClick={saveQuiz}
                 disabled={isQuizSaved}
-                className={`flex items-center justify-center space-x-2 min-h-11 px-4 sm:px-6 py-2 sm:py-3 rounded-xl font-medium text-sm sm:text-base shadow-sm hover:shadow-md transition-all flex-1 sm:flex-none ${
+                className={`flex items-center justify-center space-x-2 min-h-11 px-4 sm:px-6 py-2 sm:py-3 rounded-xl font-medium text-sm sm:text-base shadow-sm hover:shadow-md transition-all flex-1 sm:flex-none max-md:flex-none max-md:w-full min-w-0 ${
                   isQuizSaved 
                     ? 'bg-purple-100 text-purple-700 border border-purple-300 cursor-not-allowed' 
                     : 'bg-[#6D415F] text-white hover:bg-[#5A344D]'
@@ -183,7 +183,7 @@ const CreateShortAnswerQuiz = () => {
 
               {/* Launch Quiz Button - Secondary, appears after saving */}
               {isQuizSaved && (
-                <div className="flex flex-col items-stretch flex-1 sm:flex-none">
+                <div className="flex flex-col items-stretch flex-1 sm:flex-none max-md:w-full">
                   <button
                     onClick={launchQuiz}
                     className="flex items-center justify-center space-x-2 min-h-11 px-4 sm:px-6 py-2 sm:py-3 bg-[#6D415F] text-white rounded-xl hover:bg-[#5A344D] transition-colors font-medium text-sm sm:text-base shadow-sm hover:shadow-md w-full"
@@ -199,7 +199,7 @@ const CreateShortAnswerQuiz = () => {
         </div>
 
         {/* Quiz Title Section */}
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-3 sm:p-3 lg:p-4 mb-2 sm:mb-3 lg:mb-4 max-w-full">
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-3 sm:p-3 lg:p-4 mb-2 sm:mb-3 lg:mb-4 max-w-full max-md:p-4 max-md:mb-5">
           <div className="w-full max-w-3xl">
             <label htmlFor="quizTitle" className="block text-sm sm:text-base font-semibold text-gray-700 mb-1 sm:mb-2">
               Quiz Title
@@ -217,7 +217,7 @@ const CreateShortAnswerQuiz = () => {
 
         {/* Questions Section */}
         <div className="space-y-2 sm:space-y-3 lg:space-y-4">
-          <h2 className="text-xl sm:text-2xl lg:text-3xl font-bold text-gray-900">
+          <h2 className="text-xl sm:text-2xl lg:text-3xl font-bold text-gray-900 max-md:text-lg">
             Questions
           </h2>
 

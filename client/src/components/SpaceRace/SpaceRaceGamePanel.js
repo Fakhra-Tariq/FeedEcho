@@ -368,9 +368,9 @@ export default function SpaceRaceGamePanel({
 
     return (
       <div key={teamId} className="space-y-2">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <span className="text-text/50 font-bold w-6">{index + 1}</span>
+        <div className="flex flex-wrap items-center justify-between gap-2 min-w-0">
+          <div className="flex flex-wrap items-center gap-3 min-w-0">
+            <span className="text-text/50 font-bold w-6 shrink-0">{index + 1}</span>
             <div
               className={`w-8 h-8 rounded-full ${getTeamColor(teamId)} flex items-center justify-center`}
             >
@@ -390,14 +390,14 @@ export default function SpaceRaceGamePanel({
           <span className="text-text font-bold">{roundedScore} pts</span>
         </div>
 
-        <div className="relative w-full bg-neutral-200 rounded-full h-4 overflow-hidden ml-9">
+        <div className="relative w-full bg-neutral-200 rounded-full h-4 overflow-hidden max-md:ml-0 ml-9">
           <div
             className={`h-full ${getTeamColor(teamId)} transition-all duration-700 ease-out relative`}
             style={{ width: `${progress}%` }}
           />
         </div>
 
-        <div className="flex flex-wrap gap-2 ml-9">
+        <div className="flex flex-wrap gap-2 max-md:ml-0 ml-9">
           {members.slice(0, 6).map((member) => (
             <span
               key={member.id}
@@ -438,7 +438,7 @@ export default function SpaceRaceGamePanel({
 
   return (
     <div className="relative min-h-full p-4 md:p-6">
-      <div className="bg-white rounded-xl shadow-lg p-7 md:p-8 border border-gray-200 max-w-3xl mx-auto">
+      <div className="bg-white rounded-xl shadow-lg p-4 md:p-8 border border-gray-200 max-w-3xl mx-auto">
         <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
           <p className="min-w-0">
             <span className="text-lg font-bold text-primary">
@@ -473,7 +473,7 @@ export default function SpaceRaceGamePanel({
             <button
               type="button"
               onClick={handleStartQuiz}
-              className="px-5 py-2 bg-primary text-white rounded-lg font-semibold hover:bg-primary/90 transition-colors whitespace-nowrap"
+              className="px-5 py-2 min-h-11 max-md:w-full bg-primary text-white rounded-lg font-semibold hover:bg-primary/90 transition-colors whitespace-nowrap"
             >
               Start Quiz
             </button>

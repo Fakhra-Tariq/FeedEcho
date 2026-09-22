@@ -726,7 +726,89 @@ export default function HostReports() {
             <p className="text-text-light">No quizzes found in your library.</p>
           </div>
         ) : (
-        <div className="overflow-x-auto max-w-full">
+          <>
+            <div className="md:hidden p-4 space-y-3">
+              {filteredReports.map((report) => (
+                <article
+                  key={report.quiz.id}
+                  className="bg-[#F2EBF0] rounded-2xl border border-[#6D415F]/20 p-4 shadow-sm min-w-0"
+                >
+                  <p className="font-semibold text-text break-words">
+                    {report.quiz.title || 'Untitled Quiz'}
+                  </p>
+                  <p className="text-xs text-text-light mt-0.5 break-words">
+                    {normalizeQuizTypeLabel(report.quiz.type || 'Quiz')} ·{' '}
+                    {report.quiz.questionCount ??
+                      normalizeQuestionsList(report.quiz.questions).length ??
+                      0}{' '}
+                    questions
+                  </p>
+                  <dl className="mt-3 space-y-2 min-w-0">
+                    <div className="flex items-start justify-between gap-3 min-w-0">
+                      <dt className="text-xs font-semibold uppercase tracking-wide text-text-light shrink-0">
+                        Audience Joined
+                      </dt>
+                      <dd className="text-sm text-text text-right break-words min-w-0">
+                        {report.participantCount}
+                      </dd>
+                    </div>
+                    <div className="flex items-start justify-between gap-3 min-w-0">
+                      <dt className="text-xs font-semibold uppercase tracking-wide text-text-light shrink-0">
+                        Avg Score
+                      </dt>
+                      <dd className="text-sm font-medium text-text text-right break-words min-w-0">
+                        {report.avgScore != null ? `${report.avgScore}%` : '—'}
+                      </dd>
+                    </div>
+                    <div className="flex items-start justify-between gap-3 min-w-0">
+                      <dt className="text-xs font-semibold uppercase tracking-wide text-text-light shrink-0">
+                        Pass / Fail
+                      </dt>
+                      <dd className="text-sm text-right break-words min-w-0">
+                        {report.submittedCount > 0 ? (
+                          <span>
+                            <span className="text-green-700 font-medium">{report.passCount} passed</span>
+                            <span className="text-text-light"> · </span>
+                            <span className="text-red-600 font-medium">{report.failCount} failed</span>
+                          </span>
+                        ) : report.participantCount > 0 ? (
+                          <span className="text-text-light">Joined · no score yet</span>
+                        ) : (
+                          <span className="text-text-light">—</span>
+                        )}
+                      </dd>
+                    </div>
+                    <div className="flex items-start justify-between gap-3 min-w-0">
+                      <dt className="text-xs font-semibold uppercase tracking-wide text-text-light shrink-0">
+                        Date
+                      </dt>
+                      <dd className="text-sm text-text-light text-right break-words min-w-0">
+                        {formatDate(report.quiz.createdAt || report.quiz.updatedAt)}
+                      </dd>
+                    </div>
+                  </dl>
+                  <div className="mt-4 grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => openQuizReport(report)}
+                      className="inline-flex items-center justify-center gap-1.5 min-h-11 min-w-0 px-3 py-2 text-sm font-medium text-primary border border-primary/20 rounded-lg hover:bg-primary/10 transition-colors"
+                    >
+                      <Eye className="w-4 h-4 shrink-0" />
+                      View
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setDeleteConfirmQuizId(report.quiz.id)}
+                      className="inline-flex items-center justify-center gap-1.5 min-h-11 min-w-0 px-3 py-2 text-sm font-medium text-red-600 border border-red-200 rounded-lg hover:bg-red-50 transition-colors"
+                    >
+                      <Trash2 className="w-4 h-4 shrink-0" />
+                      Delete
+                    </button>
+                  </div>
+                </article>
+              ))}
+            </div>
+            <div className="hidden md:block overflow-x-auto max-w-full">
           <table className="w-full min-w-[720px]">
               <thead>
                 <tr className="bg-primary/5 text-left">
@@ -796,6 +878,7 @@ export default function HostReports() {
             </tbody>
           </table>
         </div>
+          </>
         )}
       </section>
 
