@@ -234,7 +234,7 @@ const AudienceAnonymousChat = () => {
     'Audience';
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-orange-50 via-white to-purple-50">
+    <div className="min-h-screen bg-gradient-to-br from-orange-50 via-white to-purple-50 overflow-x-hidden max-w-full">
       <AudienceActivityHeader
         title={showActiveChat && chatSession?.title ? chatSession.title : 'Anonymous Chat'}
         titleIcon={<MessageSquare className="w-4 h-4 shrink-0 text-[#6D415F]" />}
@@ -242,7 +242,7 @@ const AudienceAnonymousChat = () => {
       />
 
       <GuestProgressLoginBanner
-        contentClassName={`${AUDIENCE_ACTIVITY_PAGE_WIDTH} py-2 flex items-center justify-between gap-3`}
+        contentClassName={`${AUDIENCE_ACTIVITY_PAGE_WIDTH} py-2 flex items-center justify-between gap-2 min-w-0`}
       />
 
       <AudienceActivityContent>
@@ -276,7 +276,7 @@ const AudienceAnonymousChat = () => {
                   value={sessionCode}
                   onChange={(e) => setSessionCode(e.target.value.toUpperCase())}
                   placeholder="Enter 6-character code"
-                  className="mt-2 w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary bg-white text-text font-mono text-center text-lg"
+                  className="mt-2 w-full min-h-11 px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary bg-white text-text font-mono text-center text-lg"
                   maxLength={6}
                   onKeyDown={(e) => {
                     if (e.key === 'Enter') {
@@ -288,7 +288,7 @@ const AudienceAnonymousChat = () => {
                 <button
                   onClick={handleJoinChat}
                   disabled={!sessionCode.trim() || isJoining}
-                  className="mt-4 w-full px-4 py-3 bg-primary text-white rounded-lg hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-medium"
+                  className="mt-4 w-full min-h-11 px-4 py-3 bg-primary text-white rounded-lg hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-medium"
                 >
                   {isJoining ? 'Joining...' : 'Join Chat'}
                 </button>
@@ -296,7 +296,7 @@ const AudienceAnonymousChat = () => {
             )}
           </AudienceActivityCard>
         ) : (
-          <AudienceActivityCard className="flex flex-col min-h-[28rem] h-[min(600px,calc(100vh-11rem))]">
+          <AudienceActivityCard className="flex flex-col min-h-[28rem] h-[min(600px,calc(100dvh-11rem))] max-w-full">
             <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
               <div className="flex items-center space-x-2">
                 <Users className="w-4 h-4 text-gray-400" />
@@ -342,7 +342,7 @@ const AudienceAnonymousChat = () => {
             </div>
 
             {canSendMessages ? (
-              <div className="mt-4 flex space-x-2">
+              <div className="mt-4 flex items-center gap-2 shrink-0">
                 <input
                   type="text"
                   value={message}
@@ -353,12 +353,12 @@ const AudienceAnonymousChat = () => {
                     handleSendMessage();
                   }}
                   placeholder="Type your message..."
-                  className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary bg-white text-text"
+                  className="flex-1 min-w-0 min-h-11 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary bg-white text-text"
                 />
                 <button
                   onClick={handleSendMessage}
                   disabled={!message.trim() || isSending}
-                  className={`px-4 py-2 rounded-lg transition-colors ${
+                  className={`min-h-11 min-w-11 inline-flex items-center justify-center px-4 py-2 rounded-lg transition-colors shrink-0 ${
                     !message.trim() || isSending
                       ? 'bg-neutral-200 text-neutral-400 cursor-not-allowed'
                       : 'bg-[#6D415F] text-white hover:bg-[#5c3650]'

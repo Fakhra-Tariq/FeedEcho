@@ -1,6 +1,6 @@
-import React, { useCallback, useRef, useState } from 'react';
-import { Outlet, NavLink, useNavigate } from 'react-router-dom';
-import { User, LogOut } from 'lucide-react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { Outlet, NavLink, useLocation, useNavigate } from 'react-router-dom';
+import { User, LogOut, Menu, X } from 'lucide-react';
 import clsx from 'clsx';
 import { useAuth } from '../../contexts/AuthContext';
 import { useClickOutside } from '../../hooks/useClickOutside';
@@ -20,9 +20,16 @@ const TEACHER_PAGE_GUTTER = 'max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8';
 
 const HostLayout = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const { logout, userProfile } = useAuth();
   const [isProfileOpen, setProfileOpen] = useState(false);
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
   const profileDropdownRef = useRef(null);
+
+  useEffect(() => {
+    setIsMenuOpen(false);
+    setProfileOpen(false);
+  }, [location]);
 
   const closeProfileDropdown = useCallback(() => {
     setProfileOpen(false);
@@ -36,15 +43,15 @@ const HostLayout = () => {
   };
 
   return (
-    <div className={clsx('min-h-screen bg-background', 'text-text')}>
+    <div className={clsx('min-h-screen bg-background overflow-x-hidden max-w-full', 'text-text')}>
       <header className="fixed inset-x-0 top-0 z-40 bg-white/80 backdrop-blur-md border-b border-gray-200">
         <div className={TEACHER_PAGE_GUTTER}>
-          <div className="relative flex items-center h-16 w-full gap-4 lg:gap-8 xl:gap-12">
-            <div className="relative z-10 flex h-16 shrink-0 items-center">
+          <div className="relative flex items-center h-16 w-full min-w-0 gap-2 lg:gap-8 xl:gap-12">
+            <div className="relative z-10 flex h-16 min-w-0 shrink items-center">
               <img
                 src="/FeedEcho-logo.png.png"
                 alt="FeedEcho"
-                className="h-40 w-auto max-w-[11rem] object-contain object-left mix-blend-mode: multiply"
+                className="h-40 w-auto max-w-[min(11rem,calc(100vw-8rem))] object-contain object-left mix-blend-multiply"
               />
             </div>
 
@@ -65,12 +72,12 @@ const HostLayout = () => {
               ))}
             </nav>
 
-            <div className="flex shrink-0 items-center ml-auto lg:ml-0">
+            <div className="flex shrink-0 items-center gap-1 ml-auto lg:ml-0">
               <div className="relative" ref={profileDropdownRef}>
                 <button
                   type="button"
                   onClick={() => setProfileOpen((prev) => !prev)}
-                  className="flex items-center space-x-2 px-3 py-2 rounded-lg border border-gray-200 hover:bg-primary-extralight transition-colors"
+                  className="flex items-center space-x-2 min-h-11 px-3 py-2 rounded-lg border border-gray-200 hover:bg-primary-extralight transition-colors"
                 >
                   <div className="w-8 h-8 bg-gradient-to-br from-primary to-secondary rounded-full flex items-center justify-center">
                     <span className="text-white font-semibold text-sm">
@@ -93,7 +100,7 @@ const HostLayout = () => {
                     <div className="py-1">
                       <button
                         type="button"
-                        className="w-full flex items-center space-x-2 px-4 py-2 text-gray-600 hover:bg-primary-extralight"
+                        className="w-full flex items-center space-x-2 px-4 min-h-11 py-3 text-gray-600 hover:bg-primary-extralight"
                         onClick={() => {
                           setProfileOpen(false);
                           navigate('/host/profile');
@@ -106,7 +113,7 @@ const HostLayout = () => {
                     <div className="border-t border-gray-200">
                       <button
                         type="button"
-                        className="w-full flex items-center space-x-2 px-4 py-2 text-red-600 hover:bg-red-50"
+                        className="w-full flex items-center space-x-2 px-4 min-h-11 py-3 text-red-600 hover:bg-red-50"
                         onClick={handleLogout}
                       >
                         <LogOut className="w-4 h-4" />
@@ -116,35 +123,48 @@ const HostLayout = () => {
                   </div>
                 )}
               </div>
+              <button
+                type="button"
+                onClick={() => setIsMenuOpen((prev) => !prev)}
+                aria-label={isMenuOpen ? 'Close menu' : 'Open menu'}
+                aria-expanded={isMenuOpen}
+                className="lg:hidden min-h-11 min-w-11 p-2 rounded-lg hover:bg-neutral-100 transition-colors inline-flex items-center justify-center"
+              >
+                {isMenuOpen ? (
+                  <X className="w-6 h-6 text-neutral-600" />
+                ) : (
+                  <Menu className="w-6 h-6 text-neutral-600" />
+                )}
+              </button>
             </div>
           </div>
+
+          {isMenuOpen && (
+            <nav className="lg:hidden py-3 border-t border-gray-200">
+              <div className="flex flex-col space-y-2">
+                {navItems.map((item) => (
+                  <NavLink
+                    key={item.to}
+                    to={item.to}
+                    className={({ isActive }) =>
+                      clsx(
+                        'flex items-center min-h-11 px-3 py-3 rounded-lg text-sm font-medium transition-all duration-200',
+                        isActive
+                          ? 'bg-[#6D415F] text-white shadow-soft'
+                          : 'text-neutral-600 hover:bg-[#6D415F]/10 hover:text-[#6D415F]'
+                      )
+                    }
+                  >
+                    {item.label}
+                  </NavLink>
+                ))}
+              </div>
+            </nav>
+          )}
         </div>
       </header>
 
-      {/* Mobile navigation */}
-      <nav className="lg:hidden fixed top-16 inset-x-0 z-30 border-b border-gray-200 bg-white/90 backdrop-blur-md">
-        <div className={`${TEACHER_PAGE_GUTTER} flex overflow-x-auto py-2 gap-3`}>
-          {navItems.map((item) => (
-            <NavLink
-              key={item.to}
-              to={item.to}
-              className={({ isActive }) =>
-                clsx(
-                  'shrink-0 px-3 py-2 rounded-lg font-medium whitespace-nowrap transition-all duration-200',
-                  isActive
-                    ? 'bg-[#6D415F] text-white shadow-soft'
-                    : 'text-neutral-500 hover:text-[#6D415F] hover:bg-[#6D415F]/10'
-                )
-              }
-            >
-              {item.label}
-            </NavLink>
-          ))}
-        </div>
-      </nav>
-
-      {/* Single source for the navbar -> page content gap; mobile also clears the second nav row */}
-      <main className="pt-32 lg:pt-24 pb-12">
+      <main className="pt-24 pb-12">
         <div className={TEACHER_PAGE_GUTTER}>
           <Outlet />
         </div>

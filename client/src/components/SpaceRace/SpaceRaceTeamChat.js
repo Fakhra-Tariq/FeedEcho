@@ -69,7 +69,14 @@ const LinkPreview = ({ url, title }) => {
   );
 };
 
-export default function SpaceRaceTeamChat({ raceId, teamId, participant, compactHeader = false }) {
+export default function SpaceRaceTeamChat({
+  raceId,
+  teamId,
+  participant,
+  compactHeader = false,
+  dockedEdge = false,
+  hideSyncNotice = false,
+}) {
   const { alert } = useHybridAlert();
   const [message, setMessage] = useState('');
   const [isSending, setIsSending] = useState(false);
@@ -531,10 +538,18 @@ export default function SpaceRaceTeamChat({ raceId, teamId, participant, compact
   }
 
   return (
-    <div className="h-full flex flex-col overflow-hidden bg-white border-l border-gray-200">
+    <div
+      className={
+        dockedEdge
+          ? 'h-full flex flex-col overflow-hidden bg-white rounded-tl-[16px] rounded-bl-[16px] shadow-[-8px_0_20px_-6px_rgba(46,31,42,0.18)]'
+          : 'h-full flex flex-col overflow-hidden bg-white border-l border-gray-200'
+      }
+    >
       <div
         className={
-          compactHeader
+          dockedEdge
+            ? 'flex-shrink-0 h-16 flex flex-col justify-center bg-primary px-4 text-white'
+            : compactHeader
             ? 'flex-shrink-0 bg-primary px-4 py-2 text-white'
             : 'flex-shrink-0 bg-primary px-4 py-3 text-white'
         }
@@ -601,7 +616,7 @@ export default function SpaceRaceTeamChat({ raceId, teamId, participant, compact
         </p>
       )}
 
-      {useApiFallback && (
+      {useApiFallback && !hideSyncNotice && (
         <p className="px-4 py-1 text-xs text-primary/80 bg-primary/5 border-t border-primary/10">
           Live sync limited — messages refresh every few seconds.
         </p>

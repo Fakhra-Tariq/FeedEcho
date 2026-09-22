@@ -419,7 +419,7 @@ export default function HostAnonymousChat() {
         key={chat.id}
         onClick={() => setSelectedChat(chat)}
         className={clsx(
-          'px-3 py-3 rounded-xl border cursor-pointer transition-colors',
+          'px-3 py-3 min-h-11 rounded-xl border cursor-pointer transition-colors',
           isSelected
             ? 'bg-primary/10 border-primary/30'
             : 'bg-white border-primary/10 hover:bg-background'
@@ -447,7 +447,7 @@ export default function HostAnonymousChat() {
                   e.stopPropagation();
                   handleDeleteChat(chat.id);
                 }}
-                className="p-1 text-text-light hover:text-red-600 hover:bg-red-50 rounded transition-colors"
+                className="min-h-11 min-w-11 inline-flex items-center justify-center p-1 text-text-light hover:text-red-600 hover:bg-red-50 rounded transition-colors"
                 title="Delete chat"
               >
                 <Trash2 className="w-4 h-4" />
@@ -484,7 +484,7 @@ export default function HostAnonymousChat() {
                   e.stopPropagation();
                   copyJoinCode(chat.joinCode);
                 }}
-                className="p-1 text-text-light hover:text-primary transition-colors"
+                className="min-h-11 min-w-11 inline-flex items-center justify-center p-1 text-text-light hover:text-primary transition-colors"
                 title="Copy join code"
               >
                 {copiedCode === chat.joinCode ? (
@@ -503,7 +503,7 @@ export default function HostAnonymousChat() {
   const selectedMessages = selectedChat?.messages || [];
 
   return (
-    <div className="px-6 -mt-4 lg:-mt-5 flex flex-col gap-3 overflow-hidden min-h-[450px] h-[calc(100dvh-8.75rem)] lg:h-[calc(100dvh-5.75rem)] max-h-[calc(100dvh-8.75rem)] lg:max-h-[calc(100dvh-5.75rem)]">
+    <div className="px-0 sm:px-2 lg:px-6 -mt-4 lg:-mt-5 flex flex-col gap-3 overflow-hidden overflow-x-hidden max-w-full min-h-[450px] h-[calc(100dvh-8.75rem)] lg:h-[calc(100dvh-5.75rem)] max-h-[calc(100dvh-8.75rem)] lg:max-h-[calc(100dvh-5.75rem)]">
       <div className="shrink-0">
         <SessionLaunchBanner className="!mt-0" />
       </div>
@@ -529,7 +529,7 @@ export default function HostAnonymousChat() {
             <button
               onClick={toggleModeration}
               className={clsx(
-                'inline-flex items-center px-4 py-2 rounded-lg text-sm font-medium border transition-colors',
+                'inline-flex items-center justify-center min-h-11 px-4 py-2 rounded-lg text-sm font-medium border transition-colors',
                 moderationMode
                   ? 'bg-white/25 border-white/60 text-white hover:bg-white/35'
                   : 'bg-white/10 border-white/30 text-white/90 hover:bg-white/20'
@@ -540,7 +540,7 @@ export default function HostAnonymousChat() {
             </button>
             <button
               onClick={() => setShowCreate(true)}
-              className="inline-flex items-center px-4 py-2 bg-white text-primary text-sm font-medium rounded-lg hover:bg-white/90 transition-colors shadow-sm"
+              className="inline-flex items-center justify-center min-h-11 px-4 py-2 bg-white text-primary text-sm font-medium rounded-lg hover:bg-white/90 transition-colors shadow-sm"
             >
               <MessageSquare className="w-4 h-4 mr-2" />
               New Chat
@@ -550,8 +550,15 @@ export default function HostAnonymousChat() {
       />
       </div>
 
-      <div className="flex flex-col lg:flex-row gap-4 flex-1 min-h-0 overflow-hidden">
-        <aside className="w-full lg:w-[300px] shrink-0 min-h-0 bg-white rounded-2xl border border-primary/15 shadow-sm p-3 space-y-5 overflow-y-auto max-h-[360px] lg:max-h-none lg:h-full">
+      <div className="flex flex-col md:flex-row gap-3 md:gap-4 flex-1 min-h-0 overflow-hidden max-w-full">
+        <details
+          className="w-full md:w-[min(300px,100%)] shrink-0 min-h-0 bg-white rounded-2xl border border-primary/15 shadow-sm overflow-hidden md:flex md:flex-col md:h-full md:[&>div]:!block"
+          open
+        >
+          <summary className="md:hidden min-h-11 px-3 py-2 text-sm font-semibold text-text cursor-pointer list-none flex items-center justify-between select-none [&::-webkit-details-marker]:hidden">
+            Chats
+          </summary>
+          <div className="p-3 space-y-5 overflow-y-auto max-h-[12.5rem] max-[480px]:max-h-[11rem] md:max-h-none md:flex-1 min-h-0">
           <div>
             <h3 className="px-1 text-xs font-semibold uppercase tracking-wide text-text-light mb-2">Active Chats</h3>
             <div className="space-y-2">
@@ -577,37 +584,38 @@ export default function HostAnonymousChat() {
               )}
             </div>
           </div>
-        </aside>
+          </div>
+        </details>
 
         <section className="flex-1 min-w-0 min-h-0 flex flex-col overflow-hidden bg-white rounded-2xl border border-primary/15 shadow-sm h-full">
           {selectedChat ? (
             <>
-              <div className="px-5 py-3 border-b border-primary/10 shrink-0">
-                <div className="flex items-center justify-between gap-3">
-                  <div className="flex items-center gap-2 min-w-0">
-                    <h3 className="font-semibold text-text truncate">{selectedChat.title}</h3>
-                    <span className="inline-flex items-center gap-1 text-sm text-text-light shrink-0">
-                      <Users className="w-4 h-4" />
+              <div className="px-3 sm:px-5 py-3 border-b border-primary/10 shrink-0">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div className="flex flex-wrap items-center gap-x-2 gap-y-1 min-w-0">
+                    <h3 className="font-semibold text-text break-words min-w-0">{selectedChat.title}</h3>
+                    <span className="inline-flex items-center gap-1 text-sm text-text-light">
+                      <Users className="w-4 h-4 shrink-0" />
                       {selectedParticipantCount} participants
                     </span>
                     {selectedChat.status !== 'active' && (
-                      <span className="inline-flex items-center text-sm text-text-light shrink-0">
-                        <Clock className="w-4 h-4 mr-1" />
+                      <span className="inline-flex items-center text-sm text-text-light">
+                        <Clock className="w-4 h-4 mr-1 shrink-0" />
                         Ended{selectedChat.endedAt ? ` • ${new Date(selectedChat.endedAt).toLocaleDateString()}` : ''}
                       </span>
                     )}
                   </div>
 
                   {selectedChat.status === 'active' && (
-                    <div className="flex items-center gap-2 shrink-0">
-                      <div className="flex items-center gap-2 bg-background border border-primary/15 rounded-xl pl-3 pr-1.5 py-1.5">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <div className="flex items-center gap-2 min-w-0 bg-background border border-primary/15 rounded-xl pl-3 pr-1.5 py-1.5">
                         <span className="text-[11px] font-medium text-text-light whitespace-nowrap">Access Code</span>
                         <span className="text-sm font-mono font-bold text-primary">
                           {selectedChat.joinCode}
                         </span>
                         <button
                           onClick={() => copyJoinCode(selectedChat.joinCode)}
-                          className="p-1.5 text-text-light hover:text-primary hover:bg-primary/10 rounded-lg transition-colors"
+                          className="min-h-11 min-w-11 inline-flex items-center justify-center p-1.5 text-text-light hover:text-primary hover:bg-primary/10 rounded-lg transition-colors"
                           title="Copy access code"
                         >
                           {copiedCode === selectedChat.joinCode ? (
@@ -620,7 +628,7 @@ export default function HostAnonymousChat() {
 
                       <button
                         onClick={handleEndChat}
-                        className="px-3 py-2 bg-red-500 text-white text-sm rounded-lg hover:bg-red-600 transition-colors"
+                        className="min-h-11 px-3 py-2 bg-red-500 text-white text-sm rounded-lg hover:bg-red-600 transition-colors"
                       >
                         End Chat
                       </button>
@@ -632,7 +640,7 @@ export default function HostAnonymousChat() {
               <div className="relative flex-1 min-h-0 flex flex-col overflow-hidden">
                 <div
                   ref={messagesContainerRef}
-                  className="chat-messages-scroll flex-1 min-h-0 overflow-y-auto px-5 py-4 space-y-3"
+                  className="chat-messages-scroll flex-1 min-h-0 overflow-y-auto px-3 sm:px-5 py-4 space-y-3"
                 >
                   {selectedMessages.length === 0 ? (
                     <div className="h-full flex flex-col items-center justify-center text-center px-8">
@@ -671,19 +679,19 @@ export default function HostAnonymousChat() {
               </div>
 
               {isChatActive(selectedChat) && (
-                <form onSubmit={handleSendMessage} className="px-5 py-3 border-t border-primary/10 shrink-0">
-                  <div className="flex items-center gap-2 bg-background border border-primary/15 rounded-full pl-4 pr-1.5 py-1.5 transition-colors focus-within:border-primary/40">
+                <form onSubmit={handleSendMessage} className="px-3 sm:px-5 py-3 border-t border-primary/10 shrink-0">
+                  <div className="flex items-center gap-2 min-h-11 bg-background border border-primary/15 rounded-full pl-4 pr-1.5 py-1.5 transition-colors focus-within:border-primary/40">
                     <input
                       type="text"
                       value={messageDraft}
                       onChange={(e) => setMessageDraft(e.target.value)}
                       placeholder="Message audience…"
-                      className="flex-1 bg-transparent text-sm text-text placeholder-text-light focus:outline-none"
+                      className="flex-1 min-w-0 min-h-11 bg-transparent text-sm text-text placeholder-text-light focus:outline-none"
                     />
                     <button
                       type="submit"
                       disabled={!messageDraft.trim() || isSendingMessage}
-                      className="p-2 rounded-full bg-primary text-white hover:bg-primary/90 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                      className="min-h-11 min-w-11 inline-flex items-center justify-center p-2 rounded-full bg-primary text-white hover:bg-primary/90 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
                       title="Send message"
                     >
                       <Send className="w-4 h-4" />
@@ -710,7 +718,7 @@ export default function HostAnonymousChat() {
 
       {showCreate && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-xl max-w-md w-full">
+          <div className="bg-white rounded-xl max-w-md w-full max-h-[calc(100dvh-2rem)] overflow-y-auto">
             <div className="p-6 border-b border-gray-200">
               <h2 className="text-xl font-semibold text-text">Create Anonymous Chat</h2>
             </div>
@@ -721,7 +729,7 @@ export default function HostAnonymousChat() {
                   type="text"
                   value={createForm.title}
                   onChange={(e) => setCreateForm({ ...createForm, title: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary bg-white text-text"
+                  className="w-full min-h-11 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary bg-white text-text"
                   placeholder="e.g., Weekly Q&A Session"
                 />
               </div>
@@ -736,17 +744,17 @@ export default function HostAnonymousChat() {
                 />
               </div>
             </div>
-            <div className="p-6 border-t border-gray-200 flex justify-end space-x-3">
+            <div className="p-6 border-t border-gray-200 flex flex-col-reverse min-[481px]:flex-row justify-end gap-2 min-[481px]:space-x-3">
               <button
                 onClick={() => setShowCreate(false)}
-                className="px-4 py-2 text-text-light bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
+                className="min-h-11 px-4 py-2 text-text-light bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors w-full min-[481px]:w-auto"
               >
                 Cancel
               </button>
               <button
                 onClick={handleCreate}
                 disabled={!createForm.title || isCreating}
-                className="px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                className="min-h-11 px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors w-full min-[481px]:w-auto"
               >
                 {isCreating ? 'Creating…' : 'Create Chat'}
               </button>
@@ -772,7 +780,7 @@ export default function HostAnonymousChat() {
           />
           
           {/* Modal Content */}
-          <div className="relative bg-white rounded-2xl shadow-2xl max-w-md w-full p-6">
+          <div className="relative bg-white rounded-2xl shadow-2xl max-w-md w-full max-h-[calc(100dvh-2rem)] overflow-y-auto p-5 sm:p-6">
             <div className="flex items-center space-x-3 mb-4">
               <div className="p-2 bg-red-100 rounded-full">
                 <AlertTriangle className="w-6 h-6 text-red-600" />
@@ -784,16 +792,16 @@ export default function HostAnonymousChat() {
               Are you sure you want to delete this chat? This action cannot be undone.
             </p>
             
-            <div className="flex items-center space-x-3">
+            <div className="flex items-center gap-3">
               <button
                 onClick={cancelDeleteChat}
-                className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors font-medium"
+                className="flex-1 min-h-11 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors font-medium"
               >
                 Cancel
               </button>
               <button
                 onClick={confirmDeleteChat}
-                className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors font-medium"
+                className="flex-1 min-h-11 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors font-medium"
               >
                 Delete
               </button>

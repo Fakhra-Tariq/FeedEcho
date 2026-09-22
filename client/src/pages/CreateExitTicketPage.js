@@ -301,10 +301,10 @@ export default function CreateExitTicketPage() {
   };
 
   return (
-    <div className="p-6">
+    <div className="p-4 sm:p-6 overflow-x-hidden max-w-full">
       {/* Progress Steps */}
-      <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6 mb-6">
-        <div className="flex items-center justify-center space-x-4">
+      <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-4 sm:p-6 mb-6 max-w-full">
+        <div className="flex items-center justify-center gap-2 sm:gap-4 flex-wrap">
           {[1, 2, 3].map((step) => (
             <div key={step} className="flex items-center">
               <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium transition-colors ${
@@ -315,7 +315,7 @@ export default function CreateExitTicketPage() {
                 {step}
               </div>
               {step < 3 && (
-                <div className={`w-12 h-1 transition-colors ${
+                <div className={`w-8 sm:w-12 h-1 transition-colors ${
                   currentStep > step ? 'bg-primary' : 'bg-gray-200'
                 }`} />
               )}
@@ -333,7 +333,7 @@ export default function CreateExitTicketPage() {
 
       {/* Step 1: Title */}
       {currentStep === 1 && (
-        <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6">
+        <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-4 sm:p-6 max-w-full">
           <div className="space-y-6">
             <div>
               <label className="block text-lg font-medium text-text mb-2">
@@ -344,12 +344,12 @@ export default function CreateExitTicketPage() {
                 value={ticketForm.title}
                 onChange={handleTitleChange}
                 placeholder="e.g., End of Class Feedback"
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary/20 focus:border-primary text-lg"
+                className="w-full min-h-11 px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary/20 focus:border-primary text-lg"
               />
             </div>
 
             <div>
-              <label className="flex items-center space-x-3">
+              <label className="flex items-center space-x-3 min-h-11">
                 <input
                   type="checkbox"
                   checked={ticketForm.collectAttendance}
@@ -366,17 +366,17 @@ export default function CreateExitTicketPage() {
             </div>
           </div>
 
-          <div className="flex justify-between mt-8">
+          <div className="flex flex-col-reverse min-[481px]:flex-row justify-between gap-2 mt-8">
             <button
               onClick={goBack}
-              className="px-4 py-2 border border-gray-300 text-text-light rounded-lg hover:bg-gray-50 transition-colors"
+              className="min-h-11 px-4 py-2 border border-gray-300 text-text-light rounded-lg hover:bg-gray-50 transition-colors w-full min-[481px]:w-auto"
             >
               Cancel
             </button>
             <button
               onClick={() => goToStep(2)}
               disabled={!ticketForm.title.trim()}
-              className="px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              className="min-h-11 px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed w-full min-[481px]:w-auto"
             >
               Continue
               <Plus className="w-4 h-4 ml-2 inline" />
@@ -387,18 +387,18 @@ export default function CreateExitTicketPage() {
 
       {/* Step 2: Questions */}
       {currentStep === 2 && (
-        <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6">
+        <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-4 sm:p-6 max-w-full">
           <div className="space-y-6">
             {ticketForm.questions.map((question, qIndex) => (
-              <div key={qIndex} className="border border-gray-200 rounded-xl p-6 bg-gray-50">
-                <div className="flex items-center justify-between mb-4">
+              <div key={qIndex} className="border border-gray-200 rounded-xl p-4 sm:p-6 bg-gray-50 max-w-full min-w-0">
+                <div className="flex items-center justify-between gap-2 mb-4">
                   <h4 className="text-lg font-medium text-text">
                     Question {qIndex + 1}
                   </h4>
                   {ticketForm.questions.length > 1 && (
                     <button
                       onClick={() => removeQuestion(qIndex)}
-                      className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                      className="min-h-11 min-w-11 inline-flex items-center justify-center p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
                     >
                       <X className="w-4 h-4" />
                     </button>
@@ -415,7 +415,7 @@ export default function CreateExitTicketPage() {
                       onChange={(e) => handleQuestionChange(qIndex, 'prompt', e.target.value)}
                       placeholder="What would you like to ask?"
                       rows={3}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary/20 focus:border-primary resize-none"
+                      className="w-full min-h-11 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary/20 focus:border-primary resize-none"
                     />
                   </div>
 
@@ -426,7 +426,7 @@ export default function CreateExitTicketPage() {
                     <select
                       value={question.type}
                       onChange={(e) => handleQuestionChange(qIndex, 'type', e.target.value)}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary/20 focus:border-primary"
+                      className="w-full min-h-11 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary/20 focus:border-primary"
                     >
                       {questionTypeCatalog.map(type => (
                         <option key={type.value} value={type.value}>
@@ -454,18 +454,18 @@ export default function CreateExitTicketPage() {
                       ) : (
                         <div className="space-y-2">
                           {question.options.map((option, oIndex) => (
-                            <div key={oIndex} className="flex gap-2">
+                            <div key={oIndex} className="flex gap-2 min-w-0">
                               <input
                                 type="text"
                                 value={option}
                                 onChange={(e) => handleOptionChange(qIndex, oIndex, e.target.value)}
                                 placeholder={`Option ${oIndex + 1}`}
-                                className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary/20 focus:border-primary"
+                                className="flex-1 min-w-0 min-h-11 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary/20 focus:border-primary"
                               />
                               {question.options.length > 1 && (
                                 <button
                                   onClick={() => removeOption(qIndex, oIndex)}
-                                  className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                                  className="min-h-11 min-w-11 inline-flex items-center justify-center p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
                                 >
                                   <X className="w-4 h-4" />
                                 </button>
@@ -474,7 +474,7 @@ export default function CreateExitTicketPage() {
                           ))}
                           <button
                             onClick={() => addOption(qIndex)}
-                            className="w-full px-3 py-2 border border-gray-300 text-text-light rounded-lg hover:bg-gray-50 transition-colors"
+                            className="w-full min-h-11 px-3 py-2 border border-gray-300 text-text-light rounded-lg hover:bg-gray-50 transition-colors"
                           >
                             <Plus className="w-4 h-4 mr-2 inline" />
                             Add Option
@@ -489,24 +489,24 @@ export default function CreateExitTicketPage() {
 
             <button
               onClick={addQuestion}
-              className="w-full px-4 py-2 border border-gray-300 text-text-light rounded-lg hover:bg-gray-50 transition-colors"
+              className="w-full min-h-11 px-4 py-2 border border-gray-300 text-text-light rounded-lg hover:bg-gray-50 transition-colors"
             >
               <Plus className="w-4 h-4 mr-2 inline" />
               Add Question
             </button>
           </div>
 
-          <div className="flex justify-between mt-8">
-            <div className="flex gap-2">
+          <div className="flex flex-col-reverse min-[481px]:flex-row justify-between gap-2 mt-8">
+            <div className="flex flex-wrap gap-2">
               <button
                 onClick={() => goToStep(1)}
-                className="px-4 py-2 border border-gray-300 text-text-light rounded-lg hover:bg-gray-50 transition-colors"
+                className="min-h-11 px-4 py-2 border border-gray-300 text-text-light rounded-lg hover:bg-gray-50 transition-colors flex-1 min-[481px]:flex-none"
               >
                 Back
               </button>
               <button
                 onClick={goBack}
-                className="px-4 py-2 border border-gray-300 text-text-light rounded-lg hover:bg-gray-50 transition-colors"
+                className="min-h-11 px-4 py-2 border border-gray-300 text-text-light rounded-lg hover:bg-gray-50 transition-colors flex-1 min-[481px]:flex-none"
               >
                 Cancel
               </button>
@@ -514,7 +514,7 @@ export default function CreateExitTicketPage() {
             <button
               onClick={() => goToStep(3)}
               disabled={!isFormValid}
-              className="px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              className="min-h-11 px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed w-full min-[481px]:w-auto"
             >
               Continue
             </button>
@@ -524,10 +524,10 @@ export default function CreateExitTicketPage() {
 
       {/* Step 3: Review */}
       {currentStep === 3 && (
-        <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6">
+        <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-4 sm:p-6 max-w-full">
           <div className="space-y-6">
             {/* Review Card */}
-            <div className="bg-gray-50 rounded-xl p-6">
+            <div className="bg-gray-50 rounded-xl p-4 sm:p-6 max-w-full">
               <h3 className="text-lg font-semibold text-text mb-4">Review Exit Ticket</h3>
               
               <div className="space-y-4">
@@ -541,11 +541,11 @@ export default function CreateExitTicketPage() {
                   <div className="space-y-2 mt-2">
                     {ticketForm.questions.map((question, index) => (
                       <div key={index} className="bg-white p-3 rounded-lg border border-gray-200">
-                        <div className="flex items-center justify-between">
+                        <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between min-w-0">
                           <span className="text-sm font-medium text-text">
                             Q{index + 1}: {question.type.replace('_', ' ').replace(/\b\w/g, letter => letter.toUpperCase())}
                           </span>
-                          <span className="text-xs text-text-light">
+                          <span className="text-xs text-text-light break-words min-w-0">
                             {question.prompt || 'No prompt'}
                           </span>
                         </div>
@@ -574,34 +574,34 @@ export default function CreateExitTicketPage() {
               </div>
             </div>
 
-            <div className="flex justify-between">
-              <div className="flex gap-2">
+            <div className="flex flex-col gap-2 sm:flex-row sm:justify-between">
+              <div className="flex flex-wrap gap-2">
                 <button
                   onClick={() => goToStep(2)}
-                  className="px-4 py-2 border border-gray-300 text-text-light rounded-lg hover:bg-gray-50 transition-colors"
+                  className="min-h-11 px-4 py-2 border border-gray-300 text-text-light rounded-lg hover:bg-gray-50 transition-colors flex-1 sm:flex-none"
                 >
                   Back to Edit
                 </button>
                 <button
                   onClick={goBack}
-                  className="px-4 py-2 border border-gray-300 text-text-light rounded-lg hover:bg-gray-50 transition-colors"
+                  className="min-h-11 px-4 py-2 border border-gray-300 text-text-light rounded-lg hover:bg-gray-50 transition-colors flex-1 sm:flex-none"
                 >
                   Cancel
                 </button>
               </div>
-              <div className="space-x-3">
+              <div className="flex flex-wrap gap-2">
                 <button
                   onClick={handleSaveDraft}
                   disabled={isSaving}
-                  className="px-4 py-2 border border-gray-300 text-text-light rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="min-h-11 px-4 py-2 border border-gray-300 text-text-light rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex-1 sm:flex-none"
                 >
                   {isSaving ? 'Saving...' : 'Save as Draft'}
                 </button>
-                <div className="inline-flex flex-col items-end">
+                <div className="flex flex-col items-stretch sm:items-end flex-1 sm:flex-none">
                   <button
                     onClick={handleLaunch}
                     disabled={isSaving || !isFormValid}
-                    className="px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="min-h-11 px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed w-full"
                   >
                     {isSaving ? 'Launching...' : 'Launch Exit Ticket'}
                     <Sparkles className="w-4 h-4 ml-2 inline" />
@@ -628,7 +628,7 @@ export default function CreateExitTicketPage() {
           <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" />
           
           {/* Popup modal */}
-          <div className="relative bg-white rounded-2xl shadow-2xl max-w-md w-full mx-4 overflow-hidden">
+          <div className="relative bg-white rounded-2xl shadow-2xl max-w-md w-full max-h-[calc(100dvh-2rem)] overflow-y-auto">
             <div className="p-8 text-center">
               {/* Theme colored circular success icon */}
               <div className="flex justify-center mb-6">
@@ -658,7 +658,7 @@ export default function CreateExitTicketPage() {
                 {/* Primary Copy Code button */}
                 <button
                   onClick={() => handleCopyJoinCode(launchedTicketCode)}
-                  className="w-full flex items-center justify-center gap-2 px-6 py-3 bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors font-medium"
+                  className="w-full min-h-11 flex items-center justify-center gap-2 px-6 py-3 bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors font-medium"
                 >
                   <Copy className="w-4 h-4" />
                   {copied ? 'Copied!' : 'Copy Code'}
@@ -670,7 +670,7 @@ export default function CreateExitTicketPage() {
                     setShowJoinCodeModal(false);
                     navigate('/host/exit-tickets');
                   }}
-                  className="w-full px-6 py-3 text-gray-700 hover:text-gray-900 font-medium transition-colors"
+                  className="w-full min-h-11 px-6 py-3 text-gray-700 hover:text-gray-900 font-medium transition-colors"
                 >
                   Go to Exit Ticket Library
                 </button>

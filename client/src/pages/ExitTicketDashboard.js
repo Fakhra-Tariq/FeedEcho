@@ -518,7 +518,7 @@ export default function ExitTicketDashboard() {
   }, [activeTicket?.id, questionsTree]);
 
   return (
-    <div className="px-6 pb-6 space-y-4">
+    <div className="px-0 sm:px-2 lg:px-6 pb-6 space-y-4 overflow-x-hidden max-w-full">
       <SessionLaunchBanner />
 
       {/* Header */}
@@ -543,14 +543,14 @@ export default function ExitTicketDashboard() {
               <>
                 <button
                   onClick={() => fetchResponses(activeTicket.id)}
-                  className="p-2 bg-white/20 text-white rounded-lg hover:bg-white/30 transition-colors"
+                  className="min-h-11 min-w-11 inline-flex items-center justify-center p-2 bg-white/20 text-white rounded-lg hover:bg-white/30 transition-colors"
                   title="View Responses"
                 >
                   <Eye className="w-5 h-5" />
                 </button>
                 <button
                   onClick={() => handleEndTicket(activeTicket.id)}
-                  className="p-2 bg-white/20 text-white rounded-lg hover:bg-white/30 transition-colors"
+                  className="min-h-11 min-w-11 inline-flex items-center justify-center p-2 bg-white/20 text-white rounded-lg hover:bg-white/30 transition-colors"
                   title="End Exit Ticket"
                 >
                   <Square className="w-5 h-5" />
@@ -559,7 +559,7 @@ export default function ExitTicketDashboard() {
             )}
             <button
               onClick={() => navigate('/host/exit-tickets/create')}
-              className="flex items-center gap-2 px-4 py-2 bg-white text-primary rounded-lg font-semibold hover:bg-white/90 shadow-lg transition-colors"
+              className="flex items-center justify-center gap-2 min-h-11 px-4 py-2 bg-white text-primary rounded-lg font-semibold hover:bg-white/90 shadow-lg transition-colors"
             >
               <Plus className="w-4 h-4" />
               Create Exit Ticket
@@ -601,7 +601,7 @@ export default function ExitTicketDashboard() {
             <p className="text-text-light mb-6">Create your first exit ticket to start collecting audience feedback</p>
             <button
               onClick={() => navigate('/host/exit-tickets/create')}
-              className="inline-flex items-center gap-2 px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors"
+              className="inline-flex items-center justify-center gap-2 min-h-11 px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors"
             >
               <Plus className="w-4 h-4" />
               Create Exit Ticket
@@ -609,11 +609,11 @@ export default function ExitTicketDashboard() {
           </div>
         ) : (
           visibleTickets.map(ticket => (
-            <div key={ticket.id} className="bg-white rounded-lg border border-gray-200 p-6">
-              <div className="flex items-start justify-between">
-                <div className="flex-1">
-                  <div className="flex items-center space-x-3 mb-2">
-                    <h3 className="text-lg font-semibold text-text">{ticket.title}</h3>
+            <div key={ticket.id} className="bg-white rounded-lg border border-gray-200 p-4 sm:p-6 max-w-full min-w-0">
+              <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
+                <div className="flex-1 min-w-0">
+                  <div className="flex flex-wrap items-center gap-2 mb-2">
+                    <h3 className="text-lg font-semibold text-text break-words">{ticket.title}</h3>
                     <span className={`px-2 py-1 text-xs font-medium rounded-full ${getStatusColor(ticket.status)}`}>
                       {getStatusLabel(ticket.status)}
                     </span>
@@ -621,7 +621,7 @@ export default function ExitTicketDashboard() {
                   <p className="text-text-light mb-4">
                     {ticket.questions?.length || 0} questions • {ticket.responsesCount || 0} responses
                   </p>
-                  <div className="flex items-center space-x-6 text-sm text-text-light">
+                  <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-sm text-text-light">
                     <div className="flex items-center space-x-1">
                       <FileText className="w-4 h-4" />
                       <span>{ticket.questions?.length || 0} questions</span>
@@ -646,11 +646,11 @@ export default function ExitTicketDashboard() {
                   )}
                 </div>
 
-                <div className="flex items-center space-x-2">
+                <div className="flex flex-wrap items-center gap-2 shrink-0">
                   {ticket.status === 'active' && (
                     <button
                       onClick={() => handleEndTicket(ticket.id)}
-                      className="p-2 text-primary rounded-lg border border-primary/50 hover:bg-primary/10 transition-colors text-sm flex items-center"
+                      className="min-h-11 p-2 text-primary rounded-lg border border-primary/50 hover:bg-primary/10 transition-colors text-sm inline-flex items-center"
                       title="End Exit Ticket"
                     >
                       <Square className="w-4 h-4 mr-1" />
@@ -662,7 +662,7 @@ export default function ExitTicketDashboard() {
                     <div className="flex items-center space-x-2 mt-2">
                       <button
                         onClick={() => handleResumeTicket(ticket.id)}
-                        className="p-2 text-green-600 rounded-lg border border-green-300 hover:bg-green-100 transition-colors text-sm flex items-center"
+                        className="min-h-11 p-2 text-green-600 rounded-lg border border-green-300 hover:bg-green-100 transition-colors text-sm inline-flex items-center"
                         title="Resume Exit Ticket"
                       >
                         <Play className="w-4 h-4 mr-1" />
@@ -670,7 +670,7 @@ export default function ExitTicketDashboard() {
                       </button>
                       <button
                         onClick={() => handleEndTicket(ticket.id)}
-                        className="p-2 text-primary rounded-lg border border-primary/50 hover:bg-primary/10 transition-colors text-sm flex items-center"
+                        className="min-h-11 p-2 text-primary rounded-lg border border-primary/50 hover:bg-primary/10 transition-colors text-sm inline-flex items-center"
                         title="End Exit Ticket"
                       >
                         <Square className="w-4 h-4 mr-1" />
@@ -683,7 +683,7 @@ export default function ExitTicketDashboard() {
                     <>
                       <button
                         onClick={() => fetchResponses(ticket.id)}
-                        className="p-2 text-primary rounded-lg border border-primary/50 hover:bg-primary/10 transition-colors text-sm flex items-center"
+                        className="min-h-11 p-2 text-primary rounded-lg border border-primary/50 hover:bg-primary/10 transition-colors text-sm inline-flex items-center"
                         title="View Responses"
                       >
                         <Eye className="w-4 h-4 mr-1" />
@@ -691,7 +691,7 @@ export default function ExitTicketDashboard() {
                       </button>
                       <button
                         onClick={() => handleArchiveTicket(ticket.id)}
-                        className="p-2 text-primary rounded-lg border border-primary/50 hover:bg-primary/10 transition-colors text-sm flex items-center"
+                        className="min-h-11 p-2 text-primary rounded-lg border border-primary/50 hover:bg-primary/10 transition-colors text-sm inline-flex items-center"
                         title="Archive Exit Ticket"
                       >
                         <Archive className="w-4 h-4 mr-1" />
@@ -704,7 +704,7 @@ export default function ExitTicketDashboard() {
                     <>
                       <button
                         onClick={() => navigate(`/host/exit-tickets/create?edit=${ticket.id}`)}
-                        className="p-2 text-gray-600 rounded-lg border border-gray-300 hover:bg-gray-100 transition-colors text-sm flex items-center"
+                        className="min-h-11 p-2 text-gray-600 rounded-lg border border-gray-300 hover:bg-gray-100 transition-colors text-sm inline-flex items-center"
                         title="Edit Exit Ticket"
                       >
                         <RotateCcw className="w-4 h-4 mr-1" />
@@ -712,7 +712,7 @@ export default function ExitTicketDashboard() {
                       </button>
                       <button
                         onClick={() => handleLaunchTicket(ticket.id)}
-                        className="p-2 text-primary rounded-lg border border-primary/50 hover:bg-primary/10 transition-colors text-sm flex items-center"
+                        className="min-h-11 p-2 text-primary rounded-lg border border-primary/50 hover:bg-primary/10 transition-colors text-sm inline-flex items-center"
                         title="Launch Exit Ticket"
                       >
                         <Play className="w-4 h-4 mr-1" />
@@ -720,7 +720,7 @@ export default function ExitTicketDashboard() {
                       </button>
                       <button
                         onClick={() => handleArchiveTicket(ticket.id)}
-                        className="p-2 text-primary rounded-lg border border-primary/50 hover:bg-primary/10 transition-colors text-sm flex items-center"
+                        className="min-h-11 p-2 text-primary rounded-lg border border-primary/50 hover:bg-primary/10 transition-colors text-sm inline-flex items-center"
                         title="Archive Exit Ticket"
                       >
                         <Archive className="w-4 h-4 mr-1" />
@@ -733,7 +733,7 @@ export default function ExitTicketDashboard() {
                     <div className="flex items-center space-x-2 mt-2">
                       <button
                         onClick={() => handleRestoreTicket(ticket.id)}
-                        className="p-2 text-primary rounded-lg border border-primary/50 hover:bg-primary/10 transition-colors text-sm flex items-center"
+                        className="min-h-11 p-2 text-primary rounded-lg border border-primary/50 hover:bg-primary/10 transition-colors text-sm inline-flex items-center"
                         title="Restore Exit Ticket"
                       >
                         <Restore className="w-4 h-4 mr-1" />
@@ -741,7 +741,7 @@ export default function ExitTicketDashboard() {
                       </button>
                       <button
                         onClick={() => handleDeleteTicket(ticket.id)}
-                        className="p-2 text-red-600 rounded-lg border border-red-300 hover:bg-red-100 transition-colors text-sm flex items-center"
+                        className="min-h-11 p-2 text-red-600 rounded-lg border border-red-300 hover:bg-red-100 transition-colors text-sm inline-flex items-center"
                         title="Delete Permanently"
                       >
                         <Trash2 className="w-4 h-4 mr-1" />
@@ -761,7 +761,7 @@ export default function ExitTicketDashboard() {
           <button
             type="button"
             onClick={() => setVisibleCount((prev) => prev + TICKETS_PAGE_SIZE)}
-            className="px-4 py-2 rounded-lg border border-primary/40 text-primary font-medium hover:bg-primary/10 transition-colors"
+            className="min-h-11 px-4 py-2 rounded-lg border border-primary/40 text-primary font-medium hover:bg-primary/10 transition-colors"
           >
             Show more
           </button>

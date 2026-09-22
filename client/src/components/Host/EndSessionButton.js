@@ -9,8 +9,8 @@ import { useHybridAlert } from '../../contexts/HybridAlertContext';
  * Opens the existing confirmation modal, then calls the same context handlers.
  */
 export default function EndSessionButton({
-  className = 'flex items-center gap-2 px-4 py-2 rounded-xl bg-red-500 text-white font-semibold hover:bg-red-600 transition-colors',
-  labelClassName = 'hidden sm:inline',
+  className = 'flex items-center justify-center gap-2 min-h-11 px-4 py-2.5 rounded-xl bg-red-500 text-white font-semibold hover:bg-red-600 transition-colors',
+  labelClassName = '',
 }) {
   const { data, endActiveSession, endStandaloneSession } = useHostData();
   const { alert } = useHybridAlert();

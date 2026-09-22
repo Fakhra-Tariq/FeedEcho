@@ -281,7 +281,6 @@ export default function SpaceRaceGamePanel({
 
   const leadingTeamId = sortedTeams[0]?.teamId;
   const hasQuiz = Boolean(quizId || raceData?.quizId);
-  const isActive = raceData?.status === 'active';
   
   // Check if participant has already attempted the quiz
   const hasAttemptedQuiz = useMemo(() => {
@@ -438,111 +437,66 @@ export default function SpaceRaceGamePanel({
   }
 
   return (
-    <div className="relative min-h-full p-4 md:p-6 space-y-6">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h2 className="text-xl font-bold text-text flex items-center gap-2">
-            <Rocket className="w-6 h-6 text-primary" />
-            {raceData?.title || 'Space Race'}
-          </h2>
-          <p className="text-text/70 text-sm mt-1">
-            Welcome, {participant?.name || 'Audience'}
+    <div className="relative min-h-full p-4 md:p-6">
+      <div className="bg-white rounded-xl shadow-lg p-7 md:p-8 border border-gray-200 max-w-3xl mx-auto">
+        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
+          <p className="min-w-0">
+            <span className="text-lg font-bold text-primary">
+              Welcome, {participant?.name || 'Audience'}
+            </span>
             {participant?.teamId != null && (
-              <span className="ml-2 inline-flex items-center gap-1 text-primary font-medium">
+              <span className="ml-2 inline-flex items-center gap-1 text-sm text-gray-500">
                 <Zap className="w-3 h-3" />
                 Team {participant.teamId}
               </span>
             )}
           </p>
-        </div>
-        <div className="flex items-center gap-3">
           {!window.location.pathname.includes('/quiz/') && (
-            <div className="bg-white rounded-xl border border-neutral-200 shadow-soft px-4 py-2">
-              <p className="text-text/60 text-xs text-center mb-1">Time left</p>
+            <div className="flex items-baseline gap-2 shrink-0">
+              <span className="text-text/60 text-xs">Time left</span>
               <JoinDurationTimer raceData={raceData} className="text-lg font-semibold text-primary" />
             </div>
           )}
           {window.location.pathname.includes('/quiz/') && teamTimer?.endTime && (
-            <div className="bg-white rounded-xl border border-neutral-200 shadow-soft px-4 py-2">
-              <p className="text-text/60 text-xs text-center mb-1">Quiz time left</p>
+            <div className="sm:text-right shrink-0">
+              <p className="text-text/60 text-xs mb-1">Quiz time left</p>
               <TimerDisplay timerInfo={{ endTime: teamTimer.endTime }} onTimeUp={onTimeUp} />
             </div>
           )}
         </div>
-      </div>
 
-      {hasQuiz && !window.location.pathname.includes('/quiz/') && !hasAttemptedQuiz && !quizTimeExpired && (
-        <div className="bg-primary/5 border border-primary/20 rounded-xl p-4 flex flex-col sm:flex-row items-center justify-between gap-3">
-          <p className="text-text text-sm">The quiz is ready — coordinate with your team and compete!</p>
-          <button
-            type="button"
-            onClick={handleStartQuiz}
-            className="px-5 py-2 bg-primary text-white rounded-lg font-semibold hover:bg-primary/90 transition-colors whitespace-nowrap"
-          >
-            Start Quiz
-          </button>
-        </div>
-      )}
-
-      {hasQuiz && !window.location.pathname.includes('/quiz/') && !hasAttemptedQuiz && quizTimeExpired && (
-        <div className="bg-error-50 border border-error-200 rounded-xl p-4 flex flex-col sm:flex-row items-center justify-between gap-3">
-          <p className="text-text text-sm">Time&apos;s up — this quiz is closed and can no longer be opened or attempted.</p>
-          <div className="px-5 py-2 bg-neutral-300 text-neutral-600 rounded-lg font-semibold whitespace-nowrap">
-            Quiz Closed
-          </div>
-        </div>
-      )}
-      
-      {hasAttemptedQuiz && !window.location.pathname.includes('/quiz/') && (
-        <div className="bg-neutral-100 border border-neutral-300 rounded-xl p-4 flex flex-col sm:flex-row items-center justify-between gap-3">
-          <p className="text-text text-sm">You have already attempted this quiz.</p>
-          <div className="px-5 py-2 bg-neutral-300 text-neutral-600 rounded-lg font-semibold whitespace-nowrap">
-            Quiz Completed
-          </div>
-        </div>
-      )}
-
-      {/* Communication encouragement message */}
-      {!hasAttemptedQuiz && !window.location.pathname.includes('/quiz/') && (
-        <div className="bg-gradient-to-r from-blue-50 to-purple-50 border border-blue-200 rounded-xl p-4">
-          <div className="flex items-start gap-3">
-            <Users className="w-5 h-5 text-primary mt-0.5 flex-shrink-0" />
-            <div>
-              <p className="text-text font-medium text-sm">Team Chat</p>
-              <p className="text-text/70 text-sm mt-1">
-                Communicate with your team members here. Share answers, discuss questions, and work together to win!
-              </p>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Team score summary (simplified, no leaderboard) - Hidden for students */}
-      {false && (
-        <div className="bg-white rounded-xl shadow-soft border border-neutral-200 p-4">
-          <div className="flex items-center gap-3">
-            <Users className="w-5 h-5 text-success-600" />
-            <div>
-              <p className="text-text/60 text-sm">Your team score</p>
-              <p className="text-text font-semibold text-lg">{myTeamScore} pts</p>
-              <p className="text-text/50 text-xs mt-1">
-                You contributed: {myIndividualScore} pts
-              </p>
-            </div>
-          </div>
-        </div>
-      )}
-
-      <div className="bg-white rounded-xl shadow-soft border border-neutral-200 p-4">
-        <div className="flex items-center gap-3">
-          <Star className="w-5 h-5 text-secondary" />
-          <div>
-            <p className="text-text/60 text-sm">Race status</p>
-            <p className="text-text font-semibold capitalize">
-              {isActive ? 'Active' : raceData?.status || 'Waiting'}
+        {hasQuiz && !window.location.pathname.includes('/quiz/') && !hasAttemptedQuiz && !quizTimeExpired && (
+          <div className="mt-6 flex flex-col items-center gap-3">
+            <p className="text-text text-sm w-full">
+              The quiz is ready — start it whenever you&apos;re set, and coordinate with your teammates along the way.
             </p>
+            <button
+              type="button"
+              onClick={handleStartQuiz}
+              className="px-5 py-2 bg-primary text-white rounded-lg font-semibold hover:bg-primary/90 transition-colors whitespace-nowrap"
+            >
+              Start Quiz
+            </button>
           </div>
-        </div>
+        )}
+
+        {hasQuiz && !window.location.pathname.includes('/quiz/') && !hasAttemptedQuiz && quizTimeExpired && (
+          <div className="mt-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+            <p className="text-text text-sm">Time&apos;s up — this quiz is closed and can no longer be opened or attempted.</p>
+            <div className="px-5 py-2 bg-neutral-300 text-neutral-600 rounded-lg font-semibold whitespace-nowrap">
+              Quiz Closed
+            </div>
+          </div>
+        )}
+
+        {hasAttemptedQuiz && !window.location.pathname.includes('/quiz/') && (
+          <div className="mt-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+            <p className="text-text text-sm">You have already attempted this quiz.</p>
+            <div className="px-5 py-2 bg-neutral-300 text-neutral-600 rounded-lg font-semibold whitespace-nowrap">
+              Quiz Completed
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

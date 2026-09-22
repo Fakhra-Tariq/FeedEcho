@@ -257,7 +257,7 @@ const AiQuizGeneratorPanel = ({ isOpen, onClose, onApplyGeneratedQuiz }) => {
   return (
     <div
       className={clsx(
-        'fixed inset-0 z-50 flex items-center justify-center bg-background p-4 transition-opacity duration-300',
+        'fixed inset-0 z-50 flex items-center justify-center bg-background p-3 sm:p-4 transition-opacity duration-300',
         isSlidIn ? 'opacity-100' : 'opacity-0'
       )}
       role="dialog"
@@ -266,12 +266,12 @@ const AiQuizGeneratorPanel = ({ isOpen, onClose, onApplyGeneratedQuiz }) => {
     >
       <div
         className={clsx(
-          'w-full max-w-[400px] max-h-[90vh] flex flex-col overflow-hidden bg-background shadow-2xl rounded-2xl border border-primary/10 transition-all duration-300 ease-in-out',
+          'w-full max-w-[min(400px,100%)] max-h-[calc(100dvh-1.5rem)] flex flex-col overflow-hidden bg-background shadow-2xl rounded-2xl border border-primary/10 transition-all duration-300 ease-in-out',
           isSlidIn ? 'opacity-100 scale-100 translate-y-0' : 'opacity-0 scale-95 translate-y-2'
         )}
       >
       {/* Header */}
-      <div className="flex items-start justify-between gap-3 px-5 pt-5 pb-4 border-b border-primary/10 bg-background flex-shrink-0">
+      <div className="flex items-start justify-between gap-3 px-4 sm:px-5 pt-4 sm:pt-5 pb-4 border-b border-primary/10 bg-background flex-shrink-0">
         <div className="min-w-0">
           <h2 className="text-xl font-bold text-text tracking-tight">AI quiz assistant</h2>
           <p className="text-sm text-text/70 mt-1 leading-relaxed">
@@ -281,7 +281,7 @@ const AiQuizGeneratorPanel = ({ isOpen, onClose, onApplyGeneratedQuiz }) => {
         <button
           type="button"
           onClick={dismissModal}
-          className="p-2 rounded-lg text-text/60 hover:text-primary hover:bg-primary/10 transition-colors shrink-0"
+          className="min-h-11 min-w-11 p-2 rounded-lg text-text/60 hover:text-primary hover:bg-primary/10 transition-colors shrink-0 inline-flex items-center justify-center"
           aria-label="Close AI quiz assistant"
         >
           <X className="w-5 h-5" />
@@ -289,7 +289,7 @@ const AiQuizGeneratorPanel = ({ isOpen, onClose, onApplyGeneratedQuiz }) => {
       </div>
 
       {/* Form */}
-      <div ref={formScrollRef} className="flex-1 min-h-0 overflow-y-auto px-5 py-5 space-y-6">
+      <div ref={formScrollRef} className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden px-4 sm:px-5 py-5 space-y-6">
         {/* Prompt */}
         <div>
           <label htmlFor="ai-prompt" className="block text-sm font-semibold text-text mb-2">
@@ -327,7 +327,7 @@ const AiQuizGeneratorPanel = ({ isOpen, onClose, onApplyGeneratedQuiz }) => {
                 <label
                   key={option.value}
                   className={clsx(
-                    'flex items-center gap-3 px-4 py-3 rounded-xl border cursor-pointer transition-all',
+                    'flex items-center gap-3 min-h-11 px-4 py-3 rounded-xl border cursor-pointer transition-all',
                     isChecked
                       ? 'bg-primary/8 border-primary/30'
                       : 'bg-white border-primary/10 hover:border-primary/25'
@@ -354,7 +354,7 @@ const AiQuizGeneratorPanel = ({ isOpen, onClose, onApplyGeneratedQuiz }) => {
         {/* Difficulty */}
         <div>
           <p className="block text-sm font-semibold text-text mb-3">Difficulty</p>
-          <div className="grid grid-cols-3 gap-2">
+          <div className="flex flex-wrap gap-2">
             {DIFFICULTY_OPTIONS.map((option) => {
               const isSelected = difficulty === option.value;
               return (
@@ -363,7 +363,7 @@ const AiQuizGeneratorPanel = ({ isOpen, onClose, onApplyGeneratedQuiz }) => {
                   type="button"
                   onClick={() => setDifficulty(option.value)}
                   className={clsx(
-                    'py-2.5 px-3 rounded-xl text-sm font-semibold border transition-all',
+                    'flex-1 min-w-[5.5rem] min-h-11 py-2.5 px-3 rounded-xl text-sm font-semibold border transition-all',
                     isSelected
                       ? 'bg-primary text-white border-primary shadow-sm'
                       : 'bg-white text-text border-primary/15 hover:border-primary/35 hover:bg-primary/5'
@@ -390,14 +390,14 @@ const AiQuizGeneratorPanel = ({ isOpen, onClose, onApplyGeneratedQuiz }) => {
               value={numberOfQuestions}
               onChange={handleQuestionCountChange}
               onBlur={handleQuestionCountBlur}
-              className="flex-1 min-w-0 px-4 py-3 text-sm text-text border border-primary/15 rounded-l-xl focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary bg-white [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+              className="flex-1 min-w-0 min-h-11 px-4 py-3 text-sm text-text border border-primary/15 rounded-l-xl focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary bg-white [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
             />
-            <div className="flex flex-col border border-l-0 border-primary/15 rounded-r-xl overflow-hidden bg-white">
+            <div className="flex flex-col border border-l-0 border-primary/15 rounded-r-xl overflow-hidden bg-white min-h-11">
               <button
                 type="button"
                 onClick={() => adjustQuestionCount(1)}
                 disabled={Number(numberOfQuestions) >= 50}
-                className="flex-1 flex items-center justify-center px-3 text-primary hover:bg-primary/10 transition-colors disabled:opacity-40 disabled:cursor-not-allowed border-b border-primary/10"
+                className="flex-1 min-h-[22px] flex items-center justify-center px-3 text-primary hover:bg-primary/10 transition-colors disabled:opacity-40 disabled:cursor-not-allowed border-b border-primary/10"
                 aria-label="Increase number of questions"
               >
                 <ChevronUp className="w-4 h-4" />
@@ -406,7 +406,7 @@ const AiQuizGeneratorPanel = ({ isOpen, onClose, onApplyGeneratedQuiz }) => {
                 type="button"
                 onClick={() => adjustQuestionCount(-1)}
                 disabled={Number(numberOfQuestions) <= 1}
-                className="flex-1 flex items-center justify-center px-3 text-primary hover:bg-primary/10 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                className="flex-1 min-h-[22px] flex items-center justify-center px-3 text-primary hover:bg-primary/10 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
                 aria-label="Decrease number of questions"
               >
                 <ChevronDown className="w-4 h-4" />
@@ -417,13 +417,13 @@ const AiQuizGeneratorPanel = ({ isOpen, onClose, onApplyGeneratedQuiz }) => {
       </div>
 
       {/* Footer */}
-      <div className="px-5 py-4 bg-background border-t border-primary/10 flex-shrink-0">
+      <div className="px-4 sm:px-5 py-4 bg-background border-t border-primary/10 flex-shrink-0">
         <button
           type="button"
           onClick={handleGenerate}
           disabled={isGenerating}
           className={clsx(
-            'w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl font-semibold text-sm transition-all',
+            'w-full flex items-center justify-center gap-2 min-h-11 px-4 py-3 rounded-xl font-semibold text-sm transition-all',
             'bg-primary text-white hover:bg-[#5A344D] shadow-soft',
             'disabled:opacity-60 disabled:cursor-not-allowed'
           )}

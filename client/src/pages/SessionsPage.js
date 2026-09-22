@@ -151,7 +151,7 @@ const SessionsPage = () => {
   };
 
   return (
-    <div className="w-full space-y-8 animate-fade-in">
+    <div className="w-full space-y-8 animate-fade-in overflow-x-hidden max-w-full">
       <PageHeaderCard
         icon={ClipboardList}
         title="Sessions"
@@ -162,7 +162,7 @@ const SessionsPage = () => {
             onClick={() => setShowCreateModal(true)}
             disabled={isSessionActive}
             className={clsx(
-              'flex items-center justify-center gap-2 px-6 py-3 rounded-xl font-semibold transition-all duration-300 shrink-0',
+              'flex items-center justify-center gap-2 px-6 py-3 min-h-11 rounded-xl font-semibold transition-all duration-300 shrink-0',
               'bg-white text-[#6D415F] hover:bg-white/90',
               'shadow-lg hover:shadow-xl',
               isSessionActive && 'opacity-50 cursor-not-allowed'
@@ -180,7 +180,7 @@ const SessionsPage = () => {
           <Loader2 className="w-8 h-8 animate-spin" />
         </div>
       ) : sessions.length === 0 ? (
-        <div className="bg-white dark:bg-[#3A2E2A] rounded-3xl p-12 text-center border border-[#6D415F]/20 shadow-lg">
+        <div className="bg-white dark:bg-[#3A2E2A] rounded-3xl p-6 sm:p-12 text-center border border-[#6D415F]/20 shadow-lg">
           <div className="w-20 h-20 bg-[#6D415F]/10 rounded-full flex items-center justify-center mx-auto mb-4">
             <ClipboardList className="w-10 h-10 text-[#6D415F]" />
           </div>
@@ -193,7 +193,7 @@ const SessionsPage = () => {
             onClick={() => setShowCreateModal(true)}
             disabled={isSessionActive}
             className={clsx(
-              'inline-flex items-center gap-2 px-6 py-3 rounded-xl font-semibold',
+              'inline-flex items-center justify-center gap-2 px-6 py-3 min-h-11 rounded-xl font-semibold',
               'bg-[#6D415F] text-white hover:bg-[#6D415F]/90',
               isSessionActive && 'opacity-50 cursor-not-allowed'
             )}
@@ -356,16 +356,11 @@ const SessionCard = ({ session, onCopyCode, onDelete }) => {
   const activities = parseSessionActivities(session);
 
   return (
-    <article className="bg-white dark:bg-[#3A2E2A] rounded-2xl p-6 shadow-lg border border-[#6D415F]/20">
-      <div className={clsx(
-        'flex gap-4',
-        isActive
-          ? 'flex-row items-start justify-between'
-          : 'flex-col lg:flex-row lg:items-start lg:justify-between'
-      )}>
+    <article className="bg-white dark:bg-[#3A2E2A] rounded-2xl p-4 sm:p-6 shadow-lg border border-[#6D415F]/20 max-w-full">
+      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
         <div className="flex-1 min-w-0">
           <div className="flex flex-wrap items-center gap-3 mb-3">
-            <h2 className="text-xl font-bold text-[#2E1F2A] dark:text-white truncate">
+            <h2 className="text-lg sm:text-xl font-bold text-[#2E1F2A] dark:text-white break-words">
               {session.sessionName || 'Untitled Session'}
             </h2>
             <span
@@ -390,7 +385,7 @@ const SessionCard = ({ session, onCopyCode, onDelete }) => {
                 <button
                   type="button"
                   onClick={() => onCopyCode(session.sessionCode)}
-                  className="p-1 rounded-lg hover:bg-[#F2EBF0] text-[#6D415F]"
+                  className="min-h-11 min-w-11 inline-flex items-center justify-center rounded-lg hover:bg-[#F2EBF0] text-[#6D415F]"
                   aria-label="Copy session code"
                 >
                   <Copy className="w-4 h-4" />
@@ -406,7 +401,7 @@ const SessionCard = ({ session, onCopyCode, onDelete }) => {
 
         {isActive ? (
           <EndSessionButton
-            className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-red-500 text-white text-sm font-semibold hover:bg-red-600 transition-colors"
+            className="shrink-0 flex items-center justify-center gap-1.5 min-h-11 px-4 py-2.5 rounded-xl bg-red-500 text-white text-sm font-semibold hover:bg-red-600 transition-colors"
             labelClassName=""
           />
         ) : (
@@ -414,7 +409,7 @@ const SessionCard = ({ session, onCopyCode, onDelete }) => {
             <button
               type="button"
               onClick={() => onDelete(session)}
-              className="shrink-0 p-2 rounded-xl text-gray-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-500/10 transition-colors"
+              className="shrink-0 min-h-11 min-w-11 inline-flex items-center justify-center rounded-xl text-gray-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-500/10 transition-colors"
               aria-label="Delete session"
               title="Delete session"
             >

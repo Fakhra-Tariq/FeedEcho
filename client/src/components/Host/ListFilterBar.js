@@ -39,7 +39,7 @@ export default function ListFilterBar({
             type="button"
             onClick={() => onTabChange?.(tab)}
             className={clsx(
-              'px-4 py-2 rounded-xl font-medium text-sm transition-all duration-200',
+              'min-h-11 px-4 py-2 rounded-xl font-medium text-sm transition-all duration-200',
               activeTab === tab
                 ? 'bg-primary text-white shadow-md'
                 : 'bg-white text-text-light border border-primary/15 hover:text-text hover:border-primary/30'
@@ -57,7 +57,7 @@ export default function ListFilterBar({
           value={searchTerm}
           onChange={(event) => onSearchChange?.(event.target.value)}
           placeholder={searchPlaceholder}
-          className="w-full pl-11 pr-4 py-2.5 bg-white border border-primary/15 rounded-xl text-sm text-text placeholder-text-light focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary/40 transition-all duration-200"
+          className="w-full min-h-11 pl-11 pr-4 py-2.5 bg-white border border-primary/15 rounded-xl text-sm text-text placeholder-text-light focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary/40 transition-all duration-200"
         />
       </div>
     </div>

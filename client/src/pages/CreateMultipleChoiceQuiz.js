@@ -187,17 +187,25 @@ const CreateMultipleChoiceQuiz = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-orange-50 via-white to-purple-50">
-      <div className="container mx-auto px-3 sm:px-4 lg:px-6 py-2 sm:py-3 lg:py-4">
+    <div className="min-h-screen bg-gradient-to-br from-orange-50 via-white to-purple-50 overflow-x-hidden max-w-full">
+      <div className="w-full max-w-full py-2 sm:py-3 lg:py-4">
         {/* Page Header with Navigation */}
         <div className="mb-2 sm:mb-3 lg:mb-4">
-          <div className="flex items-center justify-end">
-            <div className="flex items-center space-x-3">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <div className="min-w-0">
+              <h1 className="text-[clamp(1.375rem,5vw,2.25rem)] font-bold text-gray-900 mb-1 sm:mb-2 break-words">
+                Create Multiple Choice Quiz
+              </h1>
+              <p className="text-sm sm:text-base lg:text-lg text-gray-600 max-w-2xl">
+                Add your quiz title and start creating questions
+              </p>
+            </div>
+            <div className="flex flex-wrap items-stretch gap-2 w-full sm:w-auto sm:justify-end">
               {/* Save Quiz Button */}
               <button
                 onClick={saveQuiz}
                 disabled={isQuizSaved}
-                className={`flex items-center space-x-2 px-4 sm:px-6 py-2 sm:py-3 rounded-xl font-medium text-sm sm:text-base shadow-sm hover:shadow-md transition-all ${
+                className={`flex items-center justify-center space-x-2 min-h-11 px-4 sm:px-6 py-2 sm:py-3 rounded-xl font-medium text-sm sm:text-base shadow-sm hover:shadow-md transition-all flex-1 sm:flex-none ${
                   isQuizSaved
                     ? 'bg-purple-100 text-purple-700 border border-purple-300 cursor-not-allowed'
                     : 'bg-[#6D415F] text-white hover:bg-[#5A344D]'
@@ -218,10 +226,10 @@ const CreateMultipleChoiceQuiz = () => {
 
               {/* Launch Quiz Button - Secondary, appears after saving */}
               {isQuizSaved && (
-                <div className="flex flex-col items-end">
+                <div className="flex flex-col items-stretch flex-1 sm:flex-none">
                   <button
                     onClick={launchQuiz}
-                    className="flex items-center space-x-2 px-4 sm:px-6 py-2 sm:py-3 bg-[#6D415F] text-white rounded-xl hover:bg-[#5A344D] transition-colors font-medium text-sm sm:text-base shadow-sm hover:shadow-md"
+                    className="flex items-center justify-center space-x-2 min-h-11 px-4 sm:px-6 py-2 sm:py-3 bg-[#6D415F] text-white rounded-xl hover:bg-[#5A344D] transition-colors font-medium text-sm sm:text-base shadow-sm hover:shadow-md w-full"
                   >
                     <Rocket className="w-4 h-4 sm:w-5 sm:h-5" />
                     <span>Launch Quiz</span>
@@ -231,18 +239,11 @@ const CreateMultipleChoiceQuiz = () => {
               )}
             </div>
           </div>
-
-          <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-gray-900 mb-1 sm:mb-2 mt-1">
-            Create Multiple Choice Quiz
-          </h1>
-          <p className="text-sm sm:text-base lg:text-lg text-gray-600 max-w-2xl">
-            Add your quiz title and start creating questions
-          </p>
         </div>
 
         {/* Quiz Title Section */}
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-2 sm:p-3 lg:p-4 mb-2 sm:mb-3 lg:mb-4">
-          <div className="max-w-3xl">
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-3 sm:p-3 lg:p-4 mb-2 sm:mb-3 lg:mb-4 max-w-full">
+          <div className="w-full max-w-3xl">
             <label htmlFor="quizTitle" className="block text-sm sm:text-base font-semibold text-gray-700 mb-1 sm:mb-2">
               Quiz Title
             </label>
@@ -252,7 +253,7 @@ const CreateMultipleChoiceQuiz = () => {
               value={quizTitle}
               onChange={(e) => setQuizTitle(e.target.value)}
               placeholder="Enter your quiz title..."
-              className="w-full px-3 sm:px-4 py-2 sm:py-3 text-sm sm:text-base border border-gray-200 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all duration-200 bg-orange-50/50 hover:bg-orange-50/70"
+              className="w-full min-h-11 px-3 sm:px-4 py-2 sm:py-3 text-sm sm:text-base border border-gray-200 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all duration-200 bg-orange-50/50 hover:bg-orange-50/70"
             />
           </div>
         </div>
@@ -265,17 +266,17 @@ const CreateMultipleChoiceQuiz = () => {
 
           {/* Questions List */}
           {questions.map((question, questionIndex) => (
-            <div key={question.id} className="bg-white rounded-2xl shadow-sm border border-gray-100 p-3 sm:p-4 lg:p-5">
-              <div className="flex items-start justify-between mb-4 sm:mb-6">
-                <h3 className="text-lg sm:text-xl font-semibold text-gray-900">
+            <div key={question.id} className="bg-white rounded-2xl shadow-sm border border-gray-100 p-3 sm:p-4 lg:p-5 max-w-full min-w-0">
+              <div className="flex flex-wrap items-start justify-between gap-2 mb-4 sm:mb-6">
+                <h3 className="text-lg sm:text-xl font-semibold text-gray-900 min-w-0 break-words">
                   Question {questionIndex + 1}
                 </h3>
                 <button
                   onClick={() => removeQuestion(question.id)}
-                  className="flex items-center space-x-1 text-red-500 hover:text-red-700 transition-colors p-2 rounded-lg hover:bg-red-50"
+                  className="inline-flex items-center justify-center space-x-1 min-h-11 px-3 text-red-500 hover:text-red-700 transition-colors rounded-lg hover:bg-red-50 shrink-0"
                 >
                   <Trash2 className="w-4 h-4 sm:w-5 sm:h-5" />
-                  <span className="text-sm font-medium hidden sm:inline">Remove</span>
+                  <span className="text-sm font-medium">Remove</span>
                 </button>
               </div>
 
@@ -299,11 +300,11 @@ const CreateMultipleChoiceQuiz = () => {
                   Answer Options
                 </label>
                 {question.options.map((option) => (
-                  <div key={option.id} className="flex items-center space-x-3 sm:space-x-4">
+                  <div key={option.id} className="flex items-center gap-2 sm:gap-4 min-w-0">
                     {/* Radio Button */}
                     <button
                       onClick={() => setCorrectOption(question.id, option.id)}
-                      className="flex-shrink-0"
+                      className="flex-shrink-0 min-h-11 min-w-11 inline-flex items-center justify-center"
                     >
                       <div className={`w-5 h-5 sm:w-6 sm:h-6 rounded-full border-2 flex items-center justify-center transition-all duration-200 ${
                         option.isCorrect 
@@ -327,7 +328,7 @@ const CreateMultipleChoiceQuiz = () => {
                       value={option.text}
                       onChange={(e) => updateOptionText(question.id, option.id, e.target.value)}
                       placeholder={`Option ${option.id.toUpperCase()}`}
-                      className="flex-1 px-4 py-2 sm:py-3 text-sm sm:text-base border border-gray-200 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all duration-200 bg-orange-50/50 hover:bg-orange-50/70"
+                      className="flex-1 min-w-0 min-h-11 px-3 sm:px-4 py-2 sm:py-3 text-sm sm:text-base border border-gray-200 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all duration-200 bg-orange-50/50 hover:bg-orange-50/70"
                     />
                   </div>
                 ))}
@@ -340,7 +341,7 @@ const CreateMultipleChoiceQuiz = () => {
             <div className="flex justify-center mt-8">
               <button
                 onClick={addQuestion}
-                className="flex items-center space-x-2 px-6 sm:px-8 py-3 sm:py-4 bg-[#6D415F] text-white rounded-xl hover:bg-[#5A344D] transition-colors font-medium text-sm sm:text-base shadow-sm hover:shadow-md"
+                className="flex items-center justify-center space-x-2 w-full sm:w-auto min-h-11 px-6 sm:px-8 py-3 sm:py-4 bg-[#6D415F] text-white rounded-xl hover:bg-[#5A344D] transition-colors font-medium text-sm sm:text-base shadow-sm hover:shadow-md"
               >
                 <Plus className="w-5 h-5 sm:w-6 sm:h-6" />
                 <span>Add Question</span>
@@ -361,7 +362,7 @@ const CreateMultipleChoiceQuiz = () => {
                 </p>
                 <button
                   onClick={addQuestion}
-                  className="flex items-center space-x-2 px-5 py-2.5 bg-[#6D415F] text-white rounded-xl hover:bg-[#5A344D] transition-colors font-medium text-sm sm:text-base shadow-sm hover:shadow-md mx-auto"
+                  className="flex items-center justify-center space-x-2 min-h-11 w-full sm:w-auto px-5 py-2.5 bg-[#6D415F] text-white rounded-xl hover:bg-[#5A344D] transition-colors font-medium text-sm sm:text-base shadow-sm hover:shadow-md mx-auto"
                 >
                   <Plus className="w-4 h-4 sm:w-5 sm:h-5" />
                   <span>Add First Question</span>

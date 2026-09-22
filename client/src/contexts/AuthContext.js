@@ -20,6 +20,7 @@ import { schedulePendingQuizSubmissionSync } from '../utils/quizSubmissionSync';
 import {
   canAccessStudentPortal,
   canAccessTeacherPortal,
+  isActiveAudienceStudent,
   setActivePortal as persistActivePortal,
   clearActivePortal as clearPersistedActivePortal,
   getActivePortal,
@@ -166,8 +167,8 @@ export const AuthProvider = ({ children }) => {
               );
 
               if (
-                canAccessStudentPortal(profile) &&
-                (getActivePortal() === 'student' || getStoredAudienceSession())
+                isActiveAudienceStudent(profile, getActivePortal()) ||
+                getStoredAudienceSession()
               ) {
                 persistAudienceSession(profile);
                 if (getActivePortal() !== 'student') {

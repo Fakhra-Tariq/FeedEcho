@@ -1,6 +1,8 @@
 import React from 'react';
-import { Link } from 'react-router-dom';
+import { Link, Navigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import { isActiveAudienceStudent, isActiveHostTeacher } from '../utils/userRoles';
+import { useMarketingPageScrollToTop } from '../hooks/useMarketingPageScrollToTop';
 import { Reveal, RevealStagger } from '../components/Reveal';
 import {
   SurfaceCard,
@@ -22,11 +24,20 @@ import {
 } from 'lucide-react';
 
 const Home = () => {
+  useMarketingPageScrollToTop();
   const { userProfile, activePortal } = useAuth();
   // Portal is set at login (host vs audience); do not infer from email/profile.role
-  const isAudienceSession = activePortal === 'student';
-  const isHostSession = activePortal === 'teacher';
+  const isAudienceSession = isActiveAudienceStudent(userProfile, activePortal);
+  const isHostSession = isActiveHostTeacher(userProfile, activePortal);
   const isLoggedIn = Boolean(userProfile) && (isAudienceSession || isHostSession);
+
+  if (isHostSession) {
+    return <Navigate to="/host/explore" replace />;
+  }
+
+  if (isAudienceSession) {
+    return <Navigate to="/audience/home" replace />;
+  }
 
   const features = [
     {
@@ -103,7 +114,7 @@ const Home = () => {
   ];
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-background overflow-x-hidden max-w-full">
       {/* 1. Hero */}
       <section className="relative overflow-hidden">
         <div
@@ -112,17 +123,17 @@ const Home = () => {
         />
         <div className={marketingHeroClass}>
           <Reveal immediate className="text-center max-w-4xl mx-auto">
-            <h1 className="text-4xl sm:text-5xl md:text-6xl font-bold text-text tracking-tight leading-tight mb-5">
+            <h1 className="text-[clamp(1.5rem,5vw+0.75rem,3.75rem)] font-bold text-text tracking-tight leading-tight mb-5">
               Close the Gap.
               <span className="text-primary">{' '}In Real Time.</span>
             </h1>
-            <p className="text-lg sm:text-xl text-text-light leading-relaxed mb-8 max-w-3xl mx-auto">
+            <p className="text-base sm:text-lg md:text-xl text-text-light leading-relaxed mb-8 max-w-3xl mx-auto">
               FeedEcho is a live engagement platform for speakers and audiences —
               in classrooms, seminars, webinars, and corporate training sessions.
             </p>
 
             {!isLoggedIn ? (
-              <div className="flex flex-col sm:flex-row gap-4 justify-center">
+              <div className="flex flex-col sm:flex-row gap-4 justify-center w-full max-w-md mx-auto sm:max-w-none">
                 <Link to="/join" className="btn-marketing-primary">
                   <span>Join a Session</span>
                   <ArrowRight className="w-5 h-5" />
@@ -132,7 +143,7 @@ const Home = () => {
                 </Link>
               </div>
             ) : isAudienceSession ? (
-              <div className="flex flex-col sm:flex-row gap-4 justify-center">
+              <div className="flex flex-col sm:flex-row gap-4 justify-center w-full max-w-md mx-auto sm:max-w-none">
                 <Link to="/audience/home" className="btn-marketing-primary">
                   <span>Go to Dashboard</span>
                   <ArrowRight className="w-5 h-5" />
@@ -143,7 +154,7 @@ const Home = () => {
                 </Link>
               </div>
             ) : (
-              <div className="flex flex-col sm:flex-row gap-4 justify-center">
+              <div className="flex flex-col sm:flex-row gap-4 justify-center w-full max-w-md mx-auto sm:max-w-none">
                 <Link to="/host/explore" className="btn-marketing-primary">
                   <span>Go to Explore</span>
                   <ArrowRight className="w-5 h-5" />
@@ -162,7 +173,7 @@ const Home = () => {
       <section className="relative">
         <div className={marketingSectionBottomClass}>
           <RevealStagger
-            className="grid grid-cols-2 md:grid-cols-4 gap-4 sm:gap-6"
+            className="grid grid-cols-1 min-[481px]:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6"
             itemClassName="h-full"
           >
             {highlights.map((item) => {
@@ -187,10 +198,10 @@ const Home = () => {
       <section className="relative bg-white/40 border-y border-neutral-200/60">
         <div className={marketingSectionClass}>
           <Reveal className="text-center mb-10 sm:mb-12 max-w-3xl mx-auto">
-            <h2 className="text-3xl md:text-4xl font-bold text-text tracking-tight leading-tight mb-4">
+            <h2 className="text-[clamp(1.5rem,4vw+0.5rem,2.25rem)] font-bold text-text tracking-tight leading-tight mb-4">
               Built for Every Room. Not Just Classrooms.
             </h2>
-            <p className="text-lg sm:text-xl text-text-light leading-relaxed">
+            <p className="text-base sm:text-lg md:text-xl text-text-light leading-relaxed">
               Whether you are teaching a university lecture, running a corporate
               workshop, or hosting a webinar — FeedEcho gives every participant a
               voice.
@@ -225,10 +236,10 @@ const Home = () => {
       <section className="relative">
         <div className={marketingSectionClass}>
           <Reveal className="text-center mb-10 sm:mb-12">
-            <h2 className="text-3xl md:text-4xl font-bold text-text tracking-tight leading-tight mb-4">
+            <h2 className="text-[clamp(1.5rem,4vw+0.5rem,2.25rem)] font-bold text-text tracking-tight leading-tight mb-4">
               How It Works
             </h2>
-            <p className="text-lg sm:text-xl text-text-light leading-relaxed">
+            <p className="text-base sm:text-lg md:text-xl text-text-light leading-relaxed">
               Get started in three simple steps
             </p>
           </Reveal>

@@ -261,14 +261,14 @@ const collectReportDataForQuiz = (quiz, submissionsByQuizId, participantsByQuizI
 };
 
 const OverviewStatCard = ({ label, icon: Icon, value, caption }) => (
-  <div className="bg-[#F2EBF0] rounded-2xl border border-[#6D415F]/20 p-5 shadow-sm">
-    <div className="flex items-center justify-between gap-3 mb-3">
+  <div className="bg-[#F2EBF0] rounded-2xl border border-[#6D415F]/20 p-3 sm:p-5 shadow-sm min-w-0">
+    <div className="flex items-center justify-between gap-2 sm:gap-3 mb-3">
       <p className="text-xs font-semibold uppercase tracking-wide text-text-light">{label}</p>
-      <div className="w-11 h-11 rounded-full bg-[#6D415F] flex items-center justify-center shadow-lg shrink-0">
-        <Icon className="w-5 h-5 text-white" />
+      <div className="w-9 h-9 sm:w-11 sm:h-11 rounded-full bg-[#6D415F] flex items-center justify-center shadow-lg shrink-0">
+        <Icon className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
       </div>
     </div>
-    <p className="text-3xl font-bold text-text">{value}</p>
+    <p className="text-2xl sm:text-3xl font-bold text-text break-words">{value}</p>
     {caption && <p className="text-xs text-text-light mt-1">{caption}</p>}
   </div>
 );
@@ -678,7 +678,7 @@ export default function HostReports() {
   };
 
   return (
-    <div className="w-full space-y-8">
+    <div className="w-full space-y-8 overflow-x-hidden max-w-full">
       {/* Header */}
       <PageHeaderCard
         compact
@@ -687,7 +687,7 @@ export default function HostReports() {
       />
 
       {/* Overview stats */}
-      <section className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <section className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
         <OverviewStatCard label="Quizzes" icon={BarChart3} value={overviewStats.totalQuizzes} />
         <OverviewStatCard label="Participants" icon={Users} value={overviewStats.totalParticipants} />
         <OverviewStatCard label="Avg score" icon={Award} value={`${overviewStats.avgScore}%`} />
@@ -713,7 +713,7 @@ export default function HostReports() {
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               placeholder="Search quizzes..."
-              className="w-full pl-10 pr-4 py-2.5 text-sm border border-primary/15 rounded-xl focus:ring-2 focus:ring-primary/20 focus:border-primary bg-white text-text"
+              className="w-full min-h-11 pl-10 pr-4 py-2.5 text-sm border border-primary/15 rounded-xl focus:ring-2 focus:ring-primary/20 focus:border-primary bg-white text-text"
             />
           </div>
         </div>
@@ -726,8 +726,8 @@ export default function HostReports() {
             <p className="text-text-light">No quizzes found in your library.</p>
           </div>
         ) : (
-        <div className="overflow-x-auto">
-          <table className="w-full">
+        <div className="overflow-x-auto max-w-full">
+          <table className="w-full min-w-[720px]">
               <thead>
                 <tr className="bg-primary/5 text-left">
                   <th className="px-5 py-3 text-xs font-semibold uppercase tracking-wide text-text-light">Quiz</th>
@@ -776,7 +776,7 @@ export default function HostReports() {
                         <button
                           type="button"
                           onClick={() => openQuizReport(report)}
-                          className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-primary border border-primary/20 rounded-lg hover:bg-primary/10 transition-colors"
+                          className="inline-flex items-center gap-1.5 min-h-11 px-3 py-2 text-sm font-medium text-primary border border-primary/20 rounded-lg hover:bg-primary/10 transition-colors"
                         >
                           <Eye className="w-4 h-4" />
                           View
@@ -784,7 +784,7 @@ export default function HostReports() {
                         <button
                           type="button"
                           onClick={() => setDeleteConfirmQuizId(report.quiz.id)}
-                          className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-red-600 border border-red-200 rounded-lg hover:bg-red-50 transition-colors"
+                          className="inline-flex items-center gap-1.5 min-h-11 px-3 py-2 text-sm font-medium text-red-600 border border-red-200 rounded-lg hover:bg-red-50 transition-colors"
                         >
                           <Trash2 className="w-4 h-4" />
                           Delete
@@ -966,7 +966,7 @@ export default function HostReports() {
                                       setSelectedSubmission(submission);
                                       setReportModalView('detail');
                                     }}
-                                    className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium bg-primary text-white rounded-lg hover:bg-[#5A344D] transition-colors"
+                                    className="inline-flex items-center justify-center gap-1.5 min-h-11 px-3 py-2 text-sm font-medium bg-primary text-white rounded-lg hover:bg-[#5A344D] transition-colors"
                                   >
                                     <Eye className="w-4 h-4" />
                                     View details
@@ -1032,7 +1032,7 @@ export default function HostReports() {
                             <button
                               type="button"
                               onClick={() => openLaunchReport(launch)}
-                              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium bg-primary text-white rounded-lg hover:bg-[#5A344D] transition-colors shrink-0"
+                              className="inline-flex items-center justify-center gap-1.5 min-h-11 px-3 py-2 text-sm font-medium bg-primary text-white rounded-lg hover:bg-[#5A344D] transition-colors shrink-0"
                             >
                               <Eye className="w-4 h-4" />
                               View

@@ -266,12 +266,12 @@ const MixedTypeQuizEditor = () => {
     const config = getQuestionTypeConfig(question.type);
 
     return (
-      <div key={question.id} className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4 sm:p-6 lg:p-8">
-        <div className="flex items-start justify-between mb-4 sm:mb-6">
-          <div className="flex items-center space-x-3">
-            <div className="text-2xl">{config.icon}</div>
-            <div>
-              <h3 className="text-lg sm:text-xl font-semibold text-gray-900">
+      <div key={question.id} className="bg-white rounded-2xl shadow-sm border border-gray-100 p-3 sm:p-6 lg:p-8 max-w-full min-w-0">
+        <div className="flex flex-wrap items-start justify-between gap-2 mb-4 sm:mb-6">
+          <div className="flex items-center space-x-3 min-w-0">
+            <div className="text-2xl shrink-0">{config.icon}</div>
+            <div className="min-w-0">
+              <h3 className="text-lg sm:text-xl font-semibold text-gray-900 break-words">
                 Question {index + 1}
               </h3>
               <p className="text-sm text-gray-500">{config.label}</p>
@@ -279,10 +279,10 @@ const MixedTypeQuizEditor = () => {
           </div>
           <button
             onClick={() => removeQuestion(question.id)}
-            className="flex items-center space-x-1 text-red-500 hover:text-red-700 transition-colors p-2 rounded-lg hover:bg-red-50"
+            className="inline-flex items-center justify-center space-x-1 min-h-11 px-3 text-red-500 hover:text-red-700 transition-colors rounded-lg hover:bg-red-50 shrink-0"
           >
             <Trash2 className="w-4 h-4 sm:w-5 sm:h-5" />
-            <span className="text-sm font-medium hidden sm:inline">Remove</span>
+            <span className="text-sm font-medium">Remove</span>
           </button>
         </div>
 
@@ -310,11 +310,11 @@ const MixedTypeQuizEditor = () => {
               const isCorrect = question.correctAnswer === optIndex;
               const optionLetter = String.fromCharCode(65 + optIndex);
               return (
-                <div key={optIndex} className="flex items-center space-x-3 sm:space-x-4">
+                <div key={optIndex} className="flex items-center gap-2 sm:gap-4 min-w-0">
                   <button
                     type="button"
                     onClick={() => updateQuestion(question.id, { correctAnswer: optIndex })}
-                    className="flex-shrink-0"
+                    className="flex-shrink-0 min-h-11 min-w-11 inline-flex items-center justify-center"
                   >
                     <div
                       className={`w-5 h-5 sm:w-6 sm:h-6 rounded-full border-2 flex items-center justify-center transition-all duration-200 ${
@@ -340,7 +340,7 @@ const MixedTypeQuizEditor = () => {
                       updateQuestion(question.id, { options: newOptions });
                     }}
                     placeholder={`Option ${optionLetter}`}
-                    className="flex-1 px-4 py-2 sm:py-3 text-sm sm:text-base border border-gray-200 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all duration-200 bg-orange-50/50 hover:bg-orange-50/70"
+                    className="flex-1 min-w-0 min-h-11 px-3 sm:px-4 py-2 sm:py-3 text-sm sm:text-base border border-gray-200 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all duration-200 bg-orange-50/50 hover:bg-orange-50/70"
                   />
                 </div>
               );
@@ -353,11 +353,11 @@ const MixedTypeQuizEditor = () => {
             <label className="block text-sm sm:text-base font-semibold text-gray-700 mb-2">
               Answer Options
             </label>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
+            <div className="grid grid-cols-1 min-[481px]:grid-cols-2 gap-3 sm:gap-4">
               <button
                 type="button"
                 onClick={() => updateQuestion(question.id, { correctAnswer: true })}
-                className={`flex items-center space-x-3 px-4 py-3 rounded-xl border-2 transition-all duration-200 font-medium text-sm sm:text-base ${
+                className={`flex items-center space-x-3 min-h-11 px-4 py-3 rounded-xl border-2 transition-all duration-200 font-medium text-sm sm:text-base ${
                   question.correctAnswer === true
                     ? 'border-[#6D415F] bg-[#6D415F] text-white'
                     : 'border-gray-300 bg-white text-gray-700 hover:border-[#6D415F] hover:bg-orange-50'
@@ -380,7 +380,7 @@ const MixedTypeQuizEditor = () => {
               <button
                 type="button"
                 onClick={() => updateQuestion(question.id, { correctAnswer: false })}
-                className={`flex items-center space-x-3 px-4 py-3 rounded-xl border-2 transition-all duration-200 font-medium text-sm sm:text-base ${
+                className={`flex items-center space-x-3 min-h-11 px-4 py-3 rounded-xl border-2 transition-all duration-200 font-medium text-sm sm:text-base ${
                   question.correctAnswer === false
                     ? 'border-[#6D415F] bg-[#6D415F] text-white'
                     : 'border-gray-300 bg-white text-gray-700 hover:border-[#6D415F] hover:bg-orange-50'
@@ -422,18 +422,26 @@ const MixedTypeQuizEditor = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-orange-50 via-white to-purple-50">
+    <div className="min-h-screen bg-gradient-to-br from-orange-50 via-white to-purple-50 overflow-x-hidden max-w-full">
       {!showAiPanel && (
-      <div className="container mx-auto px-3 sm:px-4 lg:px-6 py-4 sm:py-6 lg:py-8">
+      <div className="w-full max-w-full py-4 sm:py-6 lg:py-8">
         {/* Page Header with Navigation */}
         <div className="mb-6 sm:mb-8 lg:mb-10">
-          <div className="flex items-center justify-end">
-            <div className="flex items-center space-x-3">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <div className="min-w-0">
+              <h1 className="text-[clamp(1.375rem,5vw,2.25rem)] font-bold text-gray-900 mb-2 sm:mb-4 break-words">
+                Create Mixed Type Quiz
+              </h1>
+              <p className="text-sm sm:text-base lg:text-lg text-gray-600 max-w-2xl">
+                Add your quiz title and start creating questions with different types
+              </p>
+            </div>
+            <div className="flex flex-wrap items-stretch gap-2 w-full sm:w-auto sm:justify-end">
               <button
                 type="button"
                 onClick={() => setShowAiPanel(true)}
                 className={clsx(
-                  'flex items-center space-x-2 px-4 sm:px-5 py-2 sm:py-3 rounded-xl font-medium text-sm sm:text-base shadow-sm hover:shadow-md transition-all',
+                  'flex items-center justify-center space-x-2 min-h-11 px-4 sm:px-5 py-2 sm:py-3 rounded-xl font-medium text-sm sm:text-base shadow-sm hover:shadow-md transition-all flex-1 sm:flex-none',
                   showAiPanel
                     ? 'bg-primary/10 text-primary border border-primary/20'
                     : 'bg-white text-primary border border-primary/20 hover:bg-primary/5'
@@ -447,7 +455,7 @@ const MixedTypeQuizEditor = () => {
               <button
                 onClick={saveQuiz}
                 disabled={isQuizSaved}
-                className={`flex items-center space-x-2 px-4 sm:px-6 py-2 sm:py-3 rounded-xl font-medium text-sm sm:text-base shadow-sm hover:shadow-md transition-all ${
+                className={`flex items-center justify-center space-x-2 min-h-11 px-4 sm:px-6 py-2 sm:py-3 rounded-xl font-medium text-sm sm:text-base shadow-sm hover:shadow-md transition-all flex-1 sm:flex-none ${
                   isQuizSaved 
                     ? 'bg-purple-100 text-purple-700 border border-purple-300 cursor-not-allowed' 
                     : 'bg-[#6D415F] text-white hover:bg-[#5A344D]'
@@ -468,12 +476,12 @@ const MixedTypeQuizEditor = () => {
 
               {/* Launch Quiz Button - Secondary, appears after saving */}
               {isQuizSaved && (
-                <div className="flex flex-col items-end">
+                <div className="flex flex-col items-stretch flex-1 sm:flex-none min-w-[10rem]">
                   <button
                     onClick={launchQuiz}
                     disabled={isQuizLaunched}
                     className={clsx(
-                      'flex items-center space-x-2 px-4 sm:px-6 py-2 sm:py-3 rounded-xl font-medium text-sm sm:text-base shadow-sm transition-all',
+                      'flex items-center justify-center space-x-2 min-h-11 px-4 sm:px-6 py-2 sm:py-3 rounded-xl font-medium text-sm sm:text-base shadow-sm transition-all w-full',
                       isQuizLaunched
                         ? 'bg-purple-100 text-purple-700 border border-purple-300 cursor-not-allowed'
                         : 'bg-[#6D415F] text-white hover:bg-[#5A344D] hover:shadow-md'
@@ -487,18 +495,11 @@ const MixedTypeQuizEditor = () => {
               )}
             </div>
           </div>
-          
-          <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-gray-900 mb-3 sm:mb-4 mt-1">
-            Create Mixed Type Quiz
-          </h1>
-          <p className="text-sm sm:text-base lg:text-lg text-gray-600 max-w-2xl">
-            Add your quiz title and start creating questions with different types
-          </p>
         </div>
 
         {/* Quiz Title Section */}
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4 sm:p-6 lg:p-8 mb-6 sm:mb-8 lg:mb-10">
-          <div className="max-w-3xl">
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4 sm:p-6 lg:p-8 mb-6 sm:mb-8 lg:mb-10 max-w-full">
+          <div className="w-full max-w-3xl">
             <label htmlFor="quizTitle" className="block text-sm sm:text-base font-semibold text-gray-700 mb-2 sm:mb-3">
               Quiz Title
             </label>
@@ -508,7 +509,7 @@ const MixedTypeQuizEditor = () => {
               value={quizTitle}
               onChange={(e) => setQuizTitle(e.target.value)}
               placeholder="Enter your quiz title..."
-              className="w-full px-4 sm:px-5 py-3 sm:py-4 text-sm sm:text-base border border-gray-200 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all duration-200 bg-orange-50/50 hover:bg-orange-50/70"
+              className="w-full min-h-11 px-4 sm:px-5 py-3 sm:py-4 text-sm sm:text-base border border-gray-200 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all duration-200 bg-orange-50/50 hover:bg-orange-50/70"
             />
           </div>
         </div>
@@ -524,7 +525,7 @@ const MixedTypeQuizEditor = () => {
 
           {/* Add Question Button - Only after questions */}
           {questions.length > 0 && (
-            <div className="flex justify-center mt-8">
+            <div className="flex justify-center mt-8 w-full">
               <QuestionTypeDropdown onAddQuestion={addQuestion} />
             </div>
           )}
@@ -532,7 +533,7 @@ const MixedTypeQuizEditor = () => {
           {/* Empty State - Only when no questions */}
           {questions.length === 0 && (
             <div className="text-center py-12 sm:py-16">
-              <div className="bg-orange-50 rounded-2xl p-8 sm:p-12 max-w-md mx-auto">
+              <div className="bg-orange-50 rounded-2xl p-6 sm:p-12 max-w-md mx-auto">
                 <div className="text-4xl sm:text-5xl mb-4">🎯</div>
                 <h3 className="text-lg sm:text-xl font-semibold text-gray-900 mb-2">
                   No questions yet

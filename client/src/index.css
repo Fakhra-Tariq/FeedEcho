@@ -144,7 +144,8 @@ body {
 
 @media (max-width: 768px) {
   .marketing-hero-sketch {
-    width: 42%;
+    width: min(42%, 12rem);
+    max-width: 100%;
     opacity: 0.22;
   }
 }
@@ -198,6 +199,7 @@ body {
     bg-primary text-white rounded-lg font-medium shadow-sm
     transition-all duration-200 ease-out
     hover:bg-primary/90 hover:shadow-md hover:scale-[1.02] active:scale-[0.98];
+  min-height: 44px;
 }
 
 .btn-marketing-secondary {
@@ -205,6 +207,31 @@ body {
     bg-white text-primary border-2 border-primary rounded-lg font-medium shadow-sm
     transition-all duration-200 ease-out
     hover:bg-primary/10 hover:shadow-md hover:scale-[1.02] active:scale-[0.98];
+  min-height: 44px;
+}
+
+@media (max-width: 768px) {
+  .btn-marketing-primary,
+  .btn-marketing-secondary {
+    width: 100%;
+    padding-left: 1.25rem;
+    padding-right: 1.25rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .marketing-hero-sketch {
+    display: none;
+  }
+
+  .surface-card {
+    padding: 1.25rem;
+  }
+
+  .marketing-hero-copy-panel {
+    padding-left: 1rem;
+    padding-right: 1rem;
+  }
 }
 
 .card {

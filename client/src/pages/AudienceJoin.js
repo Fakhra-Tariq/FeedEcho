@@ -178,8 +178,8 @@ const AudienceJoin = () => {
     console.log('🎨 Rendering team selection UI with', teamOptions.length, 'teams');
 
     return (
-      <div className="min-h-screen bg-background flex items-center justify-center p-4">
-        <div className="w-full max-w-md bg-white rounded-2xl shadow-soft border border-neutral-200 p-8">
+      <div className="min-h-screen bg-background flex items-center justify-center p-4 overflow-x-hidden max-w-full">
+        <div className="w-full max-w-md mx-auto bg-white rounded-2xl shadow-soft border border-neutral-200 p-5 sm:p-8">
           <h2 className="text-xl font-bold text-text mb-2 text-center">Choose your team</h2>
           <p className="text-text/70 text-sm mb-6 text-center">
             Select a team to join (max {maxStudentsPerTeam} participants per team)
@@ -219,7 +219,7 @@ const AudienceJoin = () => {
             type="button"
             onClick={handleTeamSelect}
             disabled={!selectedTeam || isLoading}
-            className="w-full py-3 bg-primary text-white font-semibold rounded-lg hover:bg-primary/90 disabled:opacity-50"
+            className="w-full min-h-11 py-3 bg-primary text-white font-semibold rounded-lg hover:bg-primary/90 disabled:opacity-50"
           >
             {isLoading ? 'Joining...' : 'Continue'}
           </button>
@@ -230,7 +230,7 @@ const AudienceJoin = () => {
               setRaceData(null);
               setSelectedTeam('');
             }}
-            className="w-full py-2 text-text/70 hover:text-text text-sm mt-2"
+            className="w-full min-h-11 py-3 text-text/70 hover:text-text text-sm mt-2"
           >
             Back
           </button>
@@ -240,8 +240,8 @@ const AudienceJoin = () => {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center px-4 py-10 bg-background">
-      <div className="w-full max-w-md bg-white rounded-2xl shadow-lg p-8">
+    <div className="min-h-screen flex items-center justify-center px-4 py-10 bg-background overflow-x-hidden max-w-full">
+      <div className="w-full max-w-md mx-auto bg-white rounded-2xl shadow-lg p-5 sm:p-8">
         <h1 className="text-2xl font-bold text-text mb-2">Join Session</h1>
         <p className="text-text-light mb-6">Enter your name and the session code shared by your host.</p>
 
@@ -251,7 +251,7 @@ const AudienceJoin = () => {
             <input
               value={name}
               onChange={(e) => setName(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
+              className="w-full min-h-11 px-3 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
               placeholder="e.g. Ali"
               disabled={isLoading}
               required
@@ -263,7 +263,7 @@ const AudienceJoin = () => {
             <input
               value={code}
               onChange={(e) => setCode(e.target.value.toUpperCase())} // Auto-uppercase
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
+              className="w-full min-h-11 px-3 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
               placeholder="e.g. AB12CD"
               maxLength={6} // Exactly 6 characters
               disabled={isLoading}
@@ -280,7 +280,7 @@ const AudienceJoin = () => {
           <button
             type="submit"
             disabled={isLoading}
-            className="w-full py-3 bg-primary text-white rounded-lg hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            className="w-full min-h-11 py-3 bg-primary text-white rounded-lg hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
           >
             {isLoading ? 'Joining...' : 'Join Session'}
           </button>
@@ -288,8 +288,8 @@ const AudienceJoin = () => {
 
         <div className="flex items-center gap-3 my-6">
           <div className="h-px bg-gray-200 flex-1" />
-          <span className="text-xs text-text-light whitespace-nowrap">
-            — already have an account? —
+          <span className="text-xs text-text-light text-center shrink">
+            already have an account?
           </span>
           <div className="h-px bg-gray-200 flex-1" />
         </div>
@@ -304,7 +304,7 @@ const AudienceJoin = () => {
           type="button"
           onClick={onGoogleLogin}
           disabled={googleLoading || authSubmitting}
-          className="w-full border border-gray-300 hover:bg-gray-100 disabled:opacity-50 text-text font-medium py-2.5 rounded-lg transition-colors duration-200 flex items-center justify-center"
+          className="w-full min-h-11 border border-gray-300 hover:bg-gray-100 disabled:opacity-50 text-text font-medium py-3 rounded-lg transition-colors duration-200 flex items-center justify-center"
         >
           {googleLoading ? (
             <>
@@ -331,7 +331,7 @@ const AudienceJoin = () => {
           <button
             type="button"
             onClick={() => setShowEmailLogin(true)}
-            className="w-full mt-4 text-sm text-primary hover:text-primary-dark font-medium"
+            className="w-full min-h-11 mt-4 text-sm text-primary hover:text-primary-dark font-medium"
           >
             Sign in with email instead
           </button>
@@ -343,7 +343,7 @@ const AudienceJoin = () => {
                 type="email"
                 value={loginData.email}
                 onChange={(e) => setLoginData({ ...loginData, email: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
+                className="w-full min-h-11 px-3 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
                 required
               />
               {authErrors.email && (
@@ -357,7 +357,7 @@ const AudienceJoin = () => {
                 type="password"
                 value={loginData.password}
                 onChange={(e) => setLoginData({ ...loginData, password: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
+                className="w-full min-h-11 px-3 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
                 required
               />
               {authErrors.password && (
@@ -368,13 +368,13 @@ const AudienceJoin = () => {
             <button
               type="submit"
               disabled={authLoading || authSubmitting}
-              className="w-full py-3 bg-primary text-white rounded-lg hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              className="w-full min-h-11 py-3 bg-primary text-white rounded-lg hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
             >
               {authLoading ? 'Signing in...' : 'Sign In'}
             </button>
 
             <div className="flex justify-end text-sm">
-              <Link to="/audience/forgot" className="text-primary hover:text-primary-dark font-medium">
+              <Link to="/audience/forgot" className="inline-flex items-center min-h-11 text-primary hover:text-primary-dark font-medium">
                 Forgot password?
               </Link>
             </div>
@@ -382,7 +382,7 @@ const AudienceJoin = () => {
         )}
 
         <div className="mt-4 text-center text-sm">
-          <Link to="/audience/signup" className="text-primary hover:text-primary-dark font-medium">
+          <Link to="/audience/signup" className="inline-flex items-center min-h-11 text-primary hover:text-primary-dark font-medium">
             No account? Sign up
           </Link>
         </div>

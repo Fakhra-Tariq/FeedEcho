@@ -57,15 +57,15 @@ const Navbar = () => {
   }
 
   return (
-    <nav className="bg-background/80 backdrop-blur-md shadow-soft sticky top-0 z-50 border-b border-neutral-200">
+    <nav className="bg-background/80 backdrop-blur-md shadow-soft sticky top-0 z-50 border-b border-neutral-200 overflow-x-hidden">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex justify-between items-center h-16">
+        <div className="flex justify-between items-center h-16 min-w-0 gap-2">
           {/* Logo — unchanged */}
-          <Link to="/" className="flex items-center space-x-2">
+          <Link to="/" className="flex items-center space-x-2 min-w-0 shrink">
             <img
               src="/FeedEcho-logo.png.png"
               alt="FeedEcho"
-              className="h-32 w-auto object-contain mix-blend-mode: multiply"
+              className="h-32 w-auto max-w-[min(11rem,calc(100vw-5.5rem))] object-contain object-left mix-blend-multiply"
             />
           </Link>
 
@@ -145,8 +145,11 @@ const Navbar = () => {
 
           {/* Mobile menu button */}
           <button
+            type="button"
             onClick={() => setIsMenuOpen(!isMenuOpen)}
-            className="md:hidden p-2 rounded-lg hover:bg-neutral-100 transition-colors"
+            aria-label={isMenuOpen ? 'Close menu' : 'Open menu'}
+            aria-expanded={isMenuOpen}
+            className="md:hidden min-h-11 min-w-11 p-2 rounded-lg hover:bg-neutral-100 transition-colors inline-flex items-center justify-center shrink-0"
           >
             {isMenuOpen ? (
               <X className="w-6 h-6 text-neutral-600" />
@@ -165,15 +168,15 @@ const Navbar = () => {
                 const isActive = location.pathname === link.href;
 
                 return (
-                  <Link
-                    key={link.name}
-                    to={link.href}
-                    className={`flex items-center space-x-2 px-3 py-2 rounded-lg transition-all duration-200 ${
-                      isActive
-                        ? 'bg-secondary-100 text-secondary-600'
-                        : 'text-neutral-600 hover:text-secondary-600 hover:bg-secondary-100'
-                    }`}
-                  >
+                <Link
+                  key={link.name}
+                  to={link.href}
+                  className={`flex items-center space-x-2 px-3 min-h-11 py-3 rounded-lg transition-all duration-200 ${
+                    isActive
+                      ? 'bg-primary/10 text-primary font-medium'
+                      : 'text-neutral-600 hover:text-primary hover:bg-primary/5'
+                  }`}
+                >
                     <Icon className="w-4 h-4" />
                     <span className="font-medium">{link.name}</span>
                   </Link>
@@ -185,14 +188,14 @@ const Navbar = () => {
                   <div className="border-t border-neutral-200 my-2"></div>
                   <Link
                     to="/profile"
-                    className="flex items-center space-x-2 px-3 py-2 text-text hover:text-secondary-600 hover:bg-secondary-100 rounded-lg transition-colors"
+                    className="flex items-center space-x-2 px-3 min-h-11 py-3 text-text hover:text-primary hover:bg-primary/5 rounded-lg transition-colors"
                   >
                     <User className="w-4 h-4" />
                     <span>Profile</span>
                   </Link>
                   <button
                     onClick={handleLogout}
-                    className="flex items-center space-x-2 px-3 py-2 text-error-600 hover:bg-error-50 rounded-lg transition-colors text-left"
+                    className="flex items-center space-x-2 px-3 min-h-11 py-3 text-error-600 hover:bg-error-50 rounded-lg transition-colors text-left"
                   >
                     <LogOut className="w-4 h-4" />
                     <span>Logout</span>

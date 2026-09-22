@@ -86,3 +86,26 @@ export const resolveActivePortal = () => {
 
   return null;
 };
+
+/**
+ * Logged-in host for this tab: teacher/admin profile and not in an audience session.
+ * Portal may be unset after a closed tab; do not treat that as a student.
+ */
+export const isActiveHostTeacher = (userProfile, activePortal = null) => {
+  if (!userProfile || !canAccessTeacherPortal(userProfile)) return false;
+  const portal = activePortal || resolveActivePortal();
+  return portal !== 'student';
+};
+
+/**
+ * Logged-in audience for this tab: student-only profile, or anyone already in
+ * the student portal. Never true for a host teacher (portal may be unset after
+ * a closed tab — that still counts as host, not student).
+ */
+export const isActiveAudienceStudent = (userProfile, activePortal = null) => {
+  if (!userProfile) return false;
+  if (isActiveHostTeacher(userProfile, activePortal)) return false;
+  const portal = activePortal || resolveActivePortal();
+  if (portal === 'student') return true;
+  return hasUserRole(userProfile, 'student') && !canAccessTeacherPortal(userProfile);
+};

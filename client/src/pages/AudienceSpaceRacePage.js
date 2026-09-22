@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { AudienceActivityHeader } from '../components/Audience/AudienceActivityLayout';
+import { Clock, Rocket } from 'lucide-react';
+import { AudienceActivityHeader, AUDIENCE_ACTIVITY_PAGE_WIDTH } from '../components/Audience/AudienceActivityLayout';
 import GuestProgressLoginBanner from '../components/Audience/GuestProgressLoginBanner';
 import { onValue, ref as dbRef, off } from 'firebase/database';
 import { db } from '../firebase';
@@ -78,6 +79,7 @@ export default function AudienceSpaceRacePage() {
   const [showTeamSelection, setShowTeamSelection] = useState(false);
   const [pendingJoin, setPendingJoin] = useState(null);
   const [participants, setParticipants] = useState([]);
+  const [quizTimerLabel, setQuizTimerLabel] = useState(null);
 
   const activeRaceId = routeRaceId || raceData?.id || raceData?.raceId;
   const activeQuizId =
@@ -474,74 +476,79 @@ export default function AudienceSpaceRacePage() {
   }
 
   return (
-    <>
-      <style>{`.quiz-embed-root { min-height: 100%; } .quiz-embed-root > div { min-height: 100% !important; }`}</style>
-      <div className="flex flex-col h-screen min-h-screen overflow-hidden bg-background">
+    <div className="flex flex-col md:flex-row h-screen max-h-screen overflow-hidden bg-background">
+      <div className="w-full md:flex-1 flex flex-col min-w-0 min-h-0 overflow-hidden">
         <div className="flex-shrink-0">
-          <AudienceActivityHeader
-            title={spaceRaceQuizTitle}
-            badge="Space Race"
-            participantName={headerParticipantName}
-            onLogoClick={handleLeave}
+          <div className="h-16 overflow-hidden">
+            <AudienceActivityHeader
+              title={spaceRaceQuizTitle}
+              titleIcon={<Rocket className="w-4 h-4 shrink-0 text-[#6D415F]" />}
+              participantName={headerParticipantName}
+              onLogoClick={handleLeave}
+              rightAddon={
+                isQuizView && quizTimerLabel != null ? (
+                  <span className="inline-flex items-center gap-1 font-semibold text-primary text-sm whitespace-nowrap tabular-nums shrink-0">
+                    <Clock className="w-4 h-4" />
+                    {quizTimerLabel}
+                  </span>
+                ) : null
+              }
+            />
+          </div>
+          <GuestProgressLoginBanner
+            contentClassName={`${AUDIENCE_ACTIVITY_PAGE_WIDTH} py-2 flex items-center justify-between gap-3`}
           />
-          {isQuizView ? <GuestProgressLoginBanner /> : null}
         </div>
-
-        <div className="flex-1 min-h-0 flex flex-col md:flex-row overflow-hidden">
-          <div className="w-full md:flex-1 flex flex-col min-w-0 min-h-0 overflow-hidden border-r border-neutral-200">
-            <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
-              {isQuizView && (
-                <SpaceRaceGamePanel
-                  raceId={activeRaceId}
-                  participant={participant}
-                  quizId={activeQuizId}
-                  compact
-                  onTimeUp={() => alert.toast.info('Race time is up!')}
-                />
-              )}
-              <div className="flex-1 min-h-0 overflow-y-auto bg-background">
-                {isQuizView ? (
-                  <div className="space-race-quiz-embed min-h-full h-full quiz-embed-root">
-                    <AudienceQuizAttempt
-                      embedded
-                      spaceRaceMode
-                      spaceRaceId={activeRaceId}
-                      spaceRaceQuizId={activeQuizId}
-                      spaceRaceParticipant={participant}
-                      raceId={activeRaceId}
-                      teamId={participant?.teamId}
-                      participantId={participant?.id}
-                      participantName={participant?.name}
-                    />
-                  </div>
-                ) : (
-                  <SpaceRaceGamePanel
-                    raceId={activeRaceId}
-                    participant={participant}
-                    quizId={activeQuizId}
-                    onTimeUp={() => alert.toast.info('Race time is up!')}
-                  />
-                )}
-              </div>
-            </div>
+        {isQuizView ? (
+          <div className="flex-1 min-h-0 overflow-y-auto bg-background">
+            <SpaceRaceGamePanel
+              raceId={activeRaceId}
+              participant={participant}
+              quizId={activeQuizId}
+              compact
+              onTimeUp={() => alert.toast.info('Race time is up!')}
+            />
+            <AudienceQuizAttempt
+              embedded
+              spaceRaceMode
+              spaceRaceId={activeRaceId}
+              spaceRaceQuizId={activeQuizId}
+              spaceRaceParticipant={participant}
+              raceId={activeRaceId}
+              teamId={participant?.teamId}
+              participantId={participant?.id}
+              participantName={participant?.name}
+              onTimerLabelChange={setQuizTimerLabel}
+            />
           </div>
-
-          <div className="w-full md:w-[34%] xl:w-[32%] flex-shrink-0 h-[45vh] md:h-full min-h-0 overflow-hidden">
-            {resolvedTeamId != null && resolvedTeamId !== '' ? (
-              <SpaceRaceTeamChat
-                raceId={activeRaceId}
-                teamId={resolvedTeamId}
-                participant={participant}
-                compactHeader
-              />
-            ) : (
-              <div className="h-full flex items-center justify-center bg-white border-l border-neutral-200 text-text/60 text-sm p-4 text-center">
-                Join a team to unlock team chat
-              </div>
-            )}
+        ) : (
+          <div className="flex-1 min-h-0 overflow-y-auto bg-background">
+            <SpaceRaceGamePanel
+              raceId={activeRaceId}
+              participant={participant}
+              quizId={activeQuizId}
+              onTimeUp={() => alert.toast.info('Race time is up!')}
+            />
           </div>
-        </div>
+        )}
       </div>
-    </>
+
+      <div className="w-full md:w-[34%] xl:w-[32%] flex-shrink-0 h-[45vh] md:h-full min-h-0 overflow-hidden">
+        {resolvedTeamId != null && resolvedTeamId !== '' ? (
+          <SpaceRaceTeamChat
+            raceId={activeRaceId}
+            teamId={resolvedTeamId}
+            participant={participant}
+            compactHeader
+            dockedEdge
+            hideSyncNotice
+          />
+        ) : (
+          <div className="h-full flex items-center justify-center bg-white rounded-tl-[16px] rounded-bl-[16px] shadow-[-8px_0_20px_-6px_rgba(46,31,42,0.18)] text-text/60 text-sm p-4 text-center">
+            Join a team to unlock team chat
+          </div>
+        )}
+      </div>
+    </div>
   );
 }

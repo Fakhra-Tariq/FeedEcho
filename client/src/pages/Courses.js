@@ -1,4 +1,5 @@
 import React from 'react';
+import { useMarketingPageScrollToTop } from '../hooks/useMarketingPageScrollToTop';
 import { Reveal, RevealStagger } from '../components/Reveal';
 import {
   SurfaceCard,
@@ -21,6 +22,7 @@ import {
 } from 'lucide-react';
 
 const About = () => {
+  useMarketingPageScrollToTop();
   const highlights = [
     {
       title: 'Anonymous Questions',
@@ -85,20 +87,20 @@ const About = () => {
   ];
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-background overflow-x-hidden max-w-full">
       <section className="relative overflow-hidden">
         <MarketingHeroBackdrop />
         <div className={marketingHeroClass}>
           <Reveal immediate className="relative z-10 text-center max-w-3xl mx-auto">
             <div className="marketing-hero-copy-panel">
-              <h1 className="text-4xl md:text-5xl font-bold text-text tracking-tight leading-tight mb-5">
+              <h1 className="text-[clamp(1.5rem,5vw+0.75rem,3rem)] font-bold text-text tracking-tight leading-tight mb-5">
                 About
                 <span className="text-primary">
                   {' '}
                   FeedEcho
                 </span>
               </h1>
-              <p className="text-lg sm:text-xl text-text leading-relaxed mb-8">
+              <p className="text-base sm:text-lg md:text-xl text-text leading-relaxed mb-8">
                 FeedEcho was built around one observation — the gap between what a
                 speaker intends and what an audience understands is invisible in real
                 time. We built a platform to close that gap, live, during the session,
@@ -108,7 +110,7 @@ const About = () => {
                 understanding, while the conversation is still happening.
               </p>
 
-              <div className="flex flex-col sm:flex-row gap-4 justify-center">
+              <div className="flex flex-col sm:flex-row gap-4 justify-center w-full max-w-md mx-auto sm:max-w-none">
                 <a href="#built-for-engagement" className="btn-marketing-secondary">
                   See How It Works
                 </a>
@@ -124,10 +126,10 @@ const About = () => {
       >
         <div className={marketingSectionClass}>
           <Reveal className="text-center mb-10 sm:mb-12 max-w-3xl mx-auto">
-            <h2 className="text-3xl md:text-4xl font-bold text-text tracking-tight leading-tight mb-4">
+            <h2 className="text-[clamp(1.5rem,4vw+0.5rem,2.25rem)] font-bold text-text tracking-tight leading-tight mb-4">
               Built for Engagement
             </h2>
-            <p className="text-lg sm:text-xl text-text-light leading-relaxed">
+            <p className="text-base sm:text-lg md:text-xl text-text-light leading-relaxed">
               Every feature is designed around one goal — making sure no participant
               is left behind, whether they are in a lecture hall, a Zoom call, or a
               boardroom.
@@ -135,7 +137,7 @@ const About = () => {
           </Reveal>
 
           <RevealStagger
-            className="grid md:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6"
+            className="grid grid-cols-1 min-[481px]:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6"
             itemClassName="h-full"
           >
             {highlights.map((item) => {
@@ -161,12 +163,12 @@ const About = () => {
       <section className="relative">
         <div className={marketingSectionClass}>
           <Reveal className="text-center mb-10 sm:mb-12">
-            <h2 className="text-3xl md:text-4xl font-bold text-text tracking-tight leading-tight mb-4">
+            <h2 className="text-[clamp(1.5rem,4vw+0.5rem,2.25rem)] font-bold text-text tracking-tight leading-tight mb-4">
               Who Uses FeedEcho?
             </h2>
           </Reveal>
           <RevealStagger
-            className="grid md:grid-cols-3 gap-4 sm:gap-6"
+            className="grid grid-cols-1 min-[481px]:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6"
             itemClassName="h-full"
           >
             {audiences.map((item) => {

@@ -314,8 +314,8 @@ const QuizLibrary = () => {
   };
 
   return (
-    <div className="min-h-screen bg-[#F4F1EC]">
-      <div className="container mx-auto px-3 sm:px-4 lg:px-6 py-0">
+    <div className="min-h-screen bg-[#F4F1EC] overflow-x-hidden max-w-full">
+      <div className="w-full max-w-full py-0">
         {/* Library Dashboard Header */}
         <div className="mb-4 space-y-4">
           <SessionLaunchBanner />
@@ -352,7 +352,7 @@ const QuizLibrary = () => {
           <div className="text-center py-20 text-gray-600">Loading quizzes…</div>
         ) : getFilteredQuizzes().length === 0 ? (
           <div className="text-center py-16 sm:py-24">
-            <div className="bg-white/80 backdrop-blur-sm rounded-3xl p-12 sm:p-16 max-w-lg mx-auto border border-[#8E7CC3]/20 shadow-xl">
+            <div className="bg-white/80 backdrop-blur-sm rounded-3xl p-6 sm:p-12 md:p-16 max-w-lg mx-auto border border-[#8E7CC3]/20 shadow-xl">
               <div className="text-6xl sm:text-7xl mb-6">
                 {searchTerm.trim() ? ' ' : ' '}
               </div>
@@ -370,7 +370,7 @@ const QuizLibrary = () => {
               {!searchTerm.trim() && savedQuizzes.length === 0 && (
                 <button
                   onClick={() => navigate('/host/launch')}
-                  className="inline-flex items-center space-x-2 px-6 py-3 bg-[#6D415F] text-white rounded-xl hover:bg-[#5A344D] transition-colors font-medium shadow-lg hover:shadow-xl"
+                  className="inline-flex items-center justify-center space-x-2 min-h-11 px-6 py-3 bg-[#6D415F] text-white rounded-xl hover:bg-[#5A344D] transition-colors font-medium shadow-lg hover:shadow-xl"
                 >
                   <Rocket className="w-5 h-5" />
                   <span>Create Quiz</span>
@@ -399,13 +399,13 @@ const QuizLibrary = () => {
               </div>
             )}
             
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 sm:gap-8">
+            <div className="grid grid-cols-1 min-[481px]:grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-8">
             {getFilteredQuizzes().map((quiz) => (
-              <div key={quiz.id} className="group bg-white/90 backdrop-blur-sm rounded-2xl shadow-lg hover:shadow-2xl border border-[#8E7CC3]/20 p-6 sm:p-8 transition-all duration-300 hover:scale-[1.02]">
+              <div key={quiz.id} className="group bg-white/90 backdrop-blur-sm rounded-2xl shadow-lg hover:shadow-2xl border border-[#8E7CC3]/20 p-4 sm:p-8 transition-all duration-300 hover:scale-[1.02] max-w-full min-w-0">
                 {/* Quiz Header */}
-                <div className="flex items-start justify-between mb-4">
-                  <div className="flex-1">
-                    <h3 className="font-bold text-gray-900 mb-3 text-lg sm:text-xl group-hover:text-[#6D415F] transition-colors">
+                <div className="flex items-start justify-between mb-4 gap-2">
+                  <div className="flex-1 min-w-0">
+                    <h3 className="font-bold text-gray-900 mb-3 text-lg sm:text-xl group-hover:text-[#6D415F] transition-colors break-words">
                       {quiz.title}
                     </h3>
                     <div className="flex flex-wrap items-center gap-2 text-sm">
@@ -444,17 +444,17 @@ const QuizLibrary = () => {
                 {/* Access Code for Launched Quizzes */}
                 {quiz.launched && quiz.launchSettings && quiz.launchSettings.accessCode && (
                   <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 mb-4">
-                    <div className="flex items-center justify-between">
-                      <div>
+                    <div className="flex items-center justify-between gap-2 min-w-0">
+                      <div className="min-w-0">
                         <div className="text-xs font-medium text-gray-700 mb-1">Audience Access Code</div>
-                        <div className="text-lg font-bold text-gray-900 tracking-widest uppercase">
+                        <div className="text-lg font-bold text-gray-900 tracking-widest uppercase break-all">
                           {quiz.launchSettings.accessCode}
                         </div>
                       </div>
                       <button
                         onClick={() => copyAccessCode(quiz.launchSettings?.accessCode || '')}
                         disabled={getQuizTimeRemaining(quiz) === 0}
-                        className={`p-2 rounded-lg transition-all duration-200 ${
+                        className={`min-h-11 min-w-11 inline-flex items-center justify-center p-2 rounded-lg transition-all duration-200 shrink-0 ${
                           getQuizTimeRemaining(quiz) === 0
                             ? 'bg-gray-200 text-gray-400 cursor-not-allowed'
                             : 'bg-[#6D415F] text-white hover:bg-[#5A344D]'
@@ -474,7 +474,7 @@ const QuizLibrary = () => {
                     <button
                       onClick={() => finishQuiz(quiz.id)}
                       disabled={getQuizTimeRemaining(quiz) === 0}
-                      className={`flex items-center justify-center space-x-2 px-4 py-3 rounded-xl transition-all duration-300 font-medium shadow-md hover:shadow-lg w-full ${
+                      className={`flex items-center justify-center space-x-2 min-h-11 px-4 py-3 rounded-xl transition-all duration-300 font-medium shadow-md hover:shadow-lg w-full ${
                         getQuizTimeRemaining(quiz) === 0
                           ? 'bg-gray-400 text-white cursor-not-allowed opacity-60'
                           : 'bg-[#6D415F] text-white hover:bg-[#5A344D]'
@@ -487,7 +487,7 @@ const QuizLibrary = () => {
                   ) : hasActiveQuiz ? (
                     <button
                       disabled
-                      className="flex items-center justify-center space-x-2 px-4 py-3 bg-gray-400 text-white rounded-xl cursor-not-allowed opacity-60 font-medium shadow-md w-full"
+                      className="flex items-center justify-center space-x-2 min-h-11 px-4 py-3 bg-gray-400 text-white rounded-xl cursor-not-allowed opacity-60 font-medium shadow-md w-full"
                       title="Only one quiz can be active at a time"
                     >
                       <Rocket className="w-4 h-4 sm:w-5 sm:h-5" />
@@ -497,7 +497,7 @@ const QuizLibrary = () => {
                     <div className="w-full flex flex-col items-stretch">
                       <button
                         onClick={() => launchQuiz(quiz.id)}
-                        className="flex items-center justify-center space-x-2 px-4 py-3 bg-[#6D415F] text-white rounded-xl hover:bg-[#5A344D] transition-all duration-300 font-medium shadow-md hover:shadow-lg w-full group-hover:scale-105"
+                        className="flex items-center justify-center space-x-2 min-h-11 px-4 py-3 bg-[#6D415F] text-white rounded-xl hover:bg-[#5A344D] transition-all duration-300 font-medium shadow-md hover:shadow-lg w-full group-hover:scale-105"
                       >
                         <Rocket className="w-4 h-4 sm:w-5 sm:h-5" />
                         <span>Launch Quiz</span>
@@ -507,20 +507,20 @@ const QuizLibrary = () => {
                   )}
 
                   {/* Secondary Actions */}
-                  <div className="flex items-center space-x-3">
+                  <div className="flex flex-wrap items-center gap-2">
                     <button
                       onClick={() => editQuiz(quiz.id)}
-                      className="flex items-center space-x-2 px-3 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 hover:border-gray-400 transition-all duration-300 font-medium text-sm group-hover:scale-105"
+                      className="inline-flex items-center justify-center space-x-2 min-h-11 px-3 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 hover:border-gray-400 transition-all duration-300 font-medium text-sm flex-1 sm:flex-none"
                     >
                       <Edit className="w-4 h-4" />
-                      <span className="hidden sm:inline">Edit</span>
+                      <span>Edit</span>
                     </button>
                     <button
                       onClick={() => deleteQuiz(quiz.id)}
-                      className="flex items-center space-x-2 px-3 py-2 border border-red-300 text-red-600 rounded-lg hover:bg-red-50 hover:border-red-400 transition-all duration-300 font-medium text-sm group-hover:scale-105"
+                      className="inline-flex items-center justify-center space-x-2 min-h-11 px-3 py-2 border border-red-300 text-red-600 rounded-lg hover:bg-red-50 hover:border-red-400 transition-all duration-300 font-medium text-sm flex-1 sm:flex-none"
                     >
                       <Trash2 className="w-4 h-4" />
-                      <span className="hidden sm:inline">Delete</span>
+                      <span>Delete</span>
                     </button>
                   </div>
                 </div>
@@ -554,7 +554,7 @@ const QuizLibrary = () => {
           />
           
           {/* Modal Content */}
-          <div className="relative bg-white rounded-2xl shadow-2xl max-w-md w-full p-6">
+          <div className="relative bg-white rounded-2xl shadow-2xl max-w-md w-full max-h-[calc(100dvh-2rem)] overflow-y-auto p-5 sm:p-6">
             <div className="flex items-center space-x-3 mb-4">
               <div className="p-2 bg-red-100 rounded-full">
                 <AlertTriangle className="w-6 h-6 text-red-600" />
@@ -567,16 +567,16 @@ const QuizLibrary = () => {
               again, but existing scores and reports will be kept.
             </p>
             
-            <div className="flex items-center space-x-3">
+            <div className="flex items-center gap-3">
               <button
                 onClick={cancelDelete}
-                className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors font-medium"
+                className="flex-1 min-h-11 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors font-medium"
               >
                 Cancel
               </button>
               <button
                 onClick={confirmDelete}
-                className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors font-medium"
+                className="flex-1 min-h-11 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors font-medium"
               >
                 Delete
               </button>

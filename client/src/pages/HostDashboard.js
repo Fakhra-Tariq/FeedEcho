@@ -140,7 +140,7 @@ const HostDashboard = () => {
   ];
 
   return (
-    <div className="space-y-8 animate-fade-in">
+    <div className="space-y-8 animate-fade-in overflow-x-hidden max-w-full">
       <div className="flex flex-col gap-3">
       {/* Header Section */}
       <PageHeaderCard
@@ -152,7 +152,7 @@ const HostDashboard = () => {
             onClick={() => setShowCreateModal(true)}
             disabled={isSessionActive}
             className={clsx(
-              'flex items-center gap-2 px-6 py-3 rounded-xl font-semibold transition-all duration-300',
+              'flex items-center justify-center gap-2 px-6 py-3 min-h-11 rounded-xl font-semibold transition-all duration-300',
               'bg-white text-[#6D415F] hover:bg-white/90',
               'shadow-lg hover:shadow-xl',
               isSessionActive && 'opacity-50 cursor-not-allowed'
@@ -160,21 +160,21 @@ const HostDashboard = () => {
             title={isSessionActive ? 'A session is already active' : 'Create a new session'}
           >
             <Plus className="w-5 h-5" />
-            <span className="hidden sm:inline">Create Session</span>
+            <span>Create Session</span>
           </button>
         }
       />
 
       {/* Session Bar - shown when any session is active */}
       {activeSession && (
-        <div className="bg-white dark:bg-[#3A2E2A] rounded-2xl px-6 py-4 shadow-lg border border-[#6D415F]/30">
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div className="bg-white dark:bg-[#3A2E2A] rounded-2xl px-4 sm:px-6 py-4 shadow-lg border border-[#6D415F]/30 max-w-full">
+          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
             <div className="flex items-center gap-3 min-w-0 flex-1">
               <div className="w-10 h-10 bg-[#6D415F]/10 rounded-full flex items-center justify-center shrink-0">
                 <Activity className="w-5 h-5 text-[#6D415F]" />
               </div>
               <div className="min-w-0">
-                <h3 className="text-lg font-bold text-[#2E1F2A] dark:text-white">
+                <h3 className="text-lg font-bold text-[#2E1F2A] dark:text-white break-words">
                   {activeSession.sessionName || 'Session'}
                 </h3>
                 <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
@@ -184,7 +184,7 @@ const HostDashboard = () => {
                     <button
                       type="button"
                       onClick={(e) => handleCopyCode(activeSession.joinCode, e)}
-                      className="p-1 hover:bg-[#6D415F]/10 rounded transition-colors"
+                      className="min-h-11 min-w-11 inline-flex items-center justify-center hover:bg-[#6D415F]/10 rounded transition-colors"
                       title="Copy code"
                       aria-label="Copy session code"
                     >
@@ -204,19 +204,22 @@ const HostDashboard = () => {
                 </div>
               </div>
             </div>
-            <div className="flex items-center gap-5 shrink-0">
-              <div className="flex items-center gap-2">
-                <Users className="w-4 h-4 text-[#6D415F]" />
+            <div className="flex flex-wrap items-center gap-3 sm:gap-5">
+              <div className="flex items-center gap-2 min-w-0">
+                <Users className="w-4 h-4 text-[#6D415F] shrink-0" />
                 <span className="text-sm text-[#5A4A55] dark:text-white/70">{toParticipantCount(activeSession.participants)} participants</span>
               </div>
-              <EndSessionButton />
+              <EndSessionButton
+                className="flex items-center justify-center gap-2 min-h-11 px-4 py-2.5 rounded-xl bg-red-500 text-white font-semibold hover:bg-red-600 transition-colors"
+                labelClassName=""
+              />
             </div>
           </div>
         </div>
       )}
 
       {/* Action Buttons Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+      <div className="grid grid-cols-1 min-[481px]:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-6">
         {actionButtons.map((action, index) => (
           <button
             key={index}
@@ -241,10 +244,10 @@ const HostDashboard = () => {
       <div className="grid grid-cols-1 gap-6">
         {/* Recent Activity Section */}
         <div>
-          <div className="bg-white dark:bg-[#3A2E2A] rounded-3xl p-7 shadow-lg border border-[#6D415F]/30 dark:border-[#6D415F]/30">
-            <div className="flex items-center justify-between mb-6">
-              <div>
-                <h2 className="text-2xl font-bold text-[#3A2E2A] dark:text-white mb-2">Recent Activity</h2>
+          <div className="bg-white dark:bg-[#3A2E2A] rounded-3xl p-4 sm:p-7 shadow-lg border border-[#6D415F]/30 dark:border-[#6D415F]/30 max-w-full">
+            <div className="flex items-center justify-between gap-3 mb-6">
+              <div className="min-w-0">
+                <h2 className="text-xl sm:text-2xl font-bold text-[#3A2E2A] dark:text-white mb-2">Recent Activity</h2>
                 <p className="text-sm text-[#3A2E2A]/60 dark:text-white/60">Latest actions and updates in your classroom</p>
               </div>
               <div className="w-10 h-10 bg-gradient-to-br from-[#6D415F] to-[#8B5A7C] rounded-full flex items-center justify-center">
@@ -435,15 +438,15 @@ const SessionBadge = ({ icon: Icon, label, value }) => (
 const ActivityRow = ({ activity }) => {
   const meta = activityMeta[activity.type] || activityMeta.default;
   return (
-    <div className="flex items-start justify-between border border-gray-200 rounded-xl px-4 py-3">
-      <div className="flex items-start gap-3">
-        <meta.icon className={clsx('w-5 h-5 mt-0.5', meta.iconClass)} />
-        <div>
-          <p className="text-sm font-semibold text-text">{activity.title}</p>
+    <div className="flex flex-col max-[480px]:items-start sm:flex-row sm:items-start sm:justify-between gap-2 border border-gray-200 rounded-xl px-4 py-3">
+      <div className="flex items-start gap-3 min-w-0">
+        <meta.icon className={clsx('w-5 h-5 mt-0.5 shrink-0', meta.iconClass)} />
+        <div className="min-w-0">
+          <p className="text-sm font-semibold text-text break-words">{activity.title}</p>
           <p className="text-xs text-text-light">{meta.description(activity.status)}</p>
         </div>
       </div>
-      <span className="text-xs text-gray-400">{formatRelativeTime(activity.timestamp)}</span>
+      <span className="text-xs text-gray-400 shrink-0">{formatRelativeTime(activity.timestamp)}</span>
     </div>
   );
 };

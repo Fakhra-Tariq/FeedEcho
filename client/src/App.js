@@ -12,6 +12,7 @@ import ServerHealthCheck from './components/ServerHealthCheck';
 import Navbar from './components/Layout/Navbar';
 import Footer from './components/Layout/Footer';
 import ProtectedRoute from './components/Auth/ProtectedRoute';
+import RedirectIfHostTeacher from './components/Auth/RedirectIfHostTeacher';
 
 // Pages
 import Home from './pages/Home';
@@ -106,27 +107,27 @@ function AppContent() {
       <main className="flex-grow">
           <Routes>
             {/* Public Routes */}
-            <Route path="/" element={<Home />} />
-            <Route path="/join" element={<AudienceJoin />} />
-            <Route path="/join/space-race" element={<AudienceSpaceRaceJoin />} />
-            <Route path="/space-race" element={<SpaceRaceHistory />} />
-            <Route path="/space-race/:raceId/quiz/:quizId" element={<AudienceSpaceRacePage />} />
-            <Route path="/space-race/:raceId" element={<AudienceSpaceRacePage />} />
-            <Route path="/space-race/play/:raceId" element={<SpaceRaceGame />} />
-            <Route path="/session/:code" element={<AudienceSession />} />
-            <Route path="/audience/join" element={<AudienceJoinSession />} />
-            <Route path="/audience/quiz/:quizId" element={<AudienceQuizAttempt />} />
-            <Route path="/audience/exit-ticket" element={<AudienceExitTicketJoin />} />
-            <Route path="/audience/exit-ticket/:joinCode" element={<AudienceExitTicket />} />
-            <Route path="/audience/chat" element={<AudienceAnonymousChat />} />
-            <Route path="/audience/space-race/:raceId/quiz/:quizId" element={<AudienceSpaceRacePage />} />
-            <Route path="/audience/space-race/:raceId" element={<AudienceSpaceRacePage />} />
+            <Route path="/" element={<RedirectIfHostTeacher redirectStudent><Home /></RedirectIfHostTeacher>} />
+            <Route path="/join" element={<RedirectIfHostTeacher redirectStudent><AudienceJoin /></RedirectIfHostTeacher>} />
+            <Route path="/join/space-race" element={<RedirectIfHostTeacher><AudienceSpaceRaceJoin /></RedirectIfHostTeacher>} />
+            <Route path="/space-race" element={<RedirectIfHostTeacher><SpaceRaceHistory /></RedirectIfHostTeacher>} />
+            <Route path="/space-race/:raceId/quiz/:quizId" element={<RedirectIfHostTeacher><AudienceSpaceRacePage /></RedirectIfHostTeacher>} />
+            <Route path="/space-race/:raceId" element={<RedirectIfHostTeacher><AudienceSpaceRacePage /></RedirectIfHostTeacher>} />
+            <Route path="/space-race/play/:raceId" element={<RedirectIfHostTeacher><SpaceRaceGame /></RedirectIfHostTeacher>} />
+            <Route path="/session/:code" element={<RedirectIfHostTeacher><AudienceSession /></RedirectIfHostTeacher>} />
+            <Route path="/audience/join" element={<RedirectIfHostTeacher><AudienceJoinSession /></RedirectIfHostTeacher>} />
+            <Route path="/audience/quiz/:quizId" element={<RedirectIfHostTeacher><AudienceQuizAttempt /></RedirectIfHostTeacher>} />
+            <Route path="/audience/exit-ticket" element={<RedirectIfHostTeacher><AudienceExitTicketJoin /></RedirectIfHostTeacher>} />
+            <Route path="/audience/exit-ticket/:joinCode" element={<RedirectIfHostTeacher><AudienceExitTicket /></RedirectIfHostTeacher>} />
+            <Route path="/audience/chat" element={<RedirectIfHostTeacher><AudienceAnonymousChat /></RedirectIfHostTeacher>} />
+            <Route path="/audience/space-race/:raceId/quiz/:quizId" element={<RedirectIfHostTeacher><AudienceSpaceRacePage /></RedirectIfHostTeacher>} />
+            <Route path="/audience/space-race/:raceId" element={<RedirectIfHostTeacher><AudienceSpaceRacePage /></RedirectIfHostTeacher>} />
             <Route path="/audience/home" element={<AudienceHome />} />
             <Route path="/audience/progress" element={<AudienceProgress />} />
             <Route path="/audience/profile" element={<AudienceProfile />} />
             <Route path="/audience/auth" element={<Navigate to="/join" replace />} />
-            <Route path="/audience/signup" element={<AudienceSignup />} />
-            <Route path="/audience/forgot" element={<AudienceForgotPassword />} />
+            <Route path="/audience/signup" element={<RedirectIfHostTeacher redirectStudent><AudienceSignup /></RedirectIfHostTeacher>} />
+            <Route path="/audience/forgot" element={<RedirectIfHostTeacher redirectStudent><AudienceForgotPassword /></RedirectIfHostTeacher>} />
             <Route path="/audience/quiz-history" element={<QuizHistory />} />
             <Route path="/create/multiple-choice" element={<CreateMultipleChoiceQuiz />} />
             <Route path="/create/true-false" element={<CreateTrueFalseQuiz />} />
@@ -136,16 +137,20 @@ function AppContent() {
             <Route path="/quiz-library" element={<Navigate to="/host/library" replace />} />
             <Route path="/host-login" element={<Navigate to="/host/signin" replace />} />
             <Route path="/host/signin" element={
-              <ServerHealthCheck>
-                <HostSignIn />
-              </ServerHealthCheck>
+              <RedirectIfHostTeacher redirectStudent>
+                <ServerHealthCheck>
+                  <HostSignIn />
+                </ServerHealthCheck>
+              </RedirectIfHostTeacher>
             } />
             <Route path="/host/signup" element={
-              <ServerHealthCheck>
-                <HostSignUp />
-              </ServerHealthCheck>
+              <RedirectIfHostTeacher redirectStudent>
+                <ServerHealthCheck>
+                  <HostSignUp />
+                </ServerHealthCheck>
+              </RedirectIfHostTeacher>
             } />
-            <Route path="/host/forgot" element={<HostForgotPassword />} />
+            <Route path="/host/forgot" element={<RedirectIfHostTeacher redirectStudent><HostForgotPassword /></RedirectIfHostTeacher>} />
             <Route path="/login" element={<Navigate to="/host/signin" replace />} />
             <Route path="/register" element={<Navigate to="/host/signup" replace />} />
             <Route path="/about" element={<About />} />

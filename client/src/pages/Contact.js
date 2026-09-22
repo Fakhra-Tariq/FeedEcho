@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useMarketingPageScrollToTop } from '../hooks/useMarketingPageScrollToTop';
 import { Send, CheckCircle2 } from 'lucide-react';
 import { Reveal } from '../components/Reveal';
 import { SurfaceCard } from '../components/marketing/SurfaceCard';
@@ -8,6 +9,7 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const emptyForm = { name: '', email: '', message: '' };
 
 const Contact = () => {
+  useMarketingPageScrollToTop();
   const [form, setForm] = useState(emptyForm);
   const [errors, setErrors] = useState({});
   const [submitted, setSubmitted] = useState(false);
@@ -59,7 +61,7 @@ const Contact = () => {
   };
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-background overflow-x-hidden max-w-full">
       <section className="relative overflow-hidden">
         <div
           className="pointer-events-none absolute inset-0 bg-gradient-to-b from-primary/[0.04] via-transparent to-transparent"
@@ -67,7 +69,7 @@ const Contact = () => {
         />
         <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-8 sm:pt-10 pb-6 sm:pb-8">
           <Reveal immediate className="text-center max-w-3xl mx-auto">
-            <h1 className="text-3xl md:text-4xl font-bold text-text tracking-tight leading-tight">
+            <h1 className="text-[clamp(1.5rem,4vw+0.5rem,2.25rem)] font-bold text-text tracking-tight leading-tight">
               Get in
               <span className="text-primary"> Touch</span>
             </h1>
@@ -100,7 +102,7 @@ const Contact = () => {
                     <button
                       type="button"
                       onClick={handleSendAnother}
-                      className="btn-marketing-secondary"
+                      className="btn-marketing-secondary w-full sm:w-auto min-h-11"
                     >
                       Send another message
                     </button>
@@ -123,7 +125,7 @@ const Contact = () => {
                         autoComplete="name"
                         value={form.name}
                         onChange={updateField('name')}
-                        className={`input-field py-2.5 ${errors.name ? 'border-error-500 focus:ring-error-500 focus:border-error-500' : ''}`}
+                        className={`input-field min-h-11 py-2.5 ${errors.name ? 'border-error-500 focus:ring-error-500 focus:border-error-500' : ''}`}
                         aria-invalid={Boolean(errors.name)}
                         aria-describedby={errors.name ? 'contact-name-error' : undefined}
                       />
@@ -145,7 +147,7 @@ const Contact = () => {
                         autoComplete="email"
                         value={form.email}
                         onChange={updateField('email')}
-                        className={`input-field py-2.5 ${errors.email ? 'border-error-500 focus:ring-error-500 focus:border-error-500' : ''}`}
+                        className={`input-field min-h-11 py-2.5 ${errors.email ? 'border-error-500 focus:ring-error-500 focus:border-error-500' : ''}`}
                         aria-invalid={Boolean(errors.email)}
                         aria-describedby={errors.email ? 'contact-email-error' : undefined}
                       />

@@ -131,7 +131,7 @@ const AudienceExitTicket = () => {
             </label>
             <div className="space-y-2.5">
               {["Strongly Agree", "Agree", "Neutral", "Disagree", "Strongly Disagree"].map((option) => (
-                <label key={option} className="flex items-center space-x-3 cursor-pointer">
+                <label key={option} className="flex items-center space-x-3 min-h-11 cursor-pointer">
                   <input
                     type="radio"
                     name={`question-${index}`}
@@ -155,7 +155,7 @@ const AudienceExitTicket = () => {
             </label>
             <div className="space-y-2.5">
               {question.options?.map((option) => (
-                <label key={option} className="flex items-center space-x-3 cursor-pointer">
+                <label key={option} className="flex items-center space-x-3 min-h-11 cursor-pointer">
                   <input
                     type="radio"
                     name={`question-${index}`}
@@ -179,7 +179,7 @@ const AudienceExitTicket = () => {
             </label>
             <div className="space-y-2.5">
               {['True', 'False'].map((option) => (
-                <label key={option} className="flex items-center space-x-3 cursor-pointer">
+                <label key={option} className="flex items-center space-x-3 min-h-11 cursor-pointer">
                   <input
                     type="radio"
                     name={`question-${index}`}
@@ -232,8 +232,8 @@ const AudienceExitTicket = () => {
   if (isSubmitted) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-orange-50 via-white to-purple-50 flex items-center justify-center">
-        <div className="max-w-md mx-auto text-center">
-          <div className="bg-white rounded-3xl shadow-soft border border-primary/10 p-8">
+        <div className="max-w-md mx-auto text-center px-4">
+          <div className="bg-white rounded-3xl shadow-soft border border-primary/10 p-6 sm:p-8">
             <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-6">
               <CheckCircle className="w-8 h-8 text-green-600" />
             </div>
@@ -245,7 +245,7 @@ const AudienceExitTicket = () => {
             </p>
             <button
               onClick={() => navigate('/')}
-              className="w-full flex items-center justify-center space-x-2 px-6 py-3 bg-gradient-to-r from-primary to-primary/80 text-white rounded-xl hover:from-primary/90 hover:to-primary/70 transition-all duration-300 font-semibold"
+              className="w-full min-h-11 flex items-center justify-center space-x-2 px-6 py-3 bg-gradient-to-r from-primary to-primary/80 text-white rounded-xl hover:from-primary/90 hover:to-primary/70 transition-all duration-300 font-semibold"
             >
               <ArrowLeft className="w-5 h-5" />
               <span>Back to Home</span>
@@ -262,7 +262,7 @@ const AudienceExitTicket = () => {
     'Audience';
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-orange-50 via-white to-purple-50">
+    <div className="min-h-screen bg-gradient-to-br from-orange-50 via-white to-purple-50 overflow-x-hidden max-w-full">
       <AudienceActivityHeader
         title={exitTicket?.title}
         participantName={participantDisplayName}
@@ -290,7 +290,7 @@ const AudienceExitTicket = () => {
             <button
               type="submit"
               disabled={isSubmitting}
-              className={`mt-4 w-full flex items-center justify-center space-x-2 px-5 py-2.5 rounded-xl font-bold transition-all ${
+              className={`mt-4 w-full min-h-11 flex items-center justify-center space-x-2 px-5 py-2.5 rounded-xl font-bold transition-all ${
                 isSubmitting
                   ? 'bg-neutral-200 text-neutral-400 cursor-not-allowed'
                   : 'bg-[#6D415F] text-white hover:bg-[#5c3650]'

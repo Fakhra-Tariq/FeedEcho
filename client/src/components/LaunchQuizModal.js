@@ -102,7 +102,7 @@ const LaunchQuizModal = ({ isOpen, onClose, onLaunch, quiz, existingAccessCode }
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4">
       <div 
         className="absolute inset-0 bg-purple-50/80 backdrop-blur-sm"
         onClick={onClose}
@@ -110,21 +110,21 @@ const LaunchQuizModal = ({ isOpen, onClose, onLaunch, quiz, existingAccessCode }
       />
 
       <div
-        className="relative bg-white rounded-2xl shadow-xl max-w-lg w-full overflow-hidden flex flex-col max-h-[calc(100vh-32px)]"
-        style={{ maxHeight: 'calc(100dvh - 32px)' }}
+        className="relative bg-white rounded-2xl shadow-xl w-full max-w-lg overflow-hidden flex flex-col"
+        style={{ maxHeight: 'calc(100dvh - 24px)' }}
       >
-        <div className="flex items-center justify-between gap-3 px-6 pt-4 pb-2 shrink-0">
-          <h3 className="text-lg font-semibold text-gray-900">Quiz Settings</h3>
+        <div className="flex items-center justify-between gap-3 px-4 sm:px-6 pt-4 pb-2 shrink-0">
+          <h3 className="text-lg font-semibold text-gray-900 min-w-0 break-words">Quiz Settings</h3>
           <button
             type="button"
             onClick={onClose}
-            className="p-2 hover:bg-gray-100 rounded-lg transition-colors shrink-0"
+            className="min-h-11 min-w-11 p-2 hover:bg-gray-100 rounded-lg transition-colors shrink-0 inline-flex items-center justify-center"
           >
             <X className="w-5 h-5 text-gray-500" />
           </button>
         </div>
 
-        <div className="px-6 min-h-0 overflow-y-auto flex-1">
+        <div className="px-4 sm:px-6 min-h-0 overflow-y-auto overflow-x-hidden flex-1">
           <div className="bg-gray-50 rounded-xl p-3 space-y-3">
             <MinuteStepperField
               label="Quiz live for"
@@ -169,11 +169,11 @@ const LaunchQuizModal = ({ isOpen, onClose, onLaunch, quiz, existingAccessCode }
           </div>
         </div>
 
-        <div className="flex items-center justify-between gap-4 px-6 pt-3 pb-4 shrink-0">
+        <div className="flex flex-col-reverse min-[481px]:flex-row items-stretch min-[481px]:items-center justify-between gap-2 px-4 sm:px-6 pt-3 pb-4 shrink-0">
           <button
             type="button"
             onClick={onClose}
-            className="px-6 py-2 text-gray-700 hover:text-gray-900 font-medium transition-colors"
+            className="min-h-11 px-6 py-2 text-gray-700 hover:text-gray-900 font-medium transition-colors w-full min-[481px]:w-auto"
           >
             Cancel
           </button>
@@ -181,7 +181,7 @@ const LaunchQuizModal = ({ isOpen, onClose, onLaunch, quiz, existingAccessCode }
             type="button"
             onClick={handleLaunch}
             disabled={launching}
-            className="flex items-center gap-2 px-6 py-2 bg-[#6D415F] text-white rounded-lg hover:bg-[#5A344D] transition-all font-medium disabled:opacity-60"
+            className="flex items-center justify-center gap-2 min-h-11 px-6 py-2 bg-[#6D415F] text-white rounded-lg hover:bg-[#5A344D] transition-all font-medium disabled:opacity-60 w-full min-[481px]:w-auto"
           >
             <Play className="w-4 h-4" />
             {launching ? 'Launching…' : 'Launch Quiz'}
@@ -247,7 +247,7 @@ const MinuteStepperField = ({ label, description, value, onChange, presets, hint
             key={preset}
             type="button"
             onClick={() => onChange(preset)}
-            className={`px-3 py-0.5 rounded-full text-xs font-medium transition-colors ${
+            className={`min-h-11 px-3 py-2 rounded-full text-xs font-medium transition-colors ${
               value === preset
                 ? 'bg-[#6D415F] text-white'
                 : 'bg-white border border-gray-200 text-gray-600 hover:border-[#6D415F]/40 hover:text-[#6D415F]'
@@ -258,11 +258,11 @@ const MinuteStepperField = ({ label, description, value, onChange, presets, hint
         ))}
       </div>
 
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-2 min-w-0">
         <button
           type="button"
           onClick={() => stepBy(-QUIZ_TIME_STEP_MINUTES)}
-          className="flex items-center justify-center w-8 h-8 rounded-lg border border-gray-200 bg-white text-gray-600 hover:border-[#6D415F]/40 hover:text-[#6D415F] transition-colors"
+          className="flex items-center justify-center min-h-11 min-w-11 rounded-lg border border-gray-200 bg-white text-gray-600 hover:border-[#6D415F]/40 hover:text-[#6D415F] transition-colors shrink-0"
           aria-label={`Decrease ${label}`}
         >
           <Minus className="w-4 h-4" />
@@ -277,7 +277,7 @@ const MinuteStepperField = ({ label, description, value, onChange, presets, hint
             onChange={handleInputChange}
             onBlur={handleBlur}
             placeholder="No limit"
-            className="w-full px-3 py-1.5 bg-white border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-[#6D415F] focus:border-transparent text-center"
+            className="w-full min-h-11 min-w-0 px-3 py-1.5 bg-white border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-[#6D415F] focus:border-transparent text-center"
           />
           <span className="text-sm font-medium text-gray-600 shrink-0">minutes</span>
         </div>
@@ -285,7 +285,7 @@ const MinuteStepperField = ({ label, description, value, onChange, presets, hint
         <button
           type="button"
           onClick={() => stepBy(QUIZ_TIME_STEP_MINUTES)}
-          className="flex items-center justify-center w-8 h-8 rounded-lg border border-gray-200 bg-white text-gray-600 hover:border-[#6D415F]/40 hover:text-[#6D415F] transition-colors"
+          className="flex items-center justify-center min-h-11 min-w-11 rounded-lg border border-gray-200 bg-white text-gray-600 hover:border-[#6D415F]/40 hover:text-[#6D415F] transition-colors shrink-0"
           aria-label={`Increase ${label}`}
         >
           <Plus className="w-4 h-4" />
@@ -301,11 +301,11 @@ const MinuteStepperField = ({ label, description, value, onChange, presets, hint
 };
 
 const ToggleRow = ({ label, enabled, onToggle, badge }) => (
-  <div className="flex items-center justify-between">
-    <div className="flex items-center gap-2">
-      <span className="text-sm font-medium text-gray-700">{label}</span>
+  <div className="flex items-center justify-between gap-3 min-h-11">
+    <div className="flex items-center gap-2 min-w-0">
+      <span className="text-sm font-medium text-gray-700 break-words">{label}</span>
       {badge && (
-        <span className="px-2 py-1 bg-purple-100 text-purple-700 text-xs font-medium rounded">
+        <span className="px-2 py-1 bg-purple-100 text-purple-700 text-xs font-medium rounded shrink-0">
           {badge}
         </span>
       )}
@@ -313,15 +313,20 @@ const ToggleRow = ({ label, enabled, onToggle, badge }) => (
     <button
       type="button"
       onClick={onToggle}
-      className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${
-        enabled ? 'bg-[#6D415F]' : 'bg-gray-300'
-      }`}
+      className="min-h-11 min-w-11 inline-flex items-center justify-center shrink-0"
+      aria-pressed={enabled}
     >
       <span
-        className={`inline-block h-3 w-3 transform rounded-full bg-white transition-transform ${
-          enabled ? 'translate-x-5' : 'translate-x-1'
+        className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${
+          enabled ? 'bg-[#6D415F]' : 'bg-gray-300'
         }`}
-      />
+      >
+        <span
+          className={`inline-block h-3 w-3 transform rounded-full bg-white transition-transform ${
+            enabled ? 'translate-x-5' : 'translate-x-1'
+          }`}
+        />
+      </span>
     </button>
   </div>
 );

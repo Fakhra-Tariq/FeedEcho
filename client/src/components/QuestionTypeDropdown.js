@@ -58,12 +58,12 @@ const QuestionTypeDropdown = ({ onAddQuestion, currentQuizType = '' }) => {
   };
 
   return (
-    <div className="relative" ref={dropdownRef}>
+    <div className="relative w-full sm:w-auto" ref={dropdownRef}>
       {/* Add Question Button */}
       <button
         onClick={() => setIsOpen(!isOpen)}
         className={clsx(
-          'flex items-center space-x-2 px-6 py-3 rounded-xl font-medium transition-all duration-200',
+          'flex items-center justify-center space-x-2 w-full sm:w-auto min-h-11 px-6 py-3 rounded-xl font-medium transition-all duration-200',
           'bg-gradient-to-r from-[#6D415F] to-[#8B5A7C]',
           'text-white shadow-sm hover:shadow-md',
           'hover:scale-[1.02] active:scale-[0.98]',
@@ -80,7 +80,7 @@ const QuestionTypeDropdown = ({ onAddQuestion, currentQuizType = '' }) => {
 
       {/* Dropdown */}
       {isOpen && (
-        <div className="absolute top-full left-0 mt-2 w-64 bg-white rounded-xl shadow-xl border border-gray-200 overflow-hidden z-50">
+        <div className="absolute top-full left-0 right-0 sm:right-auto mt-2 w-full sm:w-64 max-w-full bg-white rounded-xl shadow-xl border border-gray-200 overflow-hidden z-50">
           <div className="p-2">
             {questionTypes.map((type) => {
               const Icon = type.icon;
@@ -92,7 +92,7 @@ const QuestionTypeDropdown = ({ onAddQuestion, currentQuizType = '' }) => {
                   onClick={() => handleAddQuestion(type.key)}
                   disabled={isCurrentType}
                   className={clsx(
-                    'w-full flex items-center space-x-3 p-3 rounded-lg transition-all duration-200',
+                    'w-full flex items-center space-x-3 min-h-11 p-3 rounded-lg transition-all duration-200',
                     'mb-1 last:mb-0',
                     'hover:bg-gray-50',
                     'disabled:opacity-50 disabled:cursor-not-allowed',

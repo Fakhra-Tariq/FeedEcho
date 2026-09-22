@@ -23,6 +23,28 @@ import { toParticipantCount } from '../utils/toParticipantCount';
 
 const RACES_PAGE_SIZE = 5;
 
+const SPACE_RACE_QUIZ_COUNTDOWNS = [30, 60, 120, 300, 600, 900, 1200, 1800];
+const SPACE_RACE_JOIN_MINUTES = [5, 10, 15, 20, 30, 45, 60];
+const DURATION_MISMATCH_MSG = 'Join Duration must be equal to or greater than Quiz Duration';
+
+const quizDurationMinutes = (countdownSeconds) => Number(countdownSeconds) / 60;
+
+const isJoinShorterThanQuiz = (joinMinutes, countdownSeconds) =>
+  Number(joinMinutes) < quizDurationMinutes(countdownSeconds);
+
+const snapJoinUpToQuiz = (countdownSeconds) => {
+  const needed = quizDurationMinutes(countdownSeconds);
+  return (
+    SPACE_RACE_JOIN_MINUTES.find((minutes) => minutes >= needed) ??
+    SPACE_RACE_JOIN_MINUTES[SPACE_RACE_JOIN_MINUTES.length - 1]
+  );
+};
+
+const snapQuizDownToJoin = (joinMinutes) => {
+  const allowed = SPACE_RACE_QUIZ_COUNTDOWNS.filter((seconds) => seconds / 60 <= Number(joinMinutes));
+  return allowed[allowed.length - 1] ?? SPACE_RACE_QUIZ_COUNTDOWNS[0];
+};
+
 // Timer display component for active races
 const RaceTimer = ({ raceData, className = '' }) => {
   const [timeLeft, setTimeLeft] = useState('--:--');
@@ -337,6 +359,7 @@ export default function HostSpaceRace() {
     showFinalScore: true,
     studentsPerTeam: 3 // Default 3 participants per team for student choice
   });
+  const [durationHint, setDurationHint] = useState(false);
 
   const handleOpenCreateModal = () => {
     setCurrentStep(1);
@@ -353,6 +376,7 @@ export default function HostSpaceRace() {
       showFinalScore: true,
       studentsPerTeam: 3 // Reset participants per team
     });
+    setDurationHint(false);
     setShowCreate(true);
     // Clear old list and fetch current library only (no deleted quizzes)
     setQuizzes([]);
@@ -375,8 +399,38 @@ export default function HostSpaceRace() {
     }
   };
 
+  const handleQuizDurationChange = (event) => {
+    const nextCountdown = parseInt(event.target.value, 10);
+    setLaunchSettings((prev) => {
+      if (isJoinShorterThanQuiz(prev.joinDuration, nextCountdown)) {
+        setDurationHint(true);
+        return { ...prev, countdown: nextCountdown, joinDuration: snapJoinUpToQuiz(nextCountdown) };
+      }
+      setDurationHint(false);
+      return { ...prev, countdown: nextCountdown };
+    });
+  };
+
+  const handleJoinDurationChange = (event) => {
+    const nextJoin = parseInt(event.target.value, 10);
+    setLaunchSettings((prev) => {
+      if (isJoinShorterThanQuiz(nextJoin, prev.countdown)) {
+        setDurationHint(true);
+        return { ...prev, joinDuration: nextJoin, countdown: snapQuizDownToJoin(nextJoin) };
+      }
+      setDurationHint(false);
+      return { ...prev, joinDuration: nextJoin };
+    });
+  };
+
   // Save a new Space Race as draft (without launching)
   const handleSaveRace = async () => {
+    if (isJoinShorterThanQuiz(launchSettings.joinDuration, launchSettings.countdown)) {
+      setDurationHint(true);
+      hybridAlert.toast.error(DURATION_MISMATCH_MSG);
+      return;
+    }
+
     let raceData = null; // Declare outside try block to make it accessible in catch
     
     try {
@@ -505,6 +559,12 @@ export default function HostSpaceRace() {
 
   // Start a new Space Race from the launch modal
   const handleStartRace = async () => {
+    if (isJoinShorterThanQuiz(launchSettings.joinDuration, launchSettings.countdown)) {
+      setDurationHint(true);
+      hybridAlert.toast.error(DURATION_MISMATCH_MSG);
+      return;
+    }
+
     let raceData = null; // Declare outside try block to make it accessible in catch
 
     const teacherId = user?.uid || userProfile?.uid;
@@ -1272,17 +1332,17 @@ return (
                         <label className="block text-sm font-medium text-text-light mb-1">Quiz Duration</label>
                         <select
                           value={launchSettings.countdown}
-                          onChange={(e) => setLaunchSettings({...launchSettings, countdown: parseInt(e.target.value)})}
+                          onChange={handleQuizDurationChange}
                           className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary bg-white text-text"
                         >
-                          <option value="30">30 seconds</option>
-                          <option value="60">1 minute</option>
-                          <option value="120">2 minutes</option>
-                          <option value="300">5 minutes</option>
-                          <option value="600">10 minutes</option>
-                          <option value="900">15 minutes</option>
-                          <option value="1200">20 minutes</option>
-                          <option value="1800">30 minutes</option>
+                          <option value="30" disabled={quizDurationMinutes(30) > launchSettings.joinDuration}>30 seconds</option>
+                          <option value="60" disabled={quizDurationMinutes(60) > launchSettings.joinDuration}>1 minute</option>
+                          <option value="120" disabled={quizDurationMinutes(120) > launchSettings.joinDuration}>2 minutes</option>
+                          <option value="300" disabled={quizDurationMinutes(300) > launchSettings.joinDuration}>5 minutes</option>
+                          <option value="600" disabled={quizDurationMinutes(600) > launchSettings.joinDuration}>10 minutes</option>
+                          <option value="900" disabled={quizDurationMinutes(900) > launchSettings.joinDuration}>15 minutes</option>
+                          <option value="1200" disabled={quizDurationMinutes(1200) > launchSettings.joinDuration}>20 minutes</option>
+                          <option value="1800" disabled={quizDurationMinutes(1800) > launchSettings.joinDuration}>30 minutes</option>
                         </select>
                         <p className="text-xs text-gray-500 mt-1">Audience will see this timer when they attempt quiz</p>
                       </div>
@@ -1291,20 +1351,23 @@ return (
                         <label className="block text-sm font-medium text-text-light mb-1">Join Duration</label>
                         <select
                           value={launchSettings.joinDuration}
-                          onChange={(e) => setLaunchSettings({...launchSettings, joinDuration: parseInt(e.target.value)})}
+                          onChange={handleJoinDurationChange}
                           className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary bg-white text-text"
                         >
-                          <option value="5">5 minutes</option>
-                          <option value="10">10 minutes</option>
-                          <option value="15">15 minutes</option>
-                          <option value="20">20 minutes</option>
-                          <option value="30">30 minutes</option>
-                          <option value="45">45 minutes</option>
-                          <option value="60">1 hour</option>
+                          <option value="5" disabled={isJoinShorterThanQuiz(5, launchSettings.countdown)}>5 minutes</option>
+                          <option value="10" disabled={isJoinShorterThanQuiz(10, launchSettings.countdown)}>10 minutes</option>
+                          <option value="15" disabled={isJoinShorterThanQuiz(15, launchSettings.countdown)}>15 minutes</option>
+                          <option value="20" disabled={isJoinShorterThanQuiz(20, launchSettings.countdown)}>20 minutes</option>
+                          <option value="30" disabled={isJoinShorterThanQuiz(30, launchSettings.countdown)}>30 minutes</option>
+                          <option value="45" disabled={isJoinShorterThanQuiz(45, launchSettings.countdown)}>45 minutes</option>
+                          <option value="60" disabled={isJoinShorterThanQuiz(60, launchSettings.countdown)}>1 hour</option>
                         </select>
                         <p className="text-xs text-gray-500 mt-1">Audience can join for this duration</p>
                       </div>
                     </div>
+                    {durationHint && (
+                      <p className="text-xs text-red-600 mt-2">{DURATION_MISMATCH_MSG}</p>
+                    )}
                   </div>
 
                   {/* Right Side - Toggles */}

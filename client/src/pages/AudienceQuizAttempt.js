@@ -34,6 +34,12 @@ import {
   AUDIENCE_ACTIVITY_PAGE_WIDTH,
 } from '../components/Audience/AudienceActivityLayout';
 
+const formatQuizCountdown = (seconds) => {
+  const mins = Math.floor(seconds / 60);
+  const secs = seconds % 60;
+  return `${mins}:${secs.toString().padStart(2, '0')}`;
+};
+
 const AudienceQuizAttempt = ({
   embedded = false,
   spaceRaceId = null,
@@ -44,6 +50,7 @@ const AudienceQuizAttempt = ({
   teamId: teamIdProp = null,
   participantId: participantIdProp = null,
   participantName: participantNameProp = null,
+  onTimerLabelChange = null,
 } = {}) => {
   const { quizId: paramQuizId } = useParams();
   const effectiveQuizId = spaceRaceQuizId || paramQuizId;
@@ -824,6 +831,21 @@ const AudienceQuizAttempt = ({
       // ignore
     }
   }, [spaceRaceMode, isSpaceRace]);
+
+  useEffect(() => {
+    if (!onTimerLabelChange) return;
+    if (!(embedded && (spaceRaceMode || isSpaceRace))) {
+      onTimerLabelChange(null);
+      return;
+    }
+    onTimerLabelChange(timeLeft == null ? null : formatQuizCountdown(timeLeft));
+  }, [onTimerLabelChange, embedded, spaceRaceMode, isSpaceRace, timeLeft]);
+
+  useEffect(() => {
+    return () => {
+      onTimerLabelChange?.(null);
+    };
+  }, [onTimerLabelChange]);
 
   useEffect(() => {
     if (!quiz || isSubmitted) return;
@@ -2037,11 +2059,7 @@ const AudienceQuizAttempt = ({
     }
   }, [isSubmitted, isSpaceRace, raceId, navigate]);
 
-  const formatTime = (seconds) => {
-    const mins = Math.floor(seconds / 60);
-    const secs = seconds % 60;
-    return `${mins}:${secs.toString().padStart(2, '0')}`;
-  };
+  const formatTime = formatQuizCountdown;
 
   const getPerformanceComment = (percentage) => {
     if (percentage >= 90) return "Outstanding! You're a star performer! 🌟";
@@ -2389,24 +2407,12 @@ const AudienceQuizAttempt = ({
 
       {!embedded && <GuestProgressLoginBanner />}
 
-      {/* Quiz Duration Timer - Always show for Space Races, even when embedded */}
-      {embedded && isSpaceRace && timeLeft !== null && (
-        <div className="bg-primary/10 border-b border-primary/20">
-          <div className="max-w-4xl mx-auto px-4 py-4">
-            <div className="flex items-center justify-center">
-              <Clock className="w-6 h-6 mr-3 text-primary" />
-              <div className="text-3xl font-bold text-primary">
-                {formatTime(timeLeft)}
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* Quiz Content — single card: progress, question, options, and nav are siblings */}
       <div className={`${quizPageWidthClass} py-4`}>
-        <AudienceActivityCard key={currentQuestionId || `q-${currentQuestion}`}>
-          <div className="flex items-center justify-between">
+        <AudienceActivityCard
+          key={currentQuestionId || `q-${currentQuestion}`}
+        >
+          <div className="flex items-center justify-between shrink-0">
             <span className="text-sm text-text-light">
               Question {currentQuestion + 1} of {quiz.questions.length}
             </span>
@@ -2414,7 +2420,7 @@ const AudienceQuizAttempt = ({
               {Math.round(progress)}% Complete
             </span>
           </div>
-          <div className="mt-2 w-full bg-neutral-200 rounded-full h-[5px]">
+          <div className="mt-2 w-full bg-neutral-200 rounded-full h-[5px] shrink-0">
             <div
               className="bg-[#6D415F] h-[5px] rounded-full transition-all duration-300 ease-out"
               style={{ width: `${progress}%` }}
@@ -2628,7 +2634,7 @@ const AudienceQuizAttempt = ({
           </div>
 
           {isSpaceRace && !isCurrentQuestionSubmitted && (
-            <div className="mt-4">
+            <div className="mt-4 shrink-0">
               <button
                 type="button"
                 onClick={handleSubmitTeamAnswer}
@@ -2648,7 +2654,7 @@ const AudienceQuizAttempt = ({
             </div>
           )}
 
-          <div className="flex items-center justify-between mt-5">
+          <div className="flex items-center justify-between mt-5 shrink-0">
             <button
               onClick={() => setCurrentQuestion(currentQuestion - 1)}
               disabled={currentQuestion === 0}

@@ -82,8 +82,8 @@ const HostSignIn = () => {
   };
 
   return (
-    <div className="min-h-screen flex flex-col items-center px-4 py-10 bg-background">
-      <div className="w-full max-w-md bg-white rounded-2xl shadow-lg p-8">
+    <div className="min-h-screen flex flex-col items-center px-4 py-10 bg-background overflow-x-hidden max-w-full">
+      <div className="w-full max-w-md mx-auto bg-white rounded-2xl shadow-lg p-5 sm:p-8">
         <h1 className="text-2xl font-bold text-text mb-2">Host Login</h1>
         <p className="text-text-light mb-6">Sign in to your host account.</p>
 
@@ -101,7 +101,7 @@ const HostSignIn = () => {
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
+              className="w-full min-h-11 px-3 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
               required
             />
           </div>
@@ -112,7 +112,7 @@ const HostSignIn = () => {
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
+              className="w-full min-h-11 px-3 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
               required
             />
           </div>
@@ -120,7 +120,7 @@ const HostSignIn = () => {
           <button
             type="submit"
             disabled={loading || isSubmitting}
-            className="w-full bg-primary hover:bg-primary-dark disabled:opacity-50 text-white font-medium py-2.5 rounded-lg transition-colors duration-200 flex items-center justify-center"
+            className="w-full min-h-11 bg-primary hover:bg-primary-dark disabled:opacity-50 text-white font-medium py-3 rounded-lg transition-colors duration-200 flex items-center justify-center"
           >
             {loading ? (
               <>
@@ -149,7 +149,7 @@ const HostSignIn = () => {
           type="button"
           onClick={onGoogle}
           disabled={googleLoading || isSubmitting}
-          className="w-full border border-gray-300 hover:bg-gray-100 disabled:opacity-50 text-text font-medium py-2.5 rounded-lg transition-colors duration-200 flex items-center justify-center"
+          className="w-full min-h-11 border border-gray-300 hover:bg-gray-100 disabled:opacity-50 text-text font-medium py-3 rounded-lg transition-colors duration-200 flex items-center justify-center"
         >
           {googleLoading ? (
             <>
@@ -172,11 +172,11 @@ const HostSignIn = () => {
           )}
         </button>
 
-        <div className="mt-4 flex justify-between text-sm">
-          <Link to="/host/forgot" className="text-primary hover:text-primary-dark font-medium">
+        <div className="mt-4 flex flex-wrap justify-between gap-3 text-sm">
+          <Link to="/host/forgot" className="inline-flex items-center min-h-11 text-primary hover:text-primary-dark font-medium">
             Forgot password?
           </Link>
-          <Link to="/host/signup" className="text-primary hover:text-primary-dark font-medium">
+          <Link to="/host/signup" className="inline-flex items-center min-h-11 text-primary hover:text-primary-dark font-medium">
             Create account
           </Link>
         </div>

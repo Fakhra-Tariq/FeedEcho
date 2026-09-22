@@ -35,10 +35,10 @@ export default function GuestProgressLoginBanner({ contentClassName } = {}) {
       <div
         className={
           contentClassName ||
-          'max-w-4xl mx-auto px-4 py-2 flex items-center justify-between gap-3'
+          'max-w-4xl mx-auto px-4 py-2 flex items-center justify-between gap-2 min-w-0'
         }
       >
-        <p className="text-sm text-text min-w-0">
+        <p className="text-sm text-text min-w-0 leading-snug">
           Log in to save this to your progress history.{' '}
           <Link
             to="/join"
@@ -51,7 +51,7 @@ export default function GuestProgressLoginBanner({ contentClassName } = {}) {
           type="button"
           onClick={handleDismiss}
           aria-label="Dismiss"
-          className="shrink-0 p-1 rounded-md text-text/60 hover:text-text hover:bg-white/40 transition-colors"
+          className="shrink-0 min-h-11 min-w-11 inline-flex items-center justify-center p-1 rounded-md text-text/60 hover:text-text hover:bg-white/40 transition-colors"
         >
           <X className="w-4 h-4" />
         </button>
