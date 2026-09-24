@@ -66,11 +66,73 @@ services:
     plan: free
     buildCommand: npm install && npm --prefix client install && npm run build
     staticPublishPath: client/build
-    # SPA fallback: refresh/direct visit to /host/space-race (etc.) must serve index.html.
+    # SPA fallback: unmatched paths serve index.html so React Router can render.
     # Quote globs — unquoted /* is a YAML alias and Render can drop the rule.
-    # If this Blueprint is not synced, add the same rewrite in the dashboard:
-    #   Settings → Redirects/Rewrites → Source /*  Destination /index.html  Action Rewrite
+    # Existing files (JS/CSS/images) are still served as-is; Render skips rewrites
+    # when a real file exists at that path.
+    #
+    # If this Blueprint is not linked to feedecho-web, add the catch-all in the
+    # dashboard (applies immediately, no redeploy):
+    #   feedecho-web → Redirects/Rewrites → Add
+    #   Source: /*    Destination: /index.html    Action: Rewrite
     routes:
+      - type: rewrite
+        source: "/about"
+        destination: "/index.html"
+      - type: rewrite
+        source: "/contact"
+        destination: "/index.html"
+      - type: rewrite
+        source: "/join"
+        destination: "/index.html"
+      - type: rewrite
+        source: "/join/*"
+        destination: "/index.html"
+      - type: rewrite
+        source: "/host/*"
+        destination: "/index.html"
+      - type: rewrite
+        source: "/audience/*"
+        destination: "/index.html"
+      - type: rewrite
+        source: "/space-race"
+        destination: "/index.html"
+      - type: rewrite
+        source: "/space-race/*"
+        destination: "/index.html"
+      - type: rewrite
+        source: "/create/*"
+        destination: "/index.html"
+      - type: rewrite
+        source: "/session/*"
+        destination: "/index.html"
+      - type: rewrite
+        source: "/sessions"
+        destination: "/index.html"
+      - type: rewrite
+        source: "/sessions/*"
+        destination: "/index.html"
+      - type: rewrite
+        source: "/profile"
+        destination: "/index.html"
+      - type: rewrite
+        source: "/login"
+        destination: "/index.html"
+      - type: rewrite
+        source: "/register"
+        destination: "/index.html"
+      - type: rewrite
+        source: "/host-login"
+        destination: "/index.html"
+      - type: rewrite
+        source: "/teacher-login"
+        destination: "/index.html"
+      - type: rewrite
+        source: "/teacher/*"
+        destination: "/index.html"
+      - type: rewrite
+        source: "/student/*"
+        destination: "/index.html"
       - type: rewrite
         source: "/*"
         destination: "/index.html"
