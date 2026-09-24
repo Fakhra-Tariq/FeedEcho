@@ -1,14 +1,13 @@
 import React, { useCallback, useState, useEffect, useRef } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import {
-  Rocket, Pencil, Clipboard, LogOut, Briefcase, Users, GraduationCap, X, ArrowRight, Bot, ChevronDown, ChevronLeft, ChevronRight, User, Home, TrendingUp, Trash2, PenSquare, Menu
+  Rocket, Pencil, Clipboard, Briefcase, Users, GraduationCap, X, ArrowRight, Bot, ChevronLeft, ChevronRight, Trash2, PenSquare
 } from 'lucide-react';
 import { appToast } from '../contexts/HybridAlertContext';
 import { useAuth } from '../contexts/AuthContext';
 import { getStoredAudienceSession } from '../utils/audienceSession';
-import AudienceAvatar from '../components/AudienceAvatar';
+import AudienceDashboardNavbar from '../components/Audience/AudienceDashboardNavbar';
 import { useAudienceLiveActivity } from '../hooks/useAudienceLiveActivity';
-import { useClickOutside } from '../hooks/useClickOutside';
 import { joinSessionByCode } from '../utils/joinSessionFlow';
 import { schedulePendingQuizSubmissionSync } from '../utils/quizSubmissionSync';
 import { studyAssistantAPI, studyAssistantConversationsAPI } from '../services/api';
@@ -152,14 +151,6 @@ const AudienceHome = () => {
   const [currentDate, setCurrentDate] = useState('');
   const [classCode, setClassCode] = useState(['', '', '', '', '', '']);
   
-  // New state variables for navbar features
-  const [showProfileDropdown, setShowProfileDropdown] = useState(false);
-  const [isMenuOpen, setIsMenuOpen] = useState(false);
-  const profileDropdownRef = useRef(null);
-  const closeProfileDropdown = useCallback(() => {
-    setShowProfileDropdown(false);
-  }, []);
-  useClickOutside(profileDropdownRef, closeProfileDropdown, showProfileDropdown);
   const [showChatbot, setShowChatbot] = useState(false);
   const [chatPanelWidth, setChatPanelWidth] = useState(DEFAULT_PANEL_WIDTH);
   const [isPanelExpanded, setIsPanelExpanded] = useState(false);
@@ -672,124 +663,19 @@ const AudienceHome = () => {
     <div className="flex flex-row h-screen min-h-screen overflow-hidden bg-background">
       {/* Main content column */}
       <div className="flex flex-col flex-1 min-w-0 overflow-hidden">
-      {/* Navbar */}
-      <nav className="bg-white shadow-sm border-b border-gray-200 flex-shrink-0">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center h-16 min-w-0 gap-2">
-            {/* Logo */}
-            <div className="flex items-center space-x-3 min-w-0 shrink">
-              <img 
-                src="/FeedEcho-logo.png.png" 
-                alt="FeedEcho" 
-                className="h-32 w-auto object-contain mix-blend-mode: multiply max-md:h-12 max-md:max-w-[min(8.5rem,calc(100vw-11rem))]"
-              />
-            </div>
-
-            {/* Center Navigation */}
-            <div className="hidden md:flex items-center space-x-6">
-              <a href="/audience/home" className="flex items-center space-x-2 text-primary font-medium">
-                <Home className="w-4 h-4" />
-                <span className="font-medium">Home</span>
-              </a>
-              <Link to="/audience/progress" className="flex items-center space-x-2 text-gray-700 hover:text-primary transition-colors">
-                <TrendingUp className="w-4 h-4" />
-                <span className="font-medium">Progress</span>
-              </Link>
-            </div>
-
-            {/* Right Side Icons */}
-            <div className="flex items-center space-x-3 max-md:space-x-1 shrink-0">
-              {/* Chatbot Icon */}
-              <button 
-                onClick={() => setShowChatbot(!showChatbot)}
-                className="p-2 rounded-lg text-gray-600 hover:text-primary transition-colors min-h-11 min-w-11 inline-flex items-center justify-center"
-              >
-                <Bot className="w-5 h-5" />
-              </button>
-              
-              {/* Profile Dropdown */}
-              <div className="relative" ref={profileDropdownRef}>
-                <button
-                  onClick={() => setShowProfileDropdown(!showProfileDropdown)}
-                  className="flex items-center space-x-2 p-2 rounded-lg hover:bg-gray-100 transition-colors min-h-11"
-                >
-                  <AudienceAvatar name={student?.name || 'Audience'} />
-                  <span className="font-medium text-text max-md:max-w-[4.5rem] max-md:truncate">{student?.name?.split(' ')[0] || 'Audience'}</span>
-                  <ChevronDown className="w-4 h-4 text-gray-500 shrink-0" />
-                </button>
-                
-                {/* Profile Dropdown */}
-                {showProfileDropdown && (
-                  <div className="absolute right-0 mt-2 w-56 bg-white rounded-lg shadow-lg border border-gray-200 z-50">
-                    <div className="p-3 border-b border-gray-200">
-                      <p className="font-medium text-text">{student?.name || 'Audience'}</p>
-                      <p className="text-sm text-gray-600">{student?.email || ''}</p>
-                    </div>
-                    <div className="py-2">
-                      <Link to="/audience/profile" className="block px-4 py-2 text-gray-700 hover:bg-gray-100">
-                        <div className="flex items-center space-x-2">
-                          <User className="w-4 h-4" />
-                          <span>Profile</span>
-                        </div>
-                      </Link>
-                      <button
-                        onClick={handleLogout}
-                        className="w-full text-left px-4 py-2 text-gray-700 hover:bg-gray-100"
-                      >
-                        <div className="flex items-center space-x-2">
-                          <LogOut className="w-4 h-4" />
-                          <span>Logout</span>
-                        </div>
-                      </button>
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              <button
-                type="button"
-                onClick={() => setIsMenuOpen((prev) => !prev)}
-                aria-label={isMenuOpen ? 'Close menu' : 'Open menu'}
-                aria-expanded={isMenuOpen}
-                className="md:hidden min-h-11 min-w-11 p-2 rounded-lg hover:bg-neutral-100 transition-colors inline-flex items-center justify-center"
-              >
-                {isMenuOpen ? (
-                  <X className="w-6 h-6 text-neutral-600" />
-                ) : (
-                  <Menu className="w-6 h-6 text-neutral-600" />
-                )}
-              </button>
-            </div>
-          </div>
-
-          {isMenuOpen && (
-            <nav className="md:hidden py-3 border-t border-gray-200">
-              <div className="flex flex-col space-y-2">
-                <a
-                  href="/audience/home"
-                  className="flex items-center space-x-2 min-h-11 px-3 py-3 rounded-lg text-sm font-medium bg-[#6D415F] text-white"
-                >
-                  <Home className="w-4 h-4" />
-                  <span>Home</span>
-                </a>
-                <Link
-                  to="/audience/progress"
-                  className="flex items-center space-x-2 min-h-11 px-3 py-3 rounded-lg text-sm font-medium text-neutral-600 hover:bg-[#6D415F]/10 hover:text-[#6D415F]"
-                >
-                  <TrendingUp className="w-4 h-4" />
-                  <span>Progress</span>
-                </Link>
-              </div>
-            </nav>
-          )}
-        </div>
-      </nav>
+      <AudienceDashboardNavbar
+        displayName={student?.name}
+        displayEmail={student?.email}
+        onLogout={handleLogout}
+        onChatbotToggle={() => setShowChatbot(!showChatbot)}
+        chatbotOpen={showChatbot}
+      />
 
       {/* Main Content Area */}
       <div className="flex-1 overflow-y-auto min-h-0">
       <div className="container mx-auto p-6 max-md:p-4">
         {/* Hero Banner */}
-        <div className="relative bg-gradient-to-r from-primary to-primary/90 text-white rounded-xl shadow-lg p-10 mb-6 overflow-hidden max-md:p-5">
+        <div className="relative bg-gradient-to-r from-primary to-primary/90 text-white rounded-xl shadow-lg p-10 mb-6 overflow-hidden max-md:p-5 max-[480px]:mb-3">
           <div className="absolute top-0 right-0 w-full h-full bg-gradient-to-l from-black/20 to-transparent"></div>
           <div className="relative flex items-center justify-between max-md:gap-3">
             <div className="min-w-0">
@@ -805,19 +691,19 @@ const AudienceHome = () => {
         </div>
 
         {/* Two Action Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6 max-[480px]:grid-cols-2 max-[480px]:gap-2.5 max-[480px]:mb-3">
           {/* My Quizzes Card */}
           <div 
             onClick={() => navigate('/audience/quiz-history')}
-            className="bg-white rounded-xl shadow-lg p-6 hover:shadow-xl transition-all duration-300 transform hover:scale-105 cursor-pointer border border-gray-200 hover:border-primary"
+            className="bg-white rounded-xl shadow-lg p-6 hover:shadow-xl transition-all duration-300 transform hover:scale-105 cursor-pointer border border-gray-200 hover:border-primary max-[480px]:p-3 max-[480px]:transform-none max-[480px]:hover:scale-100"
           >
-            <div className="flex items-center space-x-4 mb-4">
-              <div className="w-12 h-12 rounded-lg bg-primary flex items-center justify-center">
-                <Pencil className="w-6 h-6 text-white" />
+            <div className="flex items-center space-x-4 mb-4 max-[480px]:flex-col max-[480px]:items-start max-[480px]:space-x-0 max-[480px]:gap-2 max-[480px]:mb-0">
+              <div className="w-12 h-12 rounded-lg bg-primary flex items-center justify-center max-[480px]:w-9 max-[480px]:h-9">
+                <Pencil className="w-6 h-6 text-white max-[480px]:w-4 max-[480px]:h-4" />
               </div>
-              <div>
-                <h3 className="text-lg font-bold text-text mb-2">My Quizzes</h3>
-                <p className="text-sm text-gray-600">View your quiz history</p>
+              <div className="min-w-0">
+                <h3 className="text-lg font-bold text-text mb-2 max-[480px]:text-[15px] max-[480px]:mb-0.5">My Quizzes</h3>
+                <p className="text-sm text-gray-600 max-[480px]:text-[12px] max-[480px]:leading-snug max-[480px]:line-clamp-2">View your quiz history</p>
               </div>
             </div>
           </div>
@@ -825,15 +711,15 @@ const AudienceHome = () => {
           {/* Space Race Card */}
           <div 
             onClick={() => navigate('/space-race')}
-            className="bg-white rounded-xl shadow-lg p-6 hover:shadow-xl transition-all duration-300 transform hover:scale-105 cursor-pointer border border-gray-200 hover:border-primary"
+            className="bg-white rounded-xl shadow-lg p-6 hover:shadow-xl transition-all duration-300 transform hover:scale-105 cursor-pointer border border-gray-200 hover:border-primary max-[480px]:p-3 max-[480px]:transform-none max-[480px]:hover:scale-100"
           >
-            <div className="flex items-center space-x-4 mb-4">
-              <div className="w-12 h-12 rounded-lg bg-secondary flex items-center justify-center">
-                <Rocket className="w-6 h-6 text-white" />
+            <div className="flex items-center space-x-4 mb-4 max-[480px]:flex-col max-[480px]:items-start max-[480px]:space-x-0 max-[480px]:gap-2 max-[480px]:mb-0">
+              <div className="w-12 h-12 rounded-lg bg-secondary flex items-center justify-center max-[480px]:w-9 max-[480px]:h-9">
+                <Rocket className="w-6 h-6 text-white max-[480px]:w-4 max-[480px]:h-4" />
               </div>
-              <div>
-                <h3 className="text-lg font-bold text-text mb-2">Space Race</h3>
-                <p className="text-sm text-gray-600">View past races & shared resources</p>
+              <div className="min-w-0">
+                <h3 className="text-lg font-bold text-text mb-2 max-[480px]:text-[15px] max-[480px]:mb-0.5">Space Race</h3>
+                <p className="text-sm text-gray-600 max-[480px]:text-[12px] max-[480px]:leading-snug max-[480px]:line-clamp-2">View past races & shared resources</p>
               </div>
             </div>
           </div>
@@ -916,7 +802,7 @@ const AudienceHome = () => {
       {/* AI Study Assistant Panel */}
       {showChatbot && (
         <div
-          className="relative flex-shrink-0 h-screen flex overflow-hidden bg-white shadow-2xl border-l border-gray-200"
+          className="relative flex-shrink-0 h-screen flex overflow-hidden bg-white shadow-2xl border-l border-gray-200 max-[480px]:fixed max-[480px]:inset-0 max-[480px]:z-50 max-[480px]:!w-full max-[480px]:h-[100dvh] max-[480px]:max-h-[100dvh]"
           style={{ width: chatPanelWidth }}
         >
           <div
@@ -924,7 +810,7 @@ const AudienceHome = () => {
             aria-orientation="vertical"
             aria-label="Resize AI Study Assistant panel"
             onMouseDown={handlePanelResizeStart}
-            className={`relative z-10 flex-shrink-0 w-2 h-full cursor-col-resize group transition-colors ${
+            className={`relative z-10 flex-shrink-0 w-2 h-full cursor-col-resize group transition-colors max-[480px]:hidden ${
               isDraggingPanel ? 'bg-primary/20' : 'bg-gray-100 hover:bg-primary/10'
             }`}
           >
@@ -943,7 +829,7 @@ const AudienceHome = () => {
             </button>
           </div>
 
-          <div className="relative flex flex-col flex-1 min-w-0 h-full overflow-hidden">
+          <div className="relative flex flex-col flex-1 min-w-0 h-full min-h-0 overflow-hidden">
           {/* Header */}
           <div className="bg-primary p-4 text-white flex-shrink-0">
             <div className="flex items-center justify-between">
@@ -1028,7 +914,7 @@ const AudienceHome = () => {
           </div>
           
           {/* Input Area */}
-          <div className="p-4 bg-white border-t border-gray-200 flex-shrink-0">
+          <div className="p-4 bg-white border-t border-gray-200 flex-shrink-0 max-[480px]:pb-[max(1rem,env(safe-area-inset-bottom))]">
             <div className="flex items-center space-x-2">
               <input
                 type="text"

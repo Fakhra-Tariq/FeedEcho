@@ -20,11 +20,11 @@ import { schedulePendingQuizSubmissionSync } from '../utils/quizSubmissionSync';
 import {
   canAccessStudentPortal,
   canAccessTeacherPortal,
-  isActiveAudienceStudent,
+  hasUserRole,
   setActivePortal as persistActivePortal,
   clearActivePortal as clearPersistedActivePortal,
   getActivePortal,
-  resolveActivePortal,
+  restoreActivePortalForUser,
 } from '../utils/userRoles';
 
 const isFirebaseOnly = process.env.REACT_APP_FIREBASE_ONLY === 'true';
@@ -43,13 +43,57 @@ const withTimeout = (promise, ms, label = 'Request') =>
 const ROLE_STORAGE_KEY = 'feedEcho_role';
 const LEGACY_ROLE_STORAGE_KEY = 'learneXa_role';
 
-const readStoredRole = () =>
-  localStorage.getItem(ROLE_STORAGE_KEY) ||
-  localStorage.getItem(LEGACY_ROLE_STORAGE_KEY) ||
-  'student';
+const readAuthUid = () => {
+  try {
+    return JSON.parse(localStorage.getItem('authUser') || 'null')?.uid || null;
+  } catch {
+    return null;
+  }
+};
 
-const persistRole = (role) => {
-  if (role) localStorage.setItem(ROLE_STORAGE_KEY, role);
+const readStoredRole = (uid = null) => {
+  try {
+    const raw = localStorage.getItem(ROLE_STORAGE_KEY);
+    if (raw === 'teacher' || raw === 'student') {
+      // Unkeyed leftover from another session — only trust if we have no uid yet
+      return uid ? null : raw;
+    }
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (uid && parsed?.uid && parsed.uid !== uid) return null;
+      if (parsed?.role === 'teacher' || parsed?.role === 'student') return parsed.role;
+    }
+  } catch {
+    // ignore
+  }
+  const legacy = localStorage.getItem(LEGACY_ROLE_STORAGE_KEY);
+  if (legacy === 'teacher' || legacy === 'student') {
+    return uid ? null : legacy;
+  }
+  return null;
+};
+
+const persistRole = (role, uid = null) => {
+  if (!role) return;
+  const resolvedUid = uid || readAuthUid();
+  try {
+    localStorage.setItem(
+      ROLE_STORAGE_KEY,
+      JSON.stringify({ uid: resolvedUid || '', role })
+    );
+    localStorage.removeItem(LEGACY_ROLE_STORAGE_KEY);
+  } catch {
+    // ignore
+  }
+};
+
+const clearStoredRole = () => {
+  try {
+    localStorage.removeItem(ROLE_STORAGE_KEY);
+    localStorage.removeItem(LEGACY_ROLE_STORAGE_KEY);
+  } catch {
+    // ignore
+  }
 };
 
 const buildProfileFromFirebase = (firebaseUser, roleFallback = 'student') => {
@@ -90,10 +134,10 @@ export const AuthProvider = ({ children }) => {
   const [userProfile, setUserProfile] = useState(null);
   const [loading, setLoading] = useState(true);
   // Tab-scoped host vs audience session — never derive from email alone
-  const [activePortal, setActivePortalState] = useState(() => resolveActivePortal());
+  const [activePortal, setActivePortalState] = useState(null);
 
-  const markActivePortal = (portal) => {
-    persistActivePortal(portal);
+  const markActivePortal = (portal, uid = null) => {
+    persistActivePortal(portal, uid);
     setActivePortalState(portal);
   };
 
@@ -142,9 +186,55 @@ export const AuthProvider = ({ children }) => {
           );
           sessionStorage.setItem('feedecho-user-id', firebaseUser.uid);
 
+          const restoredPortal = restoreActivePortalForUser(firebaseUser.uid);
+          if (restoredPortal) {
+            setActivePortalState(restoredPortal);
+          }
+
+          const applyVerifiedPortal = (profile) => {
+            const lastPortal = restoredPortal || getActivePortal();
+            const canTeacher = canAccessTeacherPortal(profile);
+            const studentOnly =
+              hasUserRole(profile, 'student') && !canTeacher;
+
+            if (lastPortal === 'student' && canAccessStudentPortal(profile)) {
+              persistAudienceSession(profile);
+              markActivePortal('student', firebaseUser.uid);
+              persistRole('student', firebaseUser.uid);
+              schedulePendingQuizSubmissionSync();
+              return;
+            }
+            if (lastPortal === 'teacher' && canTeacher) {
+              markActivePortal('teacher', firebaseUser.uid);
+              persistRole('teacher', firebaseUser.uid);
+              return;
+            }
+            if (studentOnly) {
+              persistAudienceSession(profile);
+              markActivePortal('student', firebaseUser.uid);
+              persistRole('student', firebaseUser.uid);
+              schedulePendingQuizSubmissionSync();
+              return;
+            }
+            if (canTeacher && !hasUserRole(profile, 'student')) {
+              markActivePortal('teacher', firebaseUser.uid);
+              persistRole('teacher', firebaseUser.uid);
+              return;
+            }
+            if (hasUserRole(profile, 'student')) {
+              persistAudienceSession(profile);
+              markActivePortal('student', firebaseUser.uid);
+              persistRole('student', firebaseUser.uid);
+              schedulePendingQuizSubmissionSync();
+            }
+          };
+
           if (isFirebaseOnly) {
-            const role = readStoredRole();
-            setUserProfile(buildProfileFromFirebase(firebaseUser, role));
+            const role =
+              restoredPortal || readStoredRole(firebaseUser.uid) || 'student';
+            const profile = buildProfileFromFirebase(firebaseUser, role);
+            setUserProfile(profile);
+            applyVerifiedPortal(profile);
           } else {
             try {
               const profileResponse = await withTimeout(
@@ -153,10 +243,11 @@ export const AuthProvider = ({ children }) => {
                 'Profile fetch'
               );
               const profile = profileResponse.data.user;
-              setUserProfile({
+              const normalized = {
                 ...profile,
                 uid: profile?.uid || firebaseUser.uid,
-              });
+              };
+              setUserProfile(normalized);
 
               localStorage.setItem(
                 'authUser',
@@ -166,23 +257,17 @@ export const AuthProvider = ({ children }) => {
                 })
               );
 
-              if (
-                isActiveAudienceStudent(profile, getActivePortal()) ||
-                getStoredAudienceSession()
-              ) {
-                persistAudienceSession(profile);
-                if (getActivePortal() !== 'student') {
-                  persistActivePortal('student');
-                }
-                setActivePortalState('student');
-                schedulePendingQuizSubmissionSync();
-              } else {
-                setActivePortalState(resolveActivePortal());
-              }
+              applyVerifiedPortal(normalized);
             } catch (profileError) {
               console.error('Error fetching user profile:', profileError);
-              const role = readStoredRole();
-              setUserProfile(buildProfileFromFirebase(firebaseUser, role));
+              const role = readStoredRole(firebaseUser.uid);
+              if (role) {
+                const fallback = buildProfileFromFirebase(firebaseUser, role);
+                setUserProfile(fallback);
+                applyVerifiedPortal(fallback);
+              } else {
+                setUserProfile(buildProfileFromFirebase(firebaseUser, 'student'));
+              }
             }
           }
         } catch (error) {
@@ -194,6 +279,9 @@ export const AuthProvider = ({ children }) => {
         localStorage.removeItem('token');
         localStorage.removeItem('authUser');
         sessionStorage.removeItem('feedecho-user-id');
+        clearStoredRole();
+        clearPersistedActivePortal();
+        setActivePortalState(null);
       }
 
       finishAuthInit();
@@ -212,7 +300,7 @@ export const AuthProvider = ({ children }) => {
       const token = await result.user.getIdToken();
       localStorage.setItem('token', token);
       if (isFirebaseOnly) {
-        const role = readStoredRole();
+        const role = readStoredRole(result.user.uid) || 'student';
         const profile = buildProfileFromFirebase(result.user, role);
         setUserProfile(profile);
         
@@ -271,7 +359,7 @@ export const AuthProvider = ({ children }) => {
     if (isFirebaseOnly) {
       const profile = buildProfileFromFirebase(firebaseUser, role || 'student');
       setUserProfile(profile);
-      persistRole(profile.role);
+      persistRole(profile.role, firebaseUser.uid);
       return profile;
     }
 
@@ -303,7 +391,7 @@ export const AuthProvider = ({ children }) => {
         console.warn('Backend unavailable, using Firebase-only mode');
         const profile = buildProfileFromFirebase(firebaseUser, role || 'student');
         setUserProfile(profile);
-        persistRole(profile.role);
+        persistRole(profile.role, firebaseUser.uid);
         return profile;
       }
 
@@ -346,8 +434,8 @@ export const AuthProvider = ({ children }) => {
       }
 
       // Portal key value remains 'teacher' for storage compatibility
-      markActivePortal('teacher');
-      persistRole('teacher');
+      markActivePortal('teacher', result.user.uid);
+      persistRole('teacher', result.user.uid);
       clearAudienceSession();
       toast.success('Welcome back!');
       return { success: true, user: profile };
@@ -410,8 +498,8 @@ export const AuthProvider = ({ children }) => {
         return { success: false, error: errorMessage };
       }
 
-      markActivePortal('teacher');
-      persistRole('teacher');
+      markActivePortal('teacher', firebaseUser.uid);
+      persistRole('teacher', firebaseUser.uid);
       clearAudienceSession();
       toast.success('Account created successfully');
       return { success: true, user: profile };
@@ -439,8 +527,8 @@ export const AuthProvider = ({ children }) => {
         return { success: false, error: errorMessage };
       }
 
-      markActivePortal('student');
-      persistRole('student');
+      markActivePortal('student', result.user.uid);
+      persistRole('student', result.user.uid);
       persistAudienceSession(profile);
       toast.success('Welcome back!');
       return { success: true, user: profile };
@@ -502,8 +590,8 @@ export const AuthProvider = ({ children }) => {
         return { success: false, error: errorMessage };
       }
 
-      markActivePortal('student');
-      persistRole('student');
+      markActivePortal('student', firebaseUser.uid);
+      persistRole('student', firebaseUser.uid);
       persistAudienceSession(profile);
       toast.success('Account created successfully');
       return { success: true, user: profile };
@@ -522,6 +610,7 @@ export const AuthProvider = ({ children }) => {
       localStorage.removeItem('token');
       localStorage.removeItem('authUser');
       clearAudienceSession();
+      clearStoredRole();
       clearActivePortalState();
       toast.success('Logged out successfully');
     } catch (error) {
@@ -544,8 +633,8 @@ export const AuthProvider = ({ children }) => {
         return { success: false, error: errorMessage };
       }
 
-      markActivePortal('teacher');
-      persistRole('teacher');
+      markActivePortal('teacher', result.user.uid);
+      persistRole('teacher', result.user.uid);
       clearAudienceSession();
       toast.success('Signed in with Google');
       return { success: true, user: profile };
@@ -595,8 +684,8 @@ export const AuthProvider = ({ children }) => {
         return { success: false, error: errorMessage };
       }
 
-      markActivePortal('student');
-      persistRole('student');
+      markActivePortal('student', result.user.uid);
+      persistRole('student', result.user.uid);
       persistAudienceSession(profile);
       toast.success('Signed in with Google');
       return { success: true, user: profile };
@@ -688,6 +777,8 @@ export const AuthProvider = ({ children }) => {
       setUserProfile(null);
       localStorage.removeItem('token');
       localStorage.removeItem('authUser');
+      clearAudienceSession();
+      clearStoredRole();
       clearActivePortalState();
       toast.success('Logged out successfully');
     } catch (error) {

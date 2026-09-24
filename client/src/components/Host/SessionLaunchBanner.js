@@ -65,7 +65,7 @@ export default function SessionLaunchBanner({ className = '' }) {
         className={clsx(
           'flex items-center gap-2 px-3 py-2 rounded-lg text-sm border border-primary/20',
           GUEST_LOGIN_BANNER_BG_CLASS,
-          'text-primary lg:-mt-5 [&+*]:!mt-3',
+          'relative z-10 shrink-0 text-primary [&+*]:!mt-3',
           className
         )}
         role="status"

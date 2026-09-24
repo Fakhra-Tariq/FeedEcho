@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { useHostData } from '../contexts/HostDataContext';
 import { useHybridAlert } from '../contexts/HybridAlertContext';
 import {
@@ -12,7 +13,6 @@ import {
   AlertTriangle,
   Send,
   ArrowDown,
-  ArrowLeft,
 } from 'lucide-react';
 import clsx from 'clsx';
 import ChatCreatedModal from '../components/ChatCreatedModal';
@@ -29,9 +29,20 @@ import PageHeaderCard from '../components/Host/PageHeaderCard';
 import ChatMessageBubble from '../components/Chat/ChatMessageBubble';
 import { toParticipantCount } from '../utils/toParticipantCount';
 
+const MOBILE_CHAT_QUERY = 'chat';
+const MOBILE_CHAT_LAYOUT_MQ = '(max-width: 767px)';
+
+const isMobileChatLayout = () =>
+  typeof window !== 'undefined' && window.matchMedia(MOBILE_CHAT_LAYOUT_MQ).matches;
+
+const getMobileChatIdFromSearch = (search) =>
+  new URLSearchParams(search || '').get(MOBILE_CHAT_QUERY) || '';
+
 export default function HostAnonymousChat() {
   const { user, userProfile } = useAuth();
   const uid = userProfile?.uid || user?.uid;
+  const navigate = useNavigate();
+  const location = useLocation();
   const { data, setData, addAnonymousChatSession, updateAnonymousChat, logActivity, toggleChatModeration } = useHostData();
   const { alert } = useHybridAlert();
   const { list: anonymousChats } = useRtdbList('chat_sessions', {
@@ -190,13 +201,50 @@ export default function HostAnonymousChat() {
     el.scrollTop = savedMobileListScrollRef.current;
   }, [mobileShowConversation]);
 
-  const handleSelectChat = (chat) => {
+  const syncMobileConversationUrl = (chatId) => {
+    const params = new URLSearchParams(location.search);
+    const currentId = params.get(MOBILE_CHAT_QUERY) || '';
+    if (chatId) {
+      if (currentId === chatId) return;
+      params.set(MOBILE_CHAT_QUERY, chatId);
+      navigate(
+        { pathname: '/host/anonymous-chat', search: `?${params.toString()}` },
+        { replace: Boolean(currentId) }
+      );
+      return;
+    }
+    if (!currentId) return;
+    params.delete(MOBILE_CHAT_QUERY);
+    const search = params.toString();
+    navigate(
+      { pathname: '/host/anonymous-chat', search: search ? `?${search}` : '' },
+      { replace: true }
+    );
+  };
+
+  const handleSelectChat = (chat, { updateHistory = false } = {}) => {
     if (mobileListScrollRef.current) {
       savedMobileListScrollRef.current = mobileListScrollRef.current.scrollTop;
     }
     setSelectedChat(chat);
     setMobileShowConversation(true);
+    if (updateHistory && chat?.id) syncMobileConversationUrl(chat.id);
   };
+
+  useEffect(() => {
+    const chatIdFromUrl = getMobileChatIdFromSearch(location.search);
+    if (!chatIdFromUrl) {
+      setMobileShowConversation(false);
+      return;
+    }
+    setMobileShowConversation(true);
+    setSelectedChat((prev) => {
+      if (prev?.id === chatIdFromUrl) return prev;
+      const list = (anonymousChats && anonymousChats.length > 0) ? anonymousChats : apiChats;
+      const found = (list || []).find((chat) => chat.id === chatIdFromUrl);
+      return found || { id: chatIdFromUrl };
+    });
+  }, [location.search, anonymousChats, apiChats]);
 
   // Unread tracking: chats already listed when the page loads start as read,
   // so only messages that arrive while the teacher is here light up.
@@ -331,6 +379,7 @@ export default function HostAnonymousChat() {
       // Store the created chat reference for immediate selection
       setSelectedChat(chat);
       setMobileShowConversation(true);
+      if (chat?.id && isMobileChatLayout()) syncMobileConversationUrl(chat.id);
       
       // Update moderation mode state to match backend
       setModerationMode(chat.moderationMode || false);
@@ -385,6 +434,7 @@ export default function HostAnonymousChat() {
       logActivity({ type: 'anonymousChat', title: `Ended chat: ${selectedChat.title}` });
       setSelectedChat(null);
       setMobileShowConversation(false);
+      syncMobileConversationUrl(null);
       lastMessageCountRef.current = 0;
       shouldAutoScrollRef.current = true;
       await loadChatsFromApi();
@@ -411,6 +461,7 @@ export default function HostAnonymousChat() {
         if (selectedChat?.id === deleteConfirmChat) {
           setSelectedChat(null);
           setMobileShowConversation(false);
+          syncMobileConversationUrl(null);
         }
         
         setDeleteConfirmChat(null);
@@ -431,7 +482,7 @@ export default function HostAnonymousChat() {
     setDeleteConfirmChat(null);
   };
 
-  const renderChatItem = (chat) => {
+  const renderChatItem = (chat, { updateHistory = false } = {}) => {
     const isSelected = selectedChat?.id === chat.id;
     const ended = !isChatActive(chat);
     const unread = getUnreadCount(chat);
@@ -440,7 +491,7 @@ export default function HostAnonymousChat() {
     return (
       <div
         key={chat.id}
-        onClick={() => handleSelectChat(chat)}
+        onClick={() => handleSelectChat(chat, { updateHistory })}
         className={clsx(
           'px-3 py-3 min-h-11 rounded-xl border cursor-pointer transition-colors',
           isSelected
@@ -526,9 +577,9 @@ export default function HostAnonymousChat() {
   const selectedMessages = selectedChat?.messages || [];
 
   return (
-    <div className="px-0 sm:px-2 lg:px-6 -mt-4 lg:-mt-5 flex flex-col gap-3 overflow-hidden overflow-x-hidden max-w-full min-h-[450px] h-[calc(100dvh-8.75rem)] lg:h-[calc(100dvh-5.75rem)] max-h-[calc(100dvh-8.75rem)] lg:max-h-[calc(100dvh-5.75rem)]">
+    <div className="px-0 sm:px-2 lg:px-6 -mt-4 lg:-mt-5 pt-4 lg:pt-5 flex flex-col gap-3 overflow-hidden overflow-x-hidden max-w-full min-h-[450px] h-[calc(100dvh-8.75rem)] lg:h-[calc(100dvh-5.75rem)] max-h-[calc(100dvh-8.75rem)] lg:max-h-[calc(100dvh-5.75rem)]">
       <div className={clsx('shrink-0', mobileShowConversation && 'max-md:hidden')}>
-        <SessionLaunchBanner className="!mt-0" />
+        <SessionLaunchBanner />
       </div>
 
       <div className={clsx('shrink-0', mobileShowConversation && 'max-md:hidden')}>
@@ -615,7 +666,7 @@ export default function HostAnonymousChat() {
           >
             {mobileListTab === 'active' ? (
               <>
-                {activeChats.map((chat) => renderChatItem(chat))}
+                {activeChats.map((chat) => renderChatItem(chat, { updateHistory: true }))}
                 {activeChats.length === 0 && (
                   <div className="flex flex-col items-center text-center py-6 px-3">
                     <MessageSquare className="w-6 h-6 text-primary/30 mb-2" />
@@ -625,7 +676,7 @@ export default function HostAnonymousChat() {
               </>
             ) : (
               <>
-                {endedChats.map((chat) => renderChatItem(chat))}
+                {endedChats.map((chat) => renderChatItem(chat, { updateHistory: true }))}
                 {endedChats.length === 0 && (
                   <div className="flex flex-col items-center text-center py-6 px-3">
                     <Clock className="w-6 h-6 text-primary/30 mb-2" />
@@ -674,28 +725,14 @@ export default function HostAnonymousChat() {
           {selectedChat ? (
             <>
               <div className="md:hidden px-3 pt-1 pb-2 border-b border-primary/10 shrink-0">
-                <div className="flex items-start gap-1 min-w-0">
-                  <button
-                    type="button"
-                    onClick={() => setMobileShowConversation(false)}
-                    aria-label="Back to chats"
-                    className="shrink-0 min-h-11 min-w-11 -ml-1 inline-flex items-center justify-center rounded-lg text-[#6D415F]"
-                  >
-                    <ArrowLeft className="w-5 h-5" />
-                  </button>
-                  <div className="flex-1 min-w-0 pt-1 space-y-2">
+                {isChatActive(selectedChat) ? (
+                <div className="min-w-0 space-y-2">
                     <div className="flex flex-wrap items-center gap-x-2 gap-y-1 min-w-0">
                       <h3 className="font-semibold text-text break-words min-w-0">{selectedChat.title}</h3>
                       <span className="inline-flex items-center gap-1 text-sm text-text-light whitespace-nowrap">
                         <Users className="w-4 h-4 shrink-0" />
                         {selectedParticipantCount} participants
                       </span>
-                      {selectedChat.status !== 'active' && (
-                        <span className="inline-flex items-center text-sm text-text-light">
-                          <Clock className="w-4 h-4 mr-1 shrink-0" />
-                          Ended{selectedChat.endedAt ? ` • ${new Date(selectedChat.endedAt).toLocaleDateString()}` : ''}
-                        </span>
-                      )}
                       {selectedChat.status === 'active' && (
                         <span className="inline-flex items-center gap-0.5 min-w-0">
                           <span className="text-sm font-mono font-bold text-primary">
@@ -721,14 +758,16 @@ export default function HostAnonymousChat() {
                         type="button"
                         onClick={toggleModeration}
                         className={clsx(
-                          'inline-flex flex-1 items-center justify-center min-h-11 px-3 py-2 rounded-lg text-sm font-medium border transition-colors',
+                          'inline-flex flex-1 items-center justify-center min-h-11 px-3 py-2 rounded-lg text-sm font-medium border transition-colors text-center',
                           moderationMode
                             ? 'bg-[#6D415F] border-[#6D415F] text-white'
                             : 'bg-white border-[#6D415F]/40 text-[#6D415F]'
                         )}
                       >
-                        <Settings className="w-4 h-4 mr-2 shrink-0" />
-                        {moderationMode ? 'Moderation ON' : 'Moderation OFF'}
+                        <span className="inline-flex items-center justify-center gap-2">
+                          <Settings className="w-4 h-4 shrink-0" />
+                          {moderationMode ? 'Moderation ON' : 'Moderation OFF'}
+                        </span>
                       </button>
                       {selectedChat.status === 'active' && (
                         <button
@@ -740,8 +779,22 @@ export default function HostAnonymousChat() {
                         </button>
                       )}
                     </div>
+                </div>
+                ) : (
+                <div className="min-w-0 space-y-2">
+                  <div className="flex items-start justify-between gap-2 min-w-0">
+                    <h3 className="font-semibold text-text break-words min-w-0">{selectedChat.title}</h3>
+                    <span className="inline-flex items-center text-sm text-text-light shrink-0 whitespace-nowrap">
+                      <Clock className="w-4 h-4 mr-1 shrink-0" />
+                      Ended{selectedChat.endedAt ? ` • ${new Date(selectedChat.endedAt).toLocaleDateString()}` : ''}
+                    </span>
+                  </div>
+                  <div className="inline-flex items-center gap-1 text-sm text-text-light">
+                    <Users className="w-4 h-4 shrink-0" />
+                    {selectedParticipantCount} participants
                   </div>
                 </div>
+                )}
               </div>
               <div className="hidden md:block px-3 sm:px-5 py-3 border-b border-primary/10 shrink-0">
                 <div className="flex flex-wrap items-center justify-between gap-2">

@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useEffect, useState } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { ArrowLeft, Plus, X, FileText, Sparkles, Users, CheckCircle, Copy, Check } from 'lucide-react';
 import { exitTicketsAPI } from '../services/api';
 import { useHostData } from '../contexts/HostDataContext';
@@ -28,13 +28,43 @@ const questionTypeCatalog = [
   { value: 'true_false', label: 'True / False' }
 ];
 
+const emptyQuestion = () => ({
+  prompt: '',
+  type: 'short_text',
+  options: [],
+});
+
+const normalizeLoadedQuestion = (question) => {
+  const rawType = String(question?.type || 'short_text').toLowerCase().replace(/[\s-]+/g, '_');
+  const type =
+    rawType === 'shorttext' ? 'short_text'
+    : rawType === 'multiplechoice' || rawType === 'mcq' ? 'multiple_choice'
+    : rawType === 'truefalse' || rawType === 'true/false' ? 'true_false'
+    : rawType;
+  const options = Array.isArray(question?.options)
+    ? question.options.map((option) => (
+      typeof option === 'string' ? option : (option?.text || option?.label || '')
+    ))
+    : [];
+
+  return {
+    prompt: question?.prompt || question?.text || question?.question || '',
+    type: questionTypeCatalog.some((item) => item.value === type) ? type : 'short_text',
+    options: type === 'multiple_choice' && options.length === 0 ? ['', ''] : options,
+  };
+};
+
 export default function CreateExitTicketPage() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const editTicketId = searchParams.get('edit');
   const { data: teacherData } = useHostData();
   const { userProfile } = useAuth();
   const { alert } = useHybridAlert();
   const [currentStep, setCurrentStep] = useState(1);
   const [isSaving, setIsSaving] = useState(false);
+  const [isLoadingDraft, setIsLoadingDraft] = useState(Boolean(editTicketId));
+  const [editingTicketId, setEditingTicketId] = useState(editTicketId || null);
   const [showNoSessionModal, setShowNoSessionModal] = useState(false);
   const [showJoinCodeModal, setShowJoinCodeModal] = useState(false);
   const [launchedTicketCode, setLaunchedTicketCode] = useState('');
@@ -45,12 +75,51 @@ export default function CreateExitTicketPage() {
   const [ticketForm, setTicketForm] = useState({
     title: '',
     collectAttendance: true,
-    questions: [{
-      prompt: '',
-      type: 'short_text',
-      options: []
-    }]
+    questions: [emptyQuestion()]
   });
+
+  useEffect(() => {
+    if (!editTicketId) {
+      setIsLoadingDraft(false);
+      return undefined;
+    }
+
+    let cancelled = false;
+    setIsLoadingDraft(true);
+
+    (async () => {
+      try {
+        const response = await exitTicketsAPI.getById(editTicketId);
+        const ticket = response.data?.data;
+        if (!response.data?.success || !ticket) {
+          throw new Error(response.data?.error || 'Exit ticket not found');
+        }
+        if (cancelled) return;
+
+        const questions = Array.isArray(ticket.questions) && ticket.questions.length > 0
+          ? ticket.questions.map(normalizeLoadedQuestion)
+          : [emptyQuestion()];
+
+        setEditingTicketId(ticket.id || editTicketId);
+        setTicketForm({
+          title: ticket.title || '',
+          collectAttendance: ticket.collectAttendance !== false,
+          questions,
+        });
+      } catch (error) {
+        if (cancelled) return;
+        console.error('Failed to load exit ticket for editing:', error);
+        alert.toast.error(error?.response?.data?.error || error.message || 'Failed to load exit ticket');
+        navigate('/host/exit-tickets');
+      } finally {
+        if (!cancelled) setIsLoadingDraft(false);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [editTicketId, alert.toast, navigate]);
 
   const handleCopyJoinCode = async (code) => {
     try {
@@ -226,7 +295,9 @@ export default function CreateExitTicketPage() {
 
       console.log('Sending ticket data:', ticketData);
 
-      const response = await exitTicketsAPI.create(ticketData);
+      const response = editingTicketId
+        ? await exitTicketsAPI.update(editingTicketId, ticketData)
+        : await exitTicketsAPI.create(ticketData);
       if (response.data.success) {
         console.log('Exit ticket created successfully:', response.data);
         alert.toast.success('Exit ticket saved as draft!');
@@ -275,15 +346,19 @@ export default function CreateExitTicketPage() {
         status: 'draft'
       };
 
-      const createResponse = await exitTicketsAPI.create(ticketData);
-      if (!createResponse.data.success) {
-        alert.toast.error('Failed to create exit ticket: ' + (createResponse.data.error || 'Unknown error'));
+      const persistResponse = editingTicketId
+        ? await exitTicketsAPI.update(editingTicketId, ticketData)
+        : await exitTicketsAPI.create(ticketData);
+      if (!persistResponse.data.success) {
+        alert.toast.error('Failed to create exit ticket: ' + (persistResponse.data.error || 'Unknown error'));
         setIsSaving(false);
         return;
       }
 
+      const ticketId = editingTicketId || persistResponse.data.data.id;
+
       // Then launch it
-      const launchResponse = await exitTicketsAPI.start(createResponse.data.data.id);
+      const launchResponse = await exitTicketsAPI.start(ticketId);
       if (launchResponse.data.success) {
         const joinCode = launchResponse.data.data.joinCode;
         setLaunchedTicketCode(joinCode);
@@ -299,6 +374,16 @@ export default function CreateExitTicketPage() {
       setIsSaving(false);
     }
   };
+
+  if (isLoadingDraft) {
+    return (
+      <div className="p-4 sm:p-6 overflow-x-hidden max-w-full">
+        <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-4 sm:p-6 text-center text-text-light">
+          Loading draft…
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="p-4 sm:p-6 overflow-x-hidden max-w-full">
@@ -574,40 +659,40 @@ export default function CreateExitTicketPage() {
               </div>
             </div>
 
-            <div className="flex flex-col gap-2 sm:flex-row sm:justify-between">
-              <div className="grid grid-cols-2 gap-2 w-full max-sm:items-start sm:flex sm:w-auto sm:flex-wrap">
+            <div>
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    onClick={() => goToStep(2)}
+                    className="min-h-11 px-4 py-2 bg-white font-normal border border-gray-300 text-text-light rounded-lg hover:bg-gray-50 transition-colors inline-flex items-center justify-center shadow-none"
+                  >
+                    Back to Edit
+                  </button>
+                  <button
+                    onClick={goBack}
+                    className="min-h-11 px-4 py-2 bg-white font-normal border border-gray-300 text-text-light rounded-lg hover:bg-gray-50 transition-colors inline-flex items-center justify-center shadow-none"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={handleSaveDraft}
+                    disabled={isSaving}
+                    className="min-h-11 px-4 py-2 bg-white font-normal border border-gray-300 text-text-light rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center justify-center shadow-none"
+                  >
+                    {isSaving ? 'Saving...' : 'Save as Draft'}
+                  </button>
+                </div>
                 <button
-                  onClick={() => goToStep(2)}
-                  className="min-h-11 px-4 py-2 border border-gray-300 text-text-light rounded-lg hover:bg-gray-50 transition-colors inline-flex items-center justify-center min-w-0 w-full sm:w-auto sm:flex-none"
+                  onClick={handleLaunch}
+                  disabled={isSaving || !isFormValid}
+                  className="min-h-11 px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center justify-center text-center"
                 >
-                  Back to Edit
-                </button>
-                <button
-                  onClick={goBack}
-                  className="min-h-11 px-4 py-2 border border-gray-300 text-text-light rounded-lg hover:bg-gray-50 transition-colors inline-flex items-center justify-center min-w-0 w-full sm:w-auto sm:flex-none"
-                >
-                  Cancel
+                  {isSaving ? 'Launching...' : 'Launch Exit Ticket'}
+                  <Sparkles className="w-4 h-4 ml-2 inline shrink-0" />
                 </button>
               </div>
-              <div className="grid grid-cols-2 gap-2 w-full max-sm:items-start sm:flex sm:w-auto sm:flex-wrap">
-                <button
-                  onClick={handleSaveDraft}
-                  disabled={isSaving}
-                  className="min-h-11 px-4 py-2 border border-gray-300 text-text-light rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center justify-center text-center min-w-0 w-full sm:w-auto sm:flex-none"
-                >
-                  {isSaving ? 'Saving...' : 'Save as Draft'}
-                </button>
-                <div className="flex flex-col items-stretch min-w-0 w-full sm:w-auto sm:flex-none sm:items-end">
-                  <button
-                    onClick={handleLaunch}
-                    disabled={isSaving || !isFormValid}
-                    className="min-h-11 px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center justify-center text-center w-full"
-                  >
-                    {isSaving ? 'Launching...' : 'Launch Exit Ticket'}
-                    <Sparkles className="w-4 h-4 ml-2 inline shrink-0" />
-                  </button>
-                  <LaunchRequiresSessionHint />
-                </div>
+              <div className="flex justify-end">
+                <LaunchRequiresSessionHint />
               </div>
             </div>
           </div>

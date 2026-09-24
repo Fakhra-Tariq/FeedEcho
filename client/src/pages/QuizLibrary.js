@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Rocket, Edit, Trash2, Calendar, AlertTriangle, Library, Copy, Flag, Clock, Lock } from 'lucide-react';
+import { Rocket, Edit, Trash2, Calendar, AlertTriangle, Library, Copy, Flag, Clock, Lock, Plus } from 'lucide-react';
 import { useHybridAlert } from '../contexts/HybridAlertContext';
 import LaunchQuizModal from '../components/LaunchQuizModal';
 import { quizzesAPI, handleAPIError } from '../services/api';
@@ -367,15 +367,14 @@ const QuizLibrary = () => {
                     : 'Try selecting a different filter'
                 }
               </p>
-              {!searchTerm.trim() && savedQuizzes.length === 0 && (
-                <button
-                  onClick={() => navigate('/host/launch')}
-                  className="inline-flex items-center justify-center space-x-2 min-h-11 px-6 py-3 bg-[#6D415F] text-white rounded-xl hover:bg-[#5A344D] transition-colors font-medium shadow-lg hover:shadow-xl"
-                >
-                  <Rocket className="w-5 h-5" />
-                  <span>Create Quiz</span>
-                </button>
-              )}
+              <button
+                type="button"
+                onClick={() => navigate('/host/launch')}
+                className="inline-flex items-center justify-center gap-2 min-h-11 px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors"
+              >
+                <Plus className="w-4 h-4" />
+                Create Quiz
+              </button>
             </div>
           </div>
         ) : (

@@ -55,12 +55,14 @@ const TimerDisplay = ({ timerInfo, onTimeUp }) => {
 };
 
 // Join duration timer component
-const JoinDurationTimer = ({ raceData, className = '' }) => {
+const JoinDurationTimer = ({ raceData, className = '', variant = 'text' }) => {
   const [timeLeft, setTimeLeft] = useState('--:--');
+  const [progress, setProgress] = useState(1);
 
   useEffect(() => {
     if (!raceData) {
       setTimeLeft('--:--');
+      setProgress(1);
       return;
     }
 
@@ -70,6 +72,7 @@ const JoinDurationTimer = ({ raceData, className = '' }) => {
         if (!raceData.startedAt) {
           const joinDurationMinutes = raceData.settings?.joinDuration || 30;
           setTimeLeft(`${joinDurationMinutes}:00`);
+          setProgress(1);
           return;
         }
 
@@ -83,15 +86,18 @@ const JoinDurationTimer = ({ raceData, className = '' }) => {
 
         if (difference <= 0) {
           setTimeLeft('00:00');
+          setProgress(0);
           return;
         }
 
         const minutes = Math.floor((difference / 1000) / 60);
         const seconds = Math.floor((difference / 1000) % 60);
         setTimeLeft(`${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`);
+        setProgress(Math.max(0, Math.min(1, difference / joinDurationMs)));
       } catch (error) {
         console.error('Error calculating join duration time left:', error);
         setTimeLeft('--:--');
+        setProgress(1);
       }
     };
 
@@ -100,6 +106,49 @@ const JoinDurationTimer = ({ raceData, className = '' }) => {
 
     return () => clearInterval(timer);
   }, [raceData]);
+
+  const remainingRatio = progress;
+
+  if (variant === 'ring') {
+    const size = 52;
+    const stroke = 4;
+    const radius = (size - stroke) / 2;
+    const circumference = 2 * Math.PI * radius;
+    const offset = circumference * (1 - remainingRatio);
+
+    return (
+      <div className="relative w-[52px] h-[52px] shrink-0" aria-label={`Time left ${timeLeft}`}>
+        <svg className="w-full h-full -rotate-90" viewBox={`0 0 ${size} ${size}`}>
+          <circle
+            cx={size / 2}
+            cy={size / 2}
+            r={radius}
+            fill="none"
+            stroke="#F1E5EB"
+            strokeWidth={stroke}
+          />
+          <circle
+            cx={size / 2}
+            cy={size / 2}
+            r={radius}
+            fill="none"
+            stroke="#6D415F"
+            strokeWidth={stroke}
+            strokeLinecap="round"
+            strokeDasharray={circumference}
+            strokeDashoffset={offset}
+            className="transition-[stroke-dashoffset] duration-1000 linear"
+          />
+        </svg>
+        <div className="absolute inset-0 flex flex-col items-center justify-center px-0.5">
+          <span className="text-[8px] text-text/60 leading-none mb-0.5">Time left</span>
+          <span className="text-[11px] font-semibold text-primary tabular-nums leading-none">
+            {timeLeft}
+          </span>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <span className={className}>
@@ -438,8 +487,8 @@ export default function SpaceRaceGamePanel({
 
   return (
     <div className="relative min-h-full p-4 md:p-6">
-      <div className="bg-white rounded-xl shadow-lg p-4 md:p-8 border border-gray-200 max-w-3xl mx-auto">
-        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
+      <div className="bg-white rounded-xl shadow-lg p-4 md:p-8 border border-gray-200 max-w-3xl mx-auto max-md:rounded-2xl max-md:shadow-soft max-md:bg-gradient-to-b max-md:from-[#F8F1F5] max-md:to-white">
+        <div className="hidden md:flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
           <p className="min-w-0">
             <span className="text-lg font-bold text-primary">
               Welcome, {participant?.name || 'Audience'}
@@ -465,15 +514,44 @@ export default function SpaceRaceGamePanel({
           )}
         </div>
 
+        <div className="md:hidden flex items-start justify-between gap-3">
+          <div className="min-w-0 flex-1">
+            <p className="text-lg font-bold text-primary leading-tight truncate">
+              Welcome, {participant?.name || 'Audience'}
+            </p>
+            {participant?.teamId != null && (
+              <span
+                className="mt-1 inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium max-w-full"
+                style={{ backgroundColor: '#F1E5EB', color: '#6D415F' }}
+              >
+                <Zap className="w-3 h-3 shrink-0" />
+                <span className="truncate">Team {participant.teamId}</span>
+              </span>
+            )}
+          </div>
+          {!window.location.pathname.includes('/quiz/') && (
+            <JoinDurationTimer
+              raceData={raceData}
+              variant="ring"
+            />
+          )}
+          {window.location.pathname.includes('/quiz/') && teamTimer?.endTime && (
+            <div className="shrink-0 text-right">
+              <p className="text-text/60 text-[10px] mb-0.5">Quiz time left</p>
+              <TimerDisplay timerInfo={{ endTime: teamTimer.endTime }} onTimeUp={onTimeUp} />
+            </div>
+          )}
+        </div>
+
         {hasQuiz && !window.location.pathname.includes('/quiz/') && !hasAttemptedQuiz && !quizTimeExpired && (
           <div className="mt-6 flex flex-col items-center gap-3">
-            <p className="text-text text-sm w-full">
+            <p className="text-text text-sm w-full max-md:text-center">
               The quiz is ready — start it whenever you&apos;re set, and coordinate with your teammates along the way.
             </p>
             <button
               type="button"
               onClick={handleStartQuiz}
-              className="px-5 py-2 min-h-11 max-md:w-full bg-primary text-white rounded-lg font-semibold hover:bg-primary/90 transition-colors whitespace-nowrap"
+              className="px-5 py-2 min-h-11 max-md:w-full bg-primary text-white rounded-lg font-semibold hover:bg-primary/90 transition-colors whitespace-nowrap max-md:bg-gradient-to-r max-md:from-primary max-md:to-[#8B4F73] max-md:border-0"
             >
               Start Quiz
             </button>

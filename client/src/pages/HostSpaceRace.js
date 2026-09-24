@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, Play, Square, Settings, Users, Clock, Trophy, Star, Filter, Monitor, Check, Copy, Loader2, X } from 'lucide-react';
+import { Plus, Play, Square, Settings, Users, Clock, Trophy, Star, Filter, Eye, Check, Copy, Loader2, X } from 'lucide-react';
 import { useHostData } from '../contexts/HostDataContext';
 import { useAuth } from '../contexts/AuthContext';
 import SpaceRaceSettings from '../components/SpaceRaceSettings';
@@ -20,6 +20,7 @@ import PageHeaderCard from '../components/Host/PageHeaderCard';
 import HeaderCardStats from '../components/Host/HeaderCardStats';
 import ListFilterBar from '../components/Host/ListFilterBar';
 import { toParticipantCount } from '../utils/toParticipantCount';
+import { copyToClipboard } from '../utils/copyToClipboard';
 import {
   DURATION_MISMATCH_MSG,
   isJoinShorterThanQuiz,
@@ -359,6 +360,18 @@ export default function HostSpaceRace() {
     studentsPerTeam: 3 // Default 3 participants per team for student choice
   });
   const [durationHint, setDurationHint] = useState(false);
+
+  const handleCopyRaceJoinCode = async (code) => {
+    const value = String(code || '').trim();
+    if (!value) return;
+    const ok = await copyToClipboard(value);
+    if (ok) {
+      setCopied(true);
+      setShowCopyNotification(true);
+      setTimeout(() => setCopied(false), 2000);
+      setTimeout(() => setShowCopyNotification(false), 3000);
+    }
+  };
 
   const handleOpenCreateModal = () => {
     setCurrentStep(1);
@@ -983,24 +996,24 @@ return (
       }
       subtitle="Gamified quiz competitions with team leaderboards"
       actions={
-        <div className="flex flex-col gap-2 w-full min-[481px]:flex-row min-[481px]:w-auto min-[481px]:items-center">
+        <div className="flex flex-row items-center gap-2 w-full min-[481px]:w-auto">
+          <button
+            onClick={handleOpenCreateModal}
+            className="flex-1 min-w-0 inline-flex items-center justify-center gap-1 min-h-11 px-3 py-2 bg-white text-[#6D415F] rounded-lg text-sm font-semibold hover:bg-white/90 shadow-lg transition-colors min-[481px]:flex-none min-[481px]:px-4"
+          >
+            <Plus className="w-4 h-4 shrink-0" />
+            Create Race
+          </button>
           {activeRace && (
             <button
               onClick={() => handleEnd(resolveRaceId(activeRace))}
-              className="inline-flex items-center justify-center min-h-11 px-3 py-2 bg-white/20 text-white text-sm rounded-lg hover:bg-white/30 transition-colors w-full min-[481px]:w-auto"
+              className="flex-1 min-w-0 inline-flex items-center justify-center min-h-11 px-3 py-2 bg-red-500 text-white text-sm font-semibold rounded-lg hover:bg-red-600 transition-colors min-[481px]:flex-none"
               title="End Race"
             >
-              <Square className="w-4 h-4 mr-1" />
+              <Square className="w-4 h-4 mr-1 shrink-0" />
               End Race
             </button>
           )}
-          <button
-            onClick={handleOpenCreateModal}
-            className="flex items-center justify-center gap-2 min-h-11 px-4 py-2 bg-white text-[#6D415F] rounded-lg font-semibold hover:bg-white/90 shadow-lg transition-colors w-full min-[481px]:w-auto"
-          >
-            <Plus className="w-4 h-4" />
-            Create Race
-          </button>
         </div>
       }
     >
@@ -1027,7 +1040,8 @@ return (
           <div key={race.id} className="bg-white rounded-lg border border-gray-200 p-4 md:p-6 max-w-full min-w-0">
             <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
               <div className="flex-1 min-w-0">
-                <div className="flex flex-wrap items-center gap-2 md:gap-3 mb-2">
+                <div className="flex items-start justify-between gap-2 mb-2">
+                  <div className="flex flex-wrap items-center gap-2 md:gap-3 min-w-0">
                   <h3 className="text-lg font-semibold text-text break-words min-w-0">{race.title}</h3>
                   {(() => {
                     const status = getRaceStatus(race);
@@ -1051,6 +1065,17 @@ return (
                       </span>
                     );
                   })()}
+                  </div>
+                  {getRaceStatus(race) === 'active' && (
+                    <button
+                      onClick={() => handleEnd(resolveRaceId(race))}
+                      className="shrink-0 inline-flex items-center justify-center min-h-11 px-3 py-1.5 bg-red-500 text-white text-sm rounded-lg hover:bg-red-600 transition-colors"
+                      title="End Race"
+                    >
+                      <Square className="w-4 h-4 mr-1" />
+                      End Race
+                    </button>
+                  )}
                 </div>
                 <p className="text-text-light mb-4 break-words">{race.description || 'Live Space Race session'}</p>
                 <div className="flex flex-wrap items-center gap-x-4 gap-y-2 md:gap-x-6 text-sm text-text-light">
@@ -1092,8 +1117,21 @@ return (
 
                 {/* Show join code for active races */}
                 {getRaceStatus(race) === 'active' && race.joinCode && (
-                  <div className={`mt-3 inline-flex items-center px-3 py-1 rounded-full bg-[#6D415F]/5 text-[#6D415F] text-xs font-medium`}>
+                  <div className="mt-3 inline-flex items-center px-3 py-1 rounded-full bg-[#6D415F]/5 text-[#6D415F] text-xs font-medium">
                     Join Code: <span className="ml-1 font-mono tracking-widest">{race.joinCode}</span>
+                    <button
+                      type="button"
+                      onClick={() => handleCopyRaceJoinCode(race.joinCode)}
+                      className="min-h-9 min-w-9 -mr-1 ml-0.5 inline-flex items-center justify-center rounded-full hover:bg-[#6D415F]/10 transition-colors"
+                      title="Copy join code"
+                      aria-label="Copy join code"
+                    >
+                      {copied ? (
+                        <Check className="w-3.5 h-3.5" />
+                      ) : (
+                        <Copy className="w-3.5 h-3.5" />
+                      )}
+                    </button>
                   </div>
                 )}
               </div>
@@ -1108,38 +1146,27 @@ return (
                     Launch
                   </button>
                 )}
-                
-                {/* End button for active races */}
-                {getRaceStatus(race) === 'active' && (
+
+                {(race.status === 'completed' || race.status === 'ended' || race.status === 'active') && (
                   <button
-                    onClick={() => handleEnd(resolveRaceId(race))}
-                    className="inline-flex items-center justify-center min-h-11 px-3 py-1.5 bg-[#6D415F] text-white text-sm rounded-lg hover:bg-[#5a364d] transition-colors"
-                    title="End Race"
+                    onClick={() => navigate(`/host/space-race/${race.id}/display`)}
+                    className="min-h-11 min-w-11 p-2 text-[#6D415F] rounded-lg border border-[#6D415F]/50 hover:bg-[#6D415F]/10 transition-colors text-sm inline-flex items-center justify-center"
+                    title="View Responses"
+                    aria-label="View Responses"
                   >
-                    <Square className="w-4 h-4 mr-1" />
-                    End Race
+                    <Eye className="w-4 h-4 max-[480px]:mr-0 mr-1" />
+                    <span className="max-[480px]:hidden">View Responses</span>
                   </button>
                 )}
-                
-                {/* Settings button for all races */}
-                <button 
+
+                <button
                   onClick={() => setSettingsRace(race)}
                   className="min-h-11 min-w-11 p-2 text-[#6D415F] hover:bg-[#6D415F]/10 rounded-lg transition-colors inline-flex items-center justify-center"
                   title="Race Settings"
+                  aria-label="Race Settings"
                 >
                   <Settings className="w-4 h-4" />
                 </button>
-                
-                {/* View Display button - show for completed/ended races so teachers can see who won */}
-                {(race.status === 'completed' || race.status === 'ended' || race.status === 'active') && (
-                  <button 
-                    onClick={() => navigate(`/host/space-race/${race.id}/display`)}
-                    className="min-h-11 min-w-11 p-2 text-[#6D415F] hover:bg-[#6D415F]/10 rounded-lg transition-colors inline-flex items-center justify-center"
-                    title="View Race Display - See who won and final results"
-                  >
-                    <Monitor className="w-4 h-4" />
-                  </button>
-                )}
               </div>
             </div>
           </div>
@@ -1151,18 +1178,34 @@ return (
           </div>
         ) : null}
         {filteredRaces.length === 0 && races.length === 0 && !liveRacesLoading && (
-          <div className="text-center py-12">
-            <Trophy className="w-12 h-12 text-gray-300 mx-auto mb-4" />
-            <h3 className="text-lg font-medium text-text mb-2">No space races</h3>
-            <p className="text-text-light">Create your first gamified quiz competition</p>
+          <div className="bg-white rounded-lg border border-gray-200 p-12 text-center">
+            <Trophy className="w-16 h-16 mx-auto text-gray-300 mb-4" />
+            <h3 className="text-lg font-semibold text-text mb-2">No space races</h3>
+            <p className="text-text-light mb-6">Create your first gamified quiz competition</p>
+            <button
+              type="button"
+              onClick={handleOpenCreateModal}
+              className="inline-flex items-center justify-center gap-2 min-h-11 px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors"
+            >
+              <Plus className="w-4 h-4" />
+              Create Race
+            </button>
           </div>
         )}
         
         {filteredRaces.length === 0 && races.length > 0 && (
-          <div className="text-center py-12">
-            <Filter className="w-12 h-12 text-gray-300 mx-auto mb-4" />
-            <h3 className="text-lg font-medium text-text mb-2">No races in this category</h3>
-            <p className="text-text-light">Try selecting a different filter or create a new race</p>
+          <div className="bg-white rounded-lg border border-gray-200 p-12 text-center">
+            <Filter className="w-16 h-16 mx-auto text-gray-300 mb-4" />
+            <h3 className="text-lg font-semibold text-text mb-2">No races in this category</h3>
+            <p className="text-text-light mb-6">Try selecting a different filter or create a new race</p>
+            <button
+              type="button"
+              onClick={handleOpenCreateModal}
+              className="inline-flex items-center justify-center gap-2 min-h-11 px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors"
+            >
+              <Plus className="w-4 h-4" />
+              Create Race
+            </button>
           </div>
         )}
       </div>

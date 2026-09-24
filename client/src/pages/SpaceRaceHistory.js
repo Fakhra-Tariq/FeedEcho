@@ -18,6 +18,8 @@ import {
   X,
 } from 'lucide-react';
 import { spaceRacesAPI } from '../services/api';
+import { useAuth } from '../contexts/AuthContext';
+import AudienceDashboardNavbar from '../components/Audience/AudienceDashboardNavbar';
 import { getStoredAudienceSession, getStudentQueryParams } from '../utils/audienceSession';
 
 const formatSessionDate = (iso) => {
@@ -229,6 +231,8 @@ const ImagePreviewModal = ({ previewImage, onClose }) => {
 
 export default function SpaceRaceHistory() {
   const navigate = useNavigate();
+  const { audienceLogout } = useAuth();
+  const [student, setStudent] = useState(null);
   const [expandedRaceId, setExpandedRaceId] = useState(null);
   const [resourceFilters, setResourceFilters] = useState({});
   const [sessions, setSessions] = useState([]);
@@ -237,16 +241,17 @@ export default function SpaceRaceHistory() {
   const [resourceToDelete, setResourceToDelete] = useState(null);
 
   useEffect(() => {
-    const student = getStoredAudienceSession();
-    if (!student) {
+    const loggedInStudent = getStoredAudienceSession();
+    if (!loggedInStudent) {
       navigate('/join');
       return;
     }
+    setStudent(loggedInStudent);
 
     const loadHistory = async () => {
       setLoading(true);
       try {
-        const query = getStudentQueryParams(student);
+        const query = getStudentQueryParams(loggedInStudent);
         const historyResponse = await spaceRacesAPI.getStudentHistory(query);
         const historyRows = historyResponse.data?.data || [];
 
@@ -335,15 +340,25 @@ export default function SpaceRaceHistory() {
     setResourceToDelete(null);
   };
 
+  const handleLogout = async () => {
+    await audienceLogout();
+    navigate('/');
+  };
+
   return (
     <div className="min-h-screen bg-background">
+      <AudienceDashboardNavbar
+        displayName={student?.name}
+        displayEmail={student?.email}
+        onLogout={handleLogout}
+      />
       <div className="bg-white shadow-sm" style={{ borderBottom: '1px solid #E8E0F0' }}>
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
           <div className="flex items-center justify-between max-md:flex-col max-md:items-start max-md:gap-3">
             <button
               type="button"
               onClick={() => navigate('/audience/home')}
-              className="flex items-center space-x-2 hover:opacity-80 transition-opacity text-primary max-md:min-h-11"
+              className="flex items-center space-x-2 hover:opacity-80 transition-opacity text-primary max-md:min-h-11 max-[480px]:hidden"
             >
               <ArrowLeft className="w-5 h-5 shrink-0" />
               <span>Back to Dashboard</span>
@@ -356,19 +371,19 @@ export default function SpaceRaceHistory() {
         </div>
       </div>
 
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 max-[480px]:pt-3 max-[480px]:pb-8">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8 max-[480px]:grid-cols-2 max-[480px]:gap-2 max-[480px]:mb-3">
           <div
-            className="p-6 shadow-sm"
+            className="p-6 shadow-sm max-[480px]:p-3 max-[480px]:min-h-[56px] max-[480px]:flex max-[480px]:items-center"
             style={{ backgroundColor: '#FFFFFF', border: '0.5px solid #E8E0F0', borderRadius: '12px' }}
           >
-            <div className="flex items-center space-x-3">
-              <div className="p-3 rounded-lg bg-primary">
-                <Rocket className="w-6 h-6 text-white" />
+            <div className="flex items-center space-x-3 max-[480px]:space-x-2 min-w-0 w-full">
+              <div className="p-3 rounded-lg bg-primary shrink-0 max-[480px]:p-0 max-[480px]:w-8 max-[480px]:h-8 max-[480px]:inline-flex max-[480px]:items-center max-[480px]:justify-center">
+                <Rocket className="w-6 h-6 text-white max-[480px]:w-4 max-[480px]:h-4" />
               </div>
-              <div>
-                <p className="text-sm" style={{ color: '#6B7280' }}>Total Sessions</p>
-                <p className="text-2xl font-bold" style={{ color: '#1a1a1a' }}>
+              <div className="min-w-0">
+                <p className="text-sm leading-tight max-[480px]:text-[12px]" style={{ color: '#6B7280' }}>Total Sessions</p>
+                <p className="text-2xl font-bold leading-tight max-[480px]:text-[17px]" style={{ color: '#1a1a1a' }}>
                   {sessions.length}
                 </p>
               </div>
@@ -376,16 +391,16 @@ export default function SpaceRaceHistory() {
           </div>
 
           <div
-            className="p-6 shadow-sm"
+            className="p-6 shadow-sm max-[480px]:p-3 max-[480px]:min-h-[56px] max-[480px]:flex max-[480px]:items-center"
             style={{ backgroundColor: '#FFFFFF', border: '0.5px solid #E8E0F0', borderRadius: '12px' }}
           >
-            <div className="flex items-center space-x-3">
-              <div className="p-3 rounded-lg bg-secondary">
-                <FolderOpen className="w-6 h-6 text-white" />
+            <div className="flex items-center space-x-3 max-[480px]:space-x-2 min-w-0 w-full">
+              <div className="p-3 rounded-lg bg-secondary shrink-0 max-[480px]:p-0 max-[480px]:w-8 max-[480px]:h-8 max-[480px]:inline-flex max-[480px]:items-center max-[480px]:justify-center">
+                <FolderOpen className="w-6 h-6 text-white max-[480px]:w-4 max-[480px]:h-4" />
               </div>
-              <div>
-                <p className="text-sm" style={{ color: '#6B7280' }}>Shared Resources</p>
-                <p className="text-2xl font-bold" style={{ color: '#1a1a1a' }}>
+              <div className="min-w-0">
+                <p className="text-sm leading-tight max-[480px]:text-[12px]" style={{ color: '#6B7280' }}>Shared Resources</p>
+                <p className="text-2xl font-bold leading-tight max-[480px]:text-[17px]" style={{ color: '#1a1a1a' }}>
                   {sessions.reduce((sum, s) => sum + s.resources.length, 0)}
                 </p>
               </div>

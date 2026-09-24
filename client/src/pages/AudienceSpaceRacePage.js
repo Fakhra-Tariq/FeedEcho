@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { Clock, Rocket, MessageCircle, ChevronUp, X } from 'lucide-react';
+import { Clock, Rocket, MessageCircle } from 'lucide-react';
 import { AudienceActivityHeader, AUDIENCE_ACTIVITY_PAGE_WIDTH } from '../components/Audience/AudienceActivityLayout';
 import GuestProgressLoginBanner from '../components/Audience/GuestProgressLoginBanner';
 import { onValue, ref as dbRef, off } from 'firebase/database';
@@ -81,6 +81,7 @@ export default function AudienceSpaceRacePage() {
   const [participants, setParticipants] = useState([]);
   const [quizTimerLabel, setQuizTimerLabel] = useState(null);
   const [mobileChatOpen, setMobileChatOpen] = useState(false);
+  const [unreadChatCount, setUnreadChatCount] = useState(0);
 
   const activeRaceId = routeRaceId || raceData?.id || raceData?.raceId;
   const activeQuizId =
@@ -481,15 +482,17 @@ export default function AudienceSpaceRacePage() {
     <div className="flex flex-col md:flex-row h-[100dvh] max-h-[100dvh] overflow-hidden overflow-x-hidden bg-background">
       <div className="w-full md:flex-1 flex flex-col min-w-0 min-h-0 overflow-hidden">
         <div className="flex-shrink-0">
-          <div className="h-16 overflow-hidden">
+          <div className="h-16 overflow-hidden max-md:h-auto max-md:overflow-visible">
             <AudienceActivityHeader
               title={spaceRaceQuizTitle}
-              titleIcon={<Rocket className="w-4 h-4 shrink-0 text-[#6D415F]" />}
+              titleIcon={<Rocket className="w-4 h-4 shrink-0 text-[#6D415F] max-md:w-3.5 max-md:h-3.5" />}
               participantName={headerParticipantName}
               onLogoClick={handleLeave}
+              showAvatar
+              compactMobileZones
               rightAddon={
                 isQuizView && quizTimerLabel != null ? (
-                  <span className="inline-flex items-center gap-1 font-semibold text-primary text-sm whitespace-nowrap tabular-nums shrink-0">
+                  <span className="hidden md:inline-flex items-center gap-1 font-semibold text-primary text-sm whitespace-nowrap tabular-nums shrink-0">
                     <Clock className="w-4 h-4" />
                     {quizTimerLabel}
                   </span>
@@ -502,7 +505,7 @@ export default function AudienceSpaceRacePage() {
           />
         </div>
         {isQuizView ? (
-          <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden bg-background">
+          <div className={`flex-1 min-h-0 overflow-y-auto overflow-x-hidden bg-background ${hasTeamChat ? 'max-md:pb-20' : ''}`}>
             <SpaceRaceGamePanel
               raceId={activeRaceId}
               participant={participant}
@@ -524,7 +527,7 @@ export default function AudienceSpaceRacePage() {
             />
           </div>
         ) : (
-          <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden bg-background">
+          <div className={`flex-1 min-h-0 overflow-y-auto overflow-x-hidden bg-background ${hasTeamChat ? 'max-md:pb-20' : ''}`}>
             <SpaceRaceGamePanel
               raceId={activeRaceId}
               participant={participant}
@@ -533,22 +536,25 @@ export default function AudienceSpaceRacePage() {
             />
           </div>
         )}
-        {hasTeamChat && (
-          <button
-            type="button"
-            className={`md:hidden flex-shrink-0 min-h-11 px-4 bg-primary text-white flex items-center justify-between gap-2 ${
-              mobileChatOpen ? 'hidden' : ''
-            }`}
-            onClick={() => setMobileChatOpen(true)}
-          >
-            <span className="inline-flex items-center gap-2 font-medium">
-              <MessageCircle className="w-4 h-4" />
-              Team Chat
-            </span>
-            <ChevronUp className="w-5 h-5" />
-          </button>
-        )}
       </div>
+
+      {hasTeamChat && (
+        <button
+          type="button"
+          className={`md:hidden fixed z-50 bottom-5 right-5 w-14 h-14 rounded-full bg-gradient-to-br from-primary to-[#8B4F73] text-white shadow-lg flex items-center justify-center ${
+            mobileChatOpen ? 'hidden' : ''
+          }`}
+          onClick={() => setMobileChatOpen((open) => !open)}
+          aria-label={mobileChatOpen ? 'Close team chat' : 'Open team chat'}
+        >
+          <MessageCircle className="w-6 h-6" />
+          {unreadChatCount > 0 && (
+            <span className="absolute -top-0.5 -right-0.5 min-w-[1.25rem] h-5 px-1 rounded-full bg-error-600 text-white text-[10px] font-bold leading-none flex items-center justify-center">
+              {unreadChatCount > 99 ? '99+' : unreadChatCount}
+            </span>
+          )}
+        </button>
+      )}
 
       {mobileChatOpen && hasTeamChat && (
         <button
@@ -562,7 +568,7 @@ export default function AudienceSpaceRacePage() {
       <div
         className={`flex-shrink-0 min-h-0 overflow-hidden ${
           hasTeamChat ? '' : 'max-md:hidden'
-        } max-md:fixed max-md:inset-x-0 max-md:bottom-0 max-md:z-40 ${
+        } max-md:fixed max-md:inset-x-0 max-md:bottom-0 max-md:z-40 max-md:rounded-t-2xl max-md:shadow-[0_-8px_24px_-8px_rgba(46,31,42,0.28)] ${
           mobileChatOpen ? 'max-md:h-[min(75vh,32rem)]' : 'max-md:h-0'
         } md:relative md:h-full md:w-[34%] xl:w-[32%]`}
       >
@@ -574,14 +580,16 @@ export default function AudienceSpaceRacePage() {
             compactHeader
             dockedEdge
             hideSyncNotice
+            isViewed={mobileChatOpen}
+            onUnreadCountChange={setUnreadChatCount}
             headerAction={
               <button
                 type="button"
                 onClick={() => setMobileChatOpen(false)}
-                className="md:hidden min-h-11 min-w-11 inline-flex items-center justify-center rounded-lg hover:bg-white/10 shrink-0"
+                className="md:hidden min-h-11 min-w-11 inline-flex items-center justify-center rounded-lg hover:bg-white/10 shrink-0 text-xl leading-none"
                 aria-label="Close team chat"
               >
-                <X className="w-5 h-5" />
+                ✕
               </button>
             }
           />

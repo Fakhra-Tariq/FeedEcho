@@ -69,7 +69,7 @@ const ToastNotification = ({ toast, onRemove }) => {
       className={`
         relative flex items-center space-x-3 p-4 rounded-2xl shadow-lg backdrop-blur-md
         ${styles.bg} ${styles.border} ${styles.text}
-        min-w-[300px] max-w-[500px]
+        min-w-[300px] max-w-[500px] min-h-10 max-[480px]:min-w-0 max-[480px]:w-full max-[480px]:max-w-none
         transform transition-all duration-500 ease-out
         animate-in slide-in-from-top-2 fade-in-0
         hover:shadow-xl

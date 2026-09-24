@@ -63,6 +63,7 @@ import HostAnonymousChat from './pages/HostAnonymousChat';
 import HostProfile from './pages/HostProfile';
 import HostLayout from './components/Host/HostLayout';
 import SessionsPage from './pages/SessionsPage';
+import ScrollToTop from './components/ScrollToTop';
 
 /** Redirect old /teacher/* and /student/* URLs to /host/* and /audience/* */
 function LegacyPathRedirect({ fromPrefix, toPrefix }) {
@@ -232,6 +233,7 @@ function App() {
   return (
     <ErrorBoundary>
       <Router>
+        <ScrollToTop />
         <AppContent />
       </Router>
     </ErrorBoundary>

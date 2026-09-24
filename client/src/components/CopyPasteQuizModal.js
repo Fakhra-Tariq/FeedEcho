@@ -471,13 +471,13 @@ Sample Answer: H2O`;
           {/* Question Type Selection */}
           <div className="mb-6">
             <label className="block text-sm font-semibold text-text mb-3">Select Question Type</label>
-            <div className="flex gap-3 overflow-x-auto pb-2 justify-center">
+            <div className="grid grid-cols-2 gap-3 min-w-0 md:flex md:overflow-x-auto md:pb-2 md:justify-center md:grid-cols-none">
               {questionTypes.map((type) => (
                 <button
                   key={type}
                   onClick={() => setSelectedType(type)}
                   className={clsx(
-                    'flex-shrink-0 relative p-4 rounded-2xl border-2 transition-all duration-200 min-w-[140px]',
+                    'relative p-4 rounded-2xl border-2 transition-all duration-200 min-w-0 w-full md:flex-shrink-0 md:min-w-[140px] md:w-auto',
                     'hover:shadow-lg hover:-translate-y-1 hover:scale-[1.02]',
                     selectedType === type
                       ? 'border-primary/40 bg-gradient-to-br from-primary/8 via-primary/5 to-primary/8 shadow-md'

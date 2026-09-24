@@ -336,6 +336,14 @@ const QuizDurationTimer = ({ raceData, className = '' }) => {
   );
 };
 
+const scrollLeaderboardToTop = () => {
+  window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
+  document.documentElement.scrollTop = 0;
+  document.body.scrollTop = 0;
+  const main = document.querySelector('main');
+  if (main) main.scrollTop = 0;
+};
+
 export default function HostSpaceRaceDisplay() {
   const { raceId } = useParams();
   const [expandedTeams, setExpandedTeams] = useState(new Set());
@@ -381,6 +389,12 @@ export default function HostSpaceRaceDisplay() {
 
   const isLoading = raceLoading && !raceData;
 
+  useEffect(() => {
+    scrollLeaderboardToTop();
+    const frame = requestAnimationFrame(scrollLeaderboardToTop);
+    return () => cancelAnimationFrame(frame);
+  }, [raceId, isLoading]);
+
   // Team scores are stored out of 100 (each correct answer = 100/N points)
   const totalQuestions =
     raceData?.quiz?.questions?.length ||
@@ -418,7 +432,7 @@ export default function HostSpaceRaceDisplay() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className="bg-gray-50 flex items-center justify-center py-16 [overflow-anchor:none]">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
       </div>
     );
@@ -451,7 +465,7 @@ export default function HostSpaceRaceDisplay() {
   const leadingTeamCount = teamPositions.filter((pos) => pos.score === leadingScore).length;
 
   return (
-    <div className="min-h-screen bg-gray-50 text-text overflow-x-hidden">
+    <div className="min-h-screen bg-gray-50 text-text overflow-x-hidden [overflow-anchor:none]">
       {/* Header - match teacher layout theme */}
       <div className="bg-white shadow-sm border-b border-gray-200">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">

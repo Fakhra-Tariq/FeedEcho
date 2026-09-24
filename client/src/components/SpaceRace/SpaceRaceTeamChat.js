@@ -77,6 +77,8 @@ export default function SpaceRaceTeamChat({
   dockedEdge = false,
   hideSyncNotice = false,
   headerAction = null,
+  isViewed = true,
+  onUnreadCountChange = null,
 }) {
   const { alert } = useHybridAlert();
   const [message, setMessage] = useState('');
@@ -139,6 +141,8 @@ export default function SpaceRaceTeamChat({
 
   const teamName = useMemo(() => `Team ${normalizedTeamId}`, [normalizedTeamId]);
   const currentParticipantId = participant?.id ? String(participant.id) : '';
+  const lastSeenTimestampRef = useRef(null);
+  const unreadHydratedRef = useRef(false);
 
   const scrollToBottom = useCallback(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -147,6 +151,37 @@ export default function SpaceRaceTeamChat({
   useEffect(() => {
     scrollToBottom();
   }, [messages, scrollToBottom]);
+
+  useEffect(() => {
+    if (!onUnreadCountChange) return undefined;
+
+    const viewedOnDesktop =
+      typeof window !== 'undefined' && window.matchMedia('(min-width: 768px)').matches;
+    const latestTimestamp = messages[messages.length - 1]?.timestamp || '';
+
+    if (!unreadHydratedRef.current) {
+      lastSeenTimestampRef.current = latestTimestamp;
+      if (messages.length > 0 || !rtdbLoading) {
+        unreadHydratedRef.current = true;
+        onUnreadCountChange(0);
+      }
+      return undefined;
+    }
+
+    if (isViewed || viewedOnDesktop) {
+      lastSeenTimestampRef.current = latestTimestamp || lastSeenTimestampRef.current;
+      onUnreadCountChange(0);
+      return undefined;
+    }
+
+    const lastSeen = lastSeenTimestampRef.current;
+    const unseen = messages.filter((msg) => {
+      if (String(msg.participantId || '') === currentParticipantId) return false;
+      return String(msg.timestamp || '') > String(lastSeen);
+    }).length;
+    onUnreadCountChange(unseen);
+    return undefined;
+  }, [messages, isViewed, onUnreadCountChange, currentParticipantId, rtdbLoading]);
 
   const sendMessagePayload = async (payload, optimisticId = null) => {
     if (!raceId || normalizedTeamId == null || !participant?.id) {

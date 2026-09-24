@@ -15,6 +15,7 @@ const formatTabLabel = (value) =>
  * @param {(value: string) => void} onSearchChange - Called with the new search text
  * @param {string} [searchPlaceholder]
  * @param {string} [className] - Optional wrapper classes
+ * @param {string} [tabsClassName] - Optional classes for the tab-pill row
  */
 export default function ListFilterBar({
   tabs = [],
@@ -24,6 +25,7 @@ export default function ListFilterBar({
   onSearchChange,
   searchPlaceholder = 'Search…',
   className = '',
+  tabsClassName = '',
 }) {
   return (
     <div
@@ -32,7 +34,7 @@ export default function ListFilterBar({
         className
       )}
     >
-      <div className="flex flex-wrap gap-2">
+      <div className={clsx('flex flex-wrap gap-2', tabsClassName)}>
         {tabs.map((tab) => (
           <button
             key={tab}

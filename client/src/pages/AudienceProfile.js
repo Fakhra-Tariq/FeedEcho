@@ -1,8 +1,7 @@
-import React, { useCallback, useEffect, useMemo, useState, useRef } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import React, { useEffect, useMemo, useState, useRef } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import {
   ChevronRight,
-  ChevronDown,
   LogOut,
   Trash2,
   Lock,
@@ -16,15 +15,13 @@ import {
   Award,
   TrendingUp,
   Target,
-  Home,
-  User,
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { authAPI } from '../services/api';
 import { getStoredAudienceSession, persistAudienceSession, clearAudienceSession } from '../utils/audienceSession';
 import { useAudienceQuizStats } from '../hooks/useAudienceQuizStats';
-import { useClickOutside } from '../hooks/useClickOutside';
 import AudienceAvatar from '../components/AudienceAvatar';
+import AudienceDashboardNavbar from '../components/Audience/AudienceDashboardNavbar';
 import ProfileStatsRow from '../components/ProfileStatsRow';
 
 const mapUserToProfile = (user = {}, session = {}) => {
@@ -34,10 +31,6 @@ const mapUserToProfile = (user = {}, session = {}) => {
     session.name ||
     'Audience';
 
-  const rawRole = user.role || session.role || 'student';
-  const roleLabel =
-    rawRole === 'teacher' ? 'Host' : rawRole === 'student' ? 'Audience' : rawRole.replace(/^\w/, (c) => c.toUpperCase());
-
   return {
     fullName,
     email: user.email || session.email || '',
@@ -45,10 +38,18 @@ const mapUserToProfile = (user = {}, session = {}) => {
     university: user.university || '',
     location: user.location || '',
     phone: user.phone || '',
-    roleLabel,
     joinedDate: user.createdAt || null,
     profileImage: user.profileImage || null,
   };
+};
+
+/** Viewing context from the current dashboard route (same /audience vs /host split as App.js). */
+const getViewingContextBadge = (pathname, activePortal) => {
+  if (typeof pathname === 'string' && pathname.startsWith('/audience')) return 'Audience';
+  if (typeof pathname === 'string' && pathname.startsWith('/host')) return 'Host';
+  if (activePortal === 'teacher') return 'Host';
+  if (activePortal === 'student') return 'Audience';
+  return 'Audience';
 };
 
 const SettingsRow = ({ icon: Icon, label, onClick, danger = false }) => (
@@ -69,7 +70,9 @@ const SettingsRow = ({ icon: Icon, label, onClick, danger = false }) => (
 
 export default function AudienceProfile() {
   const navigate = useNavigate();
-  const { audienceLogout, updateUserProfile, changeUserPassword, userProfile } = useAuth();
+  const location = useLocation();
+  const { audienceLogout, updateUserProfile, changeUserPassword, userProfile, activePortal } = useAuth();
+  const contextBadgeLabel = getViewingContextBadge(location.pathname, activePortal);
   const [student, setStudent] = useState(null);
   const [showEditModal, setShowEditModal] = useState(false);
   const [showPasswordModal, setShowPasswordModal] = useState(false);
@@ -79,12 +82,6 @@ export default function AudienceProfile() {
   const [savingProfile, setSavingProfile] = useState(false);
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
   const fileInputRef = useRef(null);
-  const [showProfileDropdown, setShowProfileDropdown] = useState(false);
-  const profileDropdownRef = useRef(null);
-  const closeProfileDropdown = useCallback(() => {
-    setShowProfileDropdown(false);
-  }, []);
-  useClickOutside(profileDropdownRef, closeProfileDropdown, showProfileDropdown);
 
   const { stats: quizStats, loading: loadingQuizStats } = useAudienceQuizStats(student);
 
@@ -283,69 +280,11 @@ export default function AudienceProfile() {
   const navDisplayEmail = profile?.email || student?.email || '';
 
   const studentNavbar = (
-    <nav className="bg-white shadow-sm border-b border-gray-200 flex-shrink-0">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex justify-between items-center h-16">
-          <div className="flex items-center space-x-3">
-            <img
-              src="/FeedEcho-logo.png.png"
-              alt="FeedEcho"
-              className="h-32 w-auto object-contain mix-blend-mode: multiply"
-            />
-          </div>
-
-          <div className="hidden md:flex items-center space-x-6">
-            <a href="/audience/home" className="flex items-center space-x-2 text-gray-700 hover:text-primary transition-colors">
-              <Home className="w-4 h-4" />
-              <span className="font-medium">Home</span>
-            </a>
-            <Link to="/audience/progress" className="flex items-center space-x-2 text-gray-700 hover:text-primary transition-colors">
-              <TrendingUp className="w-4 h-4" />
-              <span className="font-medium">Progress</span>
-            </Link>
-          </div>
-
-          <div className="flex items-center space-x-3">
-            <div className="relative" ref={profileDropdownRef}>
-              <button
-                onClick={() => setShowProfileDropdown(!showProfileDropdown)}
-                className="flex items-center space-x-2 p-2 rounded-lg hover:bg-gray-100 transition-colors"
-              >
-                <AudienceAvatar name={navDisplayName} />
-                <span className="font-medium text-text">{navDisplayName.split(' ')[0] || 'Audience'}</span>
-                <ChevronDown className="w-4 h-4 text-gray-500" />
-              </button>
-
-              {showProfileDropdown && (
-                <div className="absolute right-0 mt-2 w-56 bg-white rounded-lg shadow-lg border border-gray-200 z-50">
-                  <div className="p-3 border-b border-gray-200">
-                    <p className="font-medium text-text">{navDisplayName}</p>
-                    <p className="text-sm text-gray-600">{navDisplayEmail}</p>
-                  </div>
-                  <div className="py-2">
-                    <Link to="/audience/profile" className="block px-4 py-2 text-gray-700 hover:bg-gray-100">
-                      <div className="flex items-center space-x-2">
-                        <User className="w-4 h-4" />
-                        <span>Profile</span>
-                      </div>
-                    </Link>
-                    <button
-                      onClick={handleLogout}
-                      className="w-full text-left px-4 py-2 text-gray-700 hover:bg-gray-100"
-                    >
-                      <div className="flex items-center space-x-2">
-                        <LogOut className="w-4 h-4" />
-                        <span>Logout</span>
-                      </div>
-                    </button>
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      </div>
-    </nav>
+    <AudienceDashboardNavbar
+      displayName={navDisplayName}
+      displayEmail={navDisplayEmail}
+      onLogout={handleLogout}
+    />
   );
 
   if (loadingProfile || !profile) {
@@ -431,7 +370,7 @@ export default function AudienceProfile() {
               </span>
               <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-600">
                 <GraduationCap className="w-3.5 h-3.5" />
-                {profile.roleLabel}
+                {contextBadgeLabel}
               </span>
             </div>
 

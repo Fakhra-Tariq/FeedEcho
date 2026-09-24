@@ -88,6 +88,16 @@ const HostDashboard = () => {
 
   const isSessionActive = !!activeSession;
 
+  const handleCreateSessionButtonClick = () => {
+    if (isSessionActive) {
+      alert.toast.info(
+        'Only one session can be active at a time. End your current session to create a new one.'
+      );
+      return;
+    }
+    setShowCreateModal(true);
+  };
+
   const actionButtons = [
     {
       title: "Create Quiz",
@@ -149,13 +159,14 @@ const HostDashboard = () => {
         subtitle="Monitor your classroom's progress and engage with the audience through interactive activities."
         actions={
           <button
-            onClick={() => setShowCreateModal(true)}
-            disabled={isSessionActive}
+            type="button"
+            onClick={handleCreateSessionButtonClick}
+            aria-disabled={isSessionActive}
             className={clsx(
               'flex items-center justify-center gap-2 px-6 py-3 min-h-11 rounded-xl font-semibold transition-all duration-300',
               'bg-white text-[#6D415F] hover:bg-white/90',
               'shadow-lg hover:shadow-xl',
-              isSessionActive && 'opacity-50 cursor-not-allowed'
+              isSessionActive && 'opacity-50 cursor-not-allowed hover:bg-white'
             )}
             title={isSessionActive ? 'A session is already active' : 'Create a new session'}
           >

@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, Play, Square, Eye, Users, Clock, FileText, X, BarChart3, CheckCircle, Copy, RotateCcw, Trash2, Archive, RotateCcw as Restore, Loader2, Check } from 'lucide-react';
+import { Plus, Play, Square, Eye, Users, Clock, FileText, X, BarChart3, CheckCircle, Copy, RotateCcw, Trash2, Archive, RotateCcw as Restore, Loader2, Check, Edit } from 'lucide-react';
 import { useHybridAlert } from '../contexts/HybridAlertContext';
 import { exitTicketsAPI } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
@@ -521,7 +521,8 @@ export default function ExitTicketDashboard() {
     <div className="px-0 sm:px-2 lg:px-6 pb-6 space-y-4 overflow-x-hidden max-w-full">
       <SessionLaunchBanner />
 
-      {/* Header */}
+      {/* Header — desktop/tablet (768+) */}
+      <div className="hidden md:block">
       <PageHeaderCard
         compact
         title="Exit Ticket"
@@ -539,24 +540,6 @@ export default function ExitTicketDashboard() {
         subtitle="Collect anonymous audience feedback and track attendance"
         actions={
           <>
-            {activeTicket && (
-              <>
-                <button
-                  onClick={() => fetchResponses(activeTicket.id)}
-                  className="min-h-11 min-w-11 inline-flex items-center justify-center p-2 bg-white/20 text-white rounded-lg hover:bg-white/30 transition-colors"
-                  title="View Responses"
-                >
-                  <Eye className="w-5 h-5" />
-                </button>
-                <button
-                  onClick={() => handleEndTicket(activeTicket.id)}
-                  className="min-h-11 min-w-11 inline-flex items-center justify-center p-2 bg-white/20 text-white rounded-lg hover:bg-white/30 transition-colors"
-                  title="End Exit Ticket"
-                >
-                  <Square className="w-5 h-5" />
-                </button>
-              </>
-            )}
             <button
               onClick={() => navigate('/host/exit-tickets/create')}
               className="flex items-center justify-center gap-2 min-h-11 px-4 py-2 bg-white text-primary rounded-lg font-semibold hover:bg-white/90 shadow-lg transition-colors"
@@ -564,6 +547,16 @@ export default function ExitTicketDashboard() {
               <Plus className="w-4 h-4" />
               Create Exit Ticket
             </button>
+            {activeTicket && (
+              <button
+                onClick={() => handleEndTicket(activeTicket.id)}
+                className="flex items-center justify-center gap-2 min-h-11 px-4 py-2 bg-red-500 text-white rounded-lg font-semibold hover:bg-red-600 transition-colors"
+                title="End Exit Ticket"
+              >
+                <Square className="w-4 h-4" />
+                End Exit Ticket
+              </button>
+            )}
           </>
         }
       >
@@ -576,6 +569,59 @@ export default function ExitTicketDashboard() {
           ]}
         />
       </PageHeaderCard>
+      </div>
+
+      {/* Compact mobile banner (below md) */}
+      <div className="md:hidden bg-gradient-to-br from-[#6D415F] via-[#6D415F]/90 to-[#3A2E2A] border border-[#6D415F]/30 shadow-xl rounded-2xl px-3 py-3 space-y-2.5 max-w-full">
+        <div className="min-w-0">
+          <h1 className="text-xl font-bold text-white leading-tight">Exit Ticket</h1>
+          <p className="text-xs text-white/90 leading-snug mt-0.5">
+            Collect anonymous audience feedback and track attendance
+          </p>
+          <InfoRecap
+            variant="onDark"
+            className="mt-0.5 text-xs"
+            steps={[
+              'Create your exit ticket questions',
+              'Choose Save as Draft or Launch',
+              'Launching requires an active session',
+              'Responses are collected anonymously, but attendance is tracked separately.',
+            ]}
+          />
+        </div>
+        <div className="grid grid-cols-4 gap-1 min-w-0">
+          {[
+            { label: 'Drafts', value: ticketsByStatus.draft },
+            { label: 'Active', value: ticketsByStatus.active },
+            { label: 'Ended', value: ticketsByStatus.ended },
+            { label: 'Archived', value: ticketsByStatus.archived },
+          ].map(({ label, value }) => (
+            <div key={label} className="min-w-0 text-center">
+              <p className="text-[10px] leading-tight text-white/80">{label}</p>
+              <p className="text-lg font-bold text-white leading-tight">{value}</p>
+            </div>
+          ))}
+        </div>
+        <div className="flex items-stretch gap-2">
+          <button
+            onClick={() => navigate('/host/exit-tickets/create')}
+            className="flex-1 min-w-0 inline-flex items-center justify-center gap-1 min-h-11 px-2 py-2 bg-white text-[#6D415F] rounded-lg text-xs font-bold hover:bg-white/90 shadow-lg transition-colors"
+          >
+            <Plus className="w-4 h-4 shrink-0" />
+            <span className="text-center leading-tight">Create Exit Ticket</span>
+          </button>
+          {activeTicket && (
+            <button
+              onClick={() => handleEndTicket(activeTicket.id)}
+              className="flex-1 min-w-0 inline-flex items-center justify-center gap-1 min-h-11 px-2 py-2 bg-red-500 text-white rounded-lg text-xs font-semibold hover:bg-red-600 transition-colors"
+              title="End Exit Ticket"
+            >
+              <Square className="w-4 h-4 shrink-0" />
+              <span className="text-center leading-tight">End Exit Ticket</span>
+            </button>
+          )}
+        </div>
+      </div>
 
       {/* Filter Tabs */}
       <ListFilterBar
@@ -585,6 +631,7 @@ export default function ExitTicketDashboard() {
         searchTerm={searchTerm}
         onSearchChange={setSearchTerm}
         searchPlaceholder="Search exit tickets..."
+        tabsClassName="max-md:grid max-md:grid-cols-3 max-md:w-full max-md:[&>button]:w-full max-md:[&>button]:px-2 max-md:[&>button]:text-center"
       />
 
       {/* Exit Tickets List */}
@@ -610,73 +657,84 @@ export default function ExitTicketDashboard() {
         ) : (
           visibleTickets.map(ticket => (
             <div key={ticket.id} className="bg-white rounded-lg border border-gray-200 p-4 sm:p-6 max-w-full min-w-0">
-              <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
-                <div className="flex-1 min-w-0">
-                  <div className="flex flex-wrap items-center gap-2 mb-2">
-                    <h3 className="text-lg font-semibold text-text break-words">{ticket.title}</h3>
-                    <span className={`px-2 py-1 text-xs font-medium rounded-full ${getStatusColor(ticket.status)}`}>
-                      {getStatusLabel(ticket.status)}
-                    </span>
-                  </div>
-                  <p className="text-text-light mb-4">
-                    {ticket.questions?.length || 0} questions • {ticket.responsesCount || 0} responses
-                  </p>
-                  <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-sm text-text-light">
-                    <div className="flex items-center space-x-1">
-                      <FileText className="w-4 h-4" />
-                      <span>{ticket.questions?.length || 0} questions</span>
-                    </div>
-                    <div className="flex items-center space-x-1">
-                      <Users className="w-4 h-4" />
-                      <span>{ticket.responsesCount || 0} responses</span>
-                    </div>
-                    {ticket.joinCode && (
-                      <div className="flex items-center space-x-1">
-                        <Clock className="w-4 h-4" />
-                        <span className="font-mono">Code: {ticket.joinCode}</span>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Show join code for active tickets */}
-                  {ticket.status === 'active' && ticket.joinCode && (
-                    <div className="mt-3 inline-flex items-center px-3 py-1 rounded-full bg-primary/5 text-primary text-xs font-medium">
-                      Join Code: <span className="ml-1 font-mono tracking-widest">{ticket.joinCode}</span>
-                    </div>
-                  )}
+              <div className="flex items-center justify-between gap-2 mb-2">
+                <div className="flex items-center gap-2 min-w-0">
+                  <h3 className="text-lg font-semibold text-text truncate">{ticket.title}</h3>
+                  <span className={`px-2 py-1 text-xs font-medium rounded-full shrink-0 ${getStatusColor(ticket.status)}`}>
+                    {getStatusLabel(ticket.status)}
+                  </span>
                 </div>
+                {(ticket.status === 'active' || ticket.status === 'paused') && (
+                  <button
+                    onClick={() => handleEndTicket(ticket.id)}
+                    className="min-h-11 p-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors text-sm inline-flex items-center shrink-0"
+                    title="End Exit Ticket"
+                  >
+                    <Square className="w-4 h-4 mr-1" />
+                    End
+                  </button>
+                )}
+              </div>
+              <p className="text-text-light mb-4">
+                {ticket.questions?.length || 0} questions • {ticket.responsesCount || 0} responses
+              </p>
+              <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-sm text-text-light">
+                <div className="flex items-center space-x-1">
+                  <FileText className="w-4 h-4" />
+                  <span>{ticket.questions?.length || 0} questions</span>
+                </div>
+                <div className="flex items-center space-x-1">
+                  <Users className="w-4 h-4" />
+                  <span>{ticket.responsesCount || 0} responses</span>
+                </div>
+                {ticket.joinCode && (
+                  <div className="flex items-center space-x-1 min-w-0">
+                    <Clock className="w-4 h-4 shrink-0" />
+                    <span className="font-mono">Code: {ticket.joinCode}</span>
+                    <button
+                      type="button"
+                      onClick={() => handleCopyJoinCode(ticket.joinCode)}
+                      className="md:hidden min-h-9 min-w-9 inline-flex items-center justify-center rounded-lg text-text-light hover:text-primary hover:bg-primary/10 transition-colors"
+                      title="Copy access code"
+                      aria-label="Copy access code"
+                    >
+                      {copied ? (
+                        <Check className="w-4 h-4 text-emerald-600" />
+                      ) : (
+                        <Copy className="w-4 h-4" />
+                      )}
+                    </button>
+                  </div>
+                )}
+              </div>
 
-                <div className="flex flex-wrap items-center gap-2 shrink-0">
+              {ticket.status === 'active' && ticket.joinCode && (
+                <div className="mt-3 inline-flex items-center px-3 py-1 rounded-full bg-primary/5 text-primary text-xs font-medium">
+                  Join Code: <span className="ml-1 font-mono tracking-widest">{ticket.joinCode}</span>
+                </div>
+              )}
+
+              <div className="flex flex-wrap items-center gap-2 mt-3">
                   {ticket.status === 'active' && (
                     <button
-                      onClick={() => handleEndTicket(ticket.id)}
+                      onClick={() => fetchResponses(ticket.id)}
                       className="min-h-11 p-2 text-primary rounded-lg border border-primary/50 hover:bg-primary/10 transition-colors text-sm inline-flex items-center"
-                      title="End Exit Ticket"
+                      title="View Responses"
                     >
-                      <Square className="w-4 h-4 mr-1" />
-                      End
+                      <Eye className="w-4 h-4 mr-1" />
+                      View Responses
                     </button>
                   )}
 
                   {ticket.status === 'paused' && (
-                    <div className="flex items-center space-x-2 mt-2">
-                      <button
-                        onClick={() => handleResumeTicket(ticket.id)}
-                        className="min-h-11 p-2 text-green-600 rounded-lg border border-green-300 hover:bg-green-100 transition-colors text-sm inline-flex items-center"
-                        title="Resume Exit Ticket"
-                      >
-                        <Play className="w-4 h-4 mr-1" />
-                        Resume
-                      </button>
-                      <button
-                        onClick={() => handleEndTicket(ticket.id)}
-                        className="min-h-11 p-2 text-primary rounded-lg border border-primary/50 hover:bg-primary/10 transition-colors text-sm inline-flex items-center"
-                        title="End Exit Ticket"
-                      >
-                        <Square className="w-4 h-4 mr-1" />
-                        End
-                      </button>
-                    </div>
+                    <button
+                      onClick={() => handleResumeTicket(ticket.id)}
+                      className="min-h-11 p-2 text-green-600 rounded-lg border border-green-300 hover:bg-green-100 transition-colors text-sm inline-flex items-center"
+                      title="Resume Exit Ticket"
+                    >
+                      <Play className="w-4 h-4 mr-1" />
+                      Resume
+                    </button>
                   )}
                   
                   {ticket.status === 'ended' && (
@@ -707,7 +765,7 @@ export default function ExitTicketDashboard() {
                         className="min-h-11 p-2 text-gray-600 rounded-lg border border-gray-300 hover:bg-gray-100 transition-colors text-sm inline-flex items-center"
                         title="Edit Exit Ticket"
                       >
-                        <RotateCcw className="w-4 h-4 mr-1" />
+                        <Edit className="w-4 h-4 mr-1" />
                         Edit
                       </button>
                       <button
@@ -750,7 +808,6 @@ export default function ExitTicketDashboard() {
                     </div>
                   )}
                 </div>
-              </div>
             </div>
           ))
         )}

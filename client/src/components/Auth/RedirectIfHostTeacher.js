@@ -12,7 +12,7 @@ const HOST_HOME = '/host/explore';
 const AUDIENCE_HOME = '/audience/home';
 
 const restoreStudentSession = (userProfile) => {
-  setActivePortal('student');
+  setActivePortal('student', userProfile?.uid);
   persistAudienceSession(userProfile);
 };
 
@@ -29,7 +29,7 @@ export default function RedirectIfHostTeacher({ children, redirectStudent = fals
 
   useEffect(() => {
     if (isHost) {
-      setActivePortal('teacher');
+      setActivePortal('teacher', userProfile?.uid);
     } else if (redirectStudent && isStudent) {
       restoreStudentSession(userProfile);
     }

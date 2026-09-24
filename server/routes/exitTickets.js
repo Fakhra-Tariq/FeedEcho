@@ -181,7 +181,7 @@ router.put('/:id', async (req, res) => {
     if (!existing) return res.status(404).json({ success: false, error: 'Exit ticket not found' });
     if (existing.createdBy !== uid && req.userRole !== 'admin')
       return res.status(403).json({ success: false, error: 'Access denied' });
-    const allowed = ['title', 'questions', 'status', 'joinCode', 'startedAt', 'endedAt', 'previousStatus'];
+    const allowed = ['title', 'questions', 'status', 'joinCode', 'startedAt', 'endedAt', 'previousStatus', 'collectAttendance'];
     const updates = { updatedAt: new Date().toISOString() };
     allowed.forEach((key) => { if (req.body[key] !== undefined) updates[key] = req.body[key]; });
     

@@ -1,20 +1,16 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import {
-  Home,
   TrendingUp,
   Pencil,
   Clock,
   Award,
   Rocket,
   FileText,
-  ChevronDown,
   ChevronUp,
   Check,
   X,
   Bot,
-  User,
-  LogOut,
   ArrowRight,
 } from 'lucide-react';
 import { useRtdbValue } from '../hooks/useRtdb';
@@ -29,9 +25,8 @@ import {
   calculateQuizScore,
 } from '../utils/scoringUtils';
 import { useAudienceLiveActivity } from '../hooks/useAudienceLiveActivity';
-import { useClickOutside } from '../hooks/useClickOutside';
 import { useAuth } from '../contexts/AuthContext';
-import AudienceAvatar from '../components/AudienceAvatar';
+import AudienceDashboardNavbar from '../components/Audience/AudienceDashboardNavbar';
 import {
   collapseQuizAttemptRows,
   getAttemptKey,
@@ -291,12 +286,6 @@ export default function AudienceProgress() {
   const [expandedRowId, setExpandedRowId] = useState(null);
   const [chartRange, setChartRange] = useState(7);
   const [localSubmissions, setLocalSubmissions] = useState([]);
-  const [showProfileDropdown, setShowProfileDropdown] = useState(false);
-  const profileDropdownRef = useRef(null);
-  const closeProfileDropdown = useCallback(() => {
-    setShowProfileDropdown(false);
-  }, []);
-  useClickOutside(profileDropdownRef, closeProfileDropdown, showProfileDropdown);
   const [showChatbot, setShowChatbot] = useState(false);
   const [chatMessages, setChatMessages] = useState([
     {
@@ -924,82 +913,13 @@ export default function AudienceProgress() {
     <div className="flex flex-row h-screen min-h-screen overflow-hidden bg-background">
       {/* Main content column — shrinks when AI panel opens (same pattern as Audience Home) */}
       <div className="flex flex-col flex-1 min-w-0 overflow-hidden">
-      <nav className="bg-white shadow-sm border-b border-gray-200 flex-shrink-0">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center h-16">
-            {/* Logo */}
-            <div className="flex items-center space-x-3">
-              <img 
-                src="/FeedEcho-logo.png.png" 
-                alt="FeedEcho" 
-                className="h-32 w-auto object-contain mix-blend-mode: multiply"
-              />
-            </div>
-
-            {/* Center Navigation */}
-            <div className="hidden md:flex items-center space-x-6">
-              <Link to="/audience/home" className="flex items-center space-x-2 text-gray-700 hover:text-primary transition-colors">
-                <Home className="w-4 h-4" />
-                <span className="font-medium">Home</span>
-              </Link>
-              <Link to="/audience/progress" className="flex items-center space-x-2 text-primary font-medium">
-                <TrendingUp className="w-4 h-4" />
-                <span className="font-medium">Progress</span>
-              </Link>
-            </div>
-
-            {/* Right Side Icons */}
-            <div className="flex items-center space-x-3">
-              {/* Chatbot Icon */}
-              <button 
-                onClick={() => setShowChatbot(!showChatbot)}
-                className="p-2 rounded-lg text-gray-600 hover:text-primary transition-colors"
-              >
-                <Bot className="w-5 h-5" />
-              </button>
-              
-              {/* Profile Dropdown */}
-              <div className="relative" ref={profileDropdownRef}>
-                <button
-                  onClick={() => setShowProfileDropdown(!showProfileDropdown)}
-                  className="flex items-center space-x-2 p-2 rounded-lg hover:bg-gray-100 transition-colors"
-                >
-                  <AudienceAvatar name={userName || 'Audience'} />
-                  <span className="font-medium text-text">{userName || 'Audience'}</span>
-                  <ChevronDown className="w-4 h-4 text-gray-500" />
-                </button>
-                
-                {/* Profile Dropdown */}
-                {showProfileDropdown && (
-                  <div className="absolute right-0 mt-2 w-56 bg-white rounded-lg shadow-lg border border-gray-200 z-50">
-                    <div className="p-3 border-b border-gray-200">
-                      <p className="font-medium text-text">{userName || 'Audience'}</p>
-                      <p className="text-sm text-gray-600">audience@example.com</p>
-                    </div>
-                    <div className="py-2">
-                      <Link to="/audience/profile" className="block px-4 py-2 text-gray-700 hover:bg-gray-100">
-                        <div className="flex items-center space-x-2">
-                          <User className="w-4 h-4" />
-                          <span>Profile</span>
-                        </div>
-                      </Link>
-                      <button
-                        onClick={handleLogout}
-                        className="w-full text-left px-4 py-2 text-gray-700 hover:bg-gray-100"
-                      >
-                        <div className="flex items-center space-x-2">
-                          <LogOut className="w-4 h-4" />
-                          <span>Logout</span>
-                        </div>
-                      </button>
-                    </div>
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-        </div>
-      </nav>
+      <AudienceDashboardNavbar
+        displayName={userName || student?.name}
+        displayEmail={student?.email}
+        onLogout={handleLogout}
+        onChatbotToggle={() => setShowChatbot(!showChatbot)}
+        chatbotOpen={showChatbot}
+      />
 
       <div className="flex-1 overflow-y-auto min-h-0">
       <div className="container mx-auto p-6 max-w-7xl">
@@ -1269,7 +1189,7 @@ export default function AudienceProgress() {
 
       {/* AI Study Assistant Panel — flex sibling so main content shrinks (same as Audience Home) */}
       {showChatbot && (
-        <div className="w-[380px] flex-shrink-0 h-screen flex flex-col overflow-hidden bg-white shadow-2xl border-l border-gray-200 relative">
+        <div className="w-[380px] flex-shrink-0 h-screen flex flex-col overflow-hidden bg-white shadow-2xl border-l border-gray-200 relative max-[480px]:fixed max-[480px]:inset-0 max-[480px]:z-50 max-[480px]:!w-full max-[480px]:h-[100dvh] max-[480px]:max-h-[100dvh] max-[480px]:min-h-0">
           {/* Header */}
           <div className="bg-primary p-4 text-white flex-shrink-0">
             <div className="flex items-center justify-between">
@@ -1312,7 +1232,7 @@ export default function AudienceProgress() {
           </div>
           
           {/* Input Area */}
-          <div className="p-4 bg-white border-t border-gray-200 flex-shrink-0">
+          <div className="p-4 bg-white border-t border-gray-200 flex-shrink-0 max-[480px]:pb-[max(1rem,env(safe-area-inset-bottom))]">
             <div className="flex items-center space-x-2">
               <input
                 type="text"

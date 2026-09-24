@@ -54,6 +54,16 @@ const SessionsPage = () => {
 
   const isSessionActive = !!data.activeSession;
 
+  const handleCreateSessionButtonClick = () => {
+    if (isSessionActive) {
+      alert.toast.info(
+        'Only one session can be active at a time. End your current session to create a new one.'
+      );
+      return;
+    }
+    setShowCreateModal(true);
+  };
+
   const loadSessions = useCallback(async () => {
     if (!teacherId) {
       setSessions([]);
@@ -159,13 +169,13 @@ const SessionsPage = () => {
         actions={
           <button
             type="button"
-            onClick={() => setShowCreateModal(true)}
-            disabled={isSessionActive}
+            onClick={handleCreateSessionButtonClick}
+            aria-disabled={isSessionActive}
             className={clsx(
               'flex items-center justify-center gap-2 px-6 py-3 min-h-11 rounded-xl font-semibold transition-all duration-300 shrink-0',
               'bg-white text-[#6D415F] hover:bg-white/90',
               'shadow-lg hover:shadow-xl',
-              isSessionActive && 'opacity-50 cursor-not-allowed'
+              isSessionActive && 'opacity-50 cursor-not-allowed hover:bg-white'
             )}
             title={isSessionActive ? 'A session is already active' : 'Create a new session'}
           >
@@ -190,12 +200,12 @@ const SessionsPage = () => {
           </p>
           <button
             type="button"
-            onClick={() => setShowCreateModal(true)}
-            disabled={isSessionActive}
+            onClick={handleCreateSessionButtonClick}
+            aria-disabled={isSessionActive}
             className={clsx(
               'inline-flex items-center justify-center gap-2 px-6 py-3 min-h-11 rounded-xl font-semibold',
               'bg-[#6D415F] text-white hover:bg-[#6D415F]/90',
-              isSessionActive && 'opacity-50 cursor-not-allowed'
+              isSessionActive && 'opacity-50 cursor-not-allowed hover:bg-[#6D415F]'
             )}
           >
             <Plus className="w-5 h-5" />
@@ -357,15 +367,15 @@ const SessionCard = ({ session, onCopyCode, onDelete }) => {
 
   return (
     <article className="bg-white dark:bg-[#3A2E2A] rounded-2xl p-4 sm:p-6 shadow-lg border border-[#6D415F]/20 max-w-full">
-      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
+      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4 max-[480px]:relative">
         <div className="flex-1 min-w-0">
-          <div className="flex flex-wrap items-center gap-3 mb-3">
-            <h2 className="text-lg sm:text-xl font-bold text-[#2E1F2A] dark:text-white break-words">
+          <div className="flex flex-wrap items-center gap-3 mb-3 max-[480px]:flex-nowrap max-[480px]:pr-12">
+            <h2 className="text-lg sm:text-xl font-bold text-[#2E1F2A] dark:text-white break-words max-[480px]:min-w-0 max-[480px]:truncate max-[480px]:break-normal">
               {session.sessionName || 'Untitled Session'}
             </h2>
             <span
               className={clsx(
-                'inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold uppercase tracking-wide',
+                'inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold uppercase tracking-wide max-[480px]:shrink-0',
                 isActive
                   ? 'bg-green-100 text-green-800'
                   : 'bg-gray-100 text-gray-600 dark:bg-white/10 dark:text-white/70'
@@ -409,7 +419,7 @@ const SessionCard = ({ session, onCopyCode, onDelete }) => {
             <button
               type="button"
               onClick={() => onDelete(session)}
-              className="shrink-0 min-h-11 min-w-11 inline-flex items-center justify-center rounded-xl text-gray-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-500/10 transition-colors"
+              className="shrink-0 min-h-11 min-w-11 inline-flex items-center justify-center rounded-xl text-gray-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-500/10 transition-colors max-[480px]:absolute max-[480px]:top-0 max-[480px]:right-0 max-[480px]:z-10"
               aria-label="Delete session"
               title="Delete session"
             >

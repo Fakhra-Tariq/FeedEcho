@@ -25,11 +25,49 @@ const HostLayout = () => {
   const [isProfileOpen, setProfileOpen] = useState(false);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const profileDropdownRef = useRef(null);
+  const menuPanelRef = useRef(null);
+  const menuButtonRef = useRef(null);
+  const menuJustOpenedRef = useRef(false);
 
   useEffect(() => {
     setIsMenuOpen(false);
     setProfileOpen(false);
   }, [location]);
+
+  useEffect(() => {
+    if (!isMenuOpen) {
+      menuJustOpenedRef.current = false;
+      return undefined;
+    }
+
+    menuJustOpenedRef.current = true;
+    const releaseIgnoreId = window.setTimeout(() => {
+      menuJustOpenedRef.current = false;
+    }, 400);
+
+    const onDocumentClick = (event) => {
+      if (menuJustOpenedRef.current) return;
+      if (!window.matchMedia('(max-width: 480px)').matches) return;
+      const target = event.target;
+      if (!(target instanceof Node)) return;
+      if (menuPanelRef.current?.contains(target)) return;
+      if (menuButtonRef.current?.contains(target)) return;
+      setIsMenuOpen(false);
+    };
+
+    // Attach after the opening tap finishes so that same event cannot close the menu.
+    let removeListener = () => {};
+    const attachId = window.setTimeout(() => {
+      document.addEventListener('click', onDocumentClick);
+      removeListener = () => document.removeEventListener('click', onDocumentClick);
+    }, 0);
+
+    return () => {
+      window.clearTimeout(releaseIgnoreId);
+      window.clearTimeout(attachId);
+      removeListener();
+    };
+  }, [isMenuOpen]);
 
   const closeProfileDropdown = useCallback(() => {
     setProfileOpen(false);
@@ -44,10 +82,20 @@ const HostLayout = () => {
 
   return (
     <div className={clsx('min-h-screen bg-background overflow-x-hidden max-w-full', 'text-text')}>
+      {isMenuOpen && (
+        <div
+          role="presentation"
+          className="hidden max-[480px]:block fixed inset-x-0 top-16 bottom-0 z-30 bg-black/20"
+          onClick={() => {
+            if (menuJustOpenedRef.current) return;
+            setIsMenuOpen(false);
+          }}
+        />
+      )}
       <header className="fixed inset-x-0 top-0 z-40 bg-white/80 backdrop-blur-md border-b border-gray-200">
         <div className={TEACHER_PAGE_GUTTER}>
           <div className="relative flex items-center h-16 w-full min-w-0 gap-2 lg:gap-8 xl:gap-12">
-            <div className="relative z-10 flex h-16 min-w-0 shrink items-center">
+            <div className="relative z-10 flex h-16 min-w-0 shrink items-center max-[480px]:pointer-events-none">
               <img
                 src="/FeedEcho-logo.png.png"
                 alt="FeedEcho"
@@ -124,11 +172,19 @@ const HostLayout = () => {
                 )}
               </div>
               <button
+                ref={menuButtonRef}
                 type="button"
-                onClick={() => setIsMenuOpen((prev) => !prev)}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  setIsMenuOpen((prev) => {
+                    if (!prev) return true;
+                    if (menuJustOpenedRef.current) return true;
+                    return false;
+                  });
+                }}
                 aria-label={isMenuOpen ? 'Close menu' : 'Open menu'}
                 aria-expanded={isMenuOpen}
-                className="lg:hidden min-h-11 min-w-11 p-2 rounded-lg hover:bg-neutral-100 transition-colors inline-flex items-center justify-center"
+                className="lg:hidden relative z-50 min-h-11 min-w-11 p-2 rounded-lg hover:bg-neutral-100 transition-colors inline-flex items-center justify-center"
               >
                 {isMenuOpen ? (
                   <X className="w-6 h-6 text-neutral-600" />
@@ -140,7 +196,10 @@ const HostLayout = () => {
           </div>
 
           {isMenuOpen && (
-            <nav className="lg:hidden py-3 border-t border-gray-200">
+            <nav
+              ref={menuPanelRef}
+              className="lg:hidden relative z-50 py-3 border-t border-gray-200"
+            >
               <div className="flex flex-col space-y-2">
                 {navItems.map((item) => (
                   <NavLink
