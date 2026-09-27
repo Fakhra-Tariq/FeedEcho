@@ -97,6 +97,27 @@ const HostLayout = () => {
       <header className="fixed inset-x-0 top-0 z-40 bg-white/80 backdrop-blur-md border-b border-gray-200">
         <div className={TEACHER_PAGE_GUTTER}>
           <div className="relative flex items-center justify-start h-16 w-full min-w-0 gap-2 max-[480px]:gap-1 lg:gap-8 xl:gap-12">
+            <button
+              ref={menuButtonRef}
+              type="button"
+              onClick={(event) => {
+                event.stopPropagation();
+                setIsMenuOpen((prev) => {
+                  if (!prev) return true;
+                  if (menuJustOpenedRef.current) return true;
+                  return false;
+                });
+              }}
+              aria-label={isMenuOpen ? 'Close menu' : 'Open menu'}
+              aria-expanded={isMenuOpen}
+              className="lg:hidden relative z-50 min-h-11 min-w-11 p-2 rounded-lg hover:bg-neutral-100 transition-colors inline-flex items-center justify-center shrink-0"
+            >
+              {isMenuOpen ? (
+                <X className="w-6 h-6 text-neutral-600" />
+              ) : (
+                <Menu className="w-6 h-6 text-neutral-600" />
+              )}
+            </button>
             <div className="relative z-10 flex h-16 min-w-0 shrink items-center justify-start max-md:overflow-hidden max-md:mr-auto max-[480px]:pointer-events-none">
               <img
                 src="/FeedEcho-logo.png.png"
@@ -178,27 +199,6 @@ const HostLayout = () => {
                   </div>
                 )}
               </div>
-              <button
-                ref={menuButtonRef}
-                type="button"
-                onClick={(event) => {
-                  event.stopPropagation();
-                  setIsMenuOpen((prev) => {
-                    if (!prev) return true;
-                    if (menuJustOpenedRef.current) return true;
-                    return false;
-                  });
-                }}
-                aria-label={isMenuOpen ? 'Close menu' : 'Open menu'}
-                aria-expanded={isMenuOpen}
-                className="lg:hidden relative z-50 min-h-11 min-w-11 p-2 rounded-lg hover:bg-neutral-100 transition-colors inline-flex items-center justify-center"
-              >
-                {isMenuOpen ? (
-                  <X className="w-6 h-6 text-neutral-600" />
-                ) : (
-                  <Menu className="w-6 h-6 text-neutral-600" />
-                )}
-              </button>
             </div>
           </div>
 
