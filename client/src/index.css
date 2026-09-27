@@ -271,3 +271,98 @@ input[type="checkbox"]:checked {
   background-color: #6D415F !important;
   border-color: #6D415F !important;
 }
+
+/*
+  Host Launch option cards — mobile 2x2 only (320–480px).
+  Placed after @tailwind utilities so it wins over grid-cols-1.
+  Tablet (768–1023) and desktop (lg:grid-cols-4) are unchanged.
+*/
+@media (max-width: 480px) {
+  .launch-options-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.625rem;
+  }
+
+  .launch-options-grid > .surface-card {
+    min-width: 0;
+    width: 100%;
+    padding: 0.75rem;
+  }
+
+  .launch-options-grid .launch-option-icon {
+    width: 2.25rem;
+    height: 2.25rem;
+    margin-bottom: 0.5rem;
+  }
+
+  .launch-options-grid .launch-option-icon svg {
+    width: 1.125rem;
+    height: 1.125rem;
+  }
+
+  .launch-options-grid h3 {
+    font-size: 0.875rem;
+    line-height: 1.25;
+    margin-bottom: 0.25rem;
+    overflow-wrap: anywhere;
+  }
+
+  .launch-options-grid p {
+    font-size: 0.75rem;
+    line-height: 1.4;
+    overflow: visible;
+    display: block;
+    white-space: normal;
+  }
+
+  .launch-options-grid .launch-option-cta {
+    padding-top: 0.75rem;
+  }
+
+  .launch-options-grid .launch-option-cta span {
+    width: 100%;
+    justify-content: center;
+    min-height: 2.75rem;
+    padding-top: 0.5rem;
+    padding-bottom: 0.5rem;
+    font-size: 0.8125rem;
+  }
+}
+
+/*
+  Host Launch option cards — tablet 2x2 only.
+  Placed after @tailwind utilities so it wins over grid-cols-1.
+  minmax(0, 1fr) lets <button> cards shrink; default 1fr min-content can force one card per row.
+  Range matches Tailwind md–lg (768–1023), not desktop lg:grid-cols-4.
+*/
+@media (min-width: 768px) and (max-width: 1023px) {
+  .launch-options-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 1.25rem;
+    min-height: calc(100dvh - 17rem);
+    grid-auto-rows: 1fr;
+    align-content: stretch;
+  }
+
+  .launch-options-grid > .surface-card {
+    min-width: 0;
+    width: 100%;
+    height: 100%;
+    min-height: 16rem;
+    padding-top: 2.25rem;
+    padding-bottom: 2.25rem;
+    justify-content: space-between;
+  }
+
+  .launch-options-grid .launch-option-icon {
+    width: 3.75rem;
+    height: 3.75rem;
+    margin-bottom: 1.5rem;
+  }
+
+  .launch-options-grid .launch-option-cta {
+    padding-top: 2rem;
+  }
+}

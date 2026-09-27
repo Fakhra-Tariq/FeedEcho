@@ -3,7 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { handleAPIError } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
 import { joinSessionByCode } from '../utils/joinSessionFlow';
-import { onValue, ref as dbRef, off } from 'firebase/database';
+import { onValue, ref as dbRef } from 'firebase/database';
 import { db } from '../firebase';
 
 const AudienceJoin = () => {
@@ -37,9 +37,7 @@ const AudienceJoin = () => {
     const handleParticipantsUpdate = (snapshot) => {
       if (snapshot.exists()) {
         const data = snapshot.val();
-        const participantsList = Object.values(data);
-        console.log('👥 Participants updated:', participantsList);
-        setParticipants(participantsList);
+        setParticipants(Object.values(data));
       } else {
         setParticipants([]);
       }
@@ -47,19 +45,13 @@ const AudienceJoin = () => {
 
     const unsubscribe = onValue(participantsRef, handleParticipantsUpdate);
     return () => {
-      try {
-        off(participantsRef);
-      } catch (e) {
-        console.log('Error unsubscribing from participants listener:', e);
-      }
+      unsubscribe();
     };
   }, [showTeamSelection, raceData?.id]);
 
   const teamOptions = useMemo(() => {
     const count = raceData?.settings?.numberOfTeams || 2;
-    const options = Array.from({ length: count }, (_, i) => i + 1);
-    console.log('🏁 Team options generated:', { count, options });
-    return options;
+    return Array.from({ length: count }, (_, i) => i + 1);
   }, [raceData]);
 
   const runJoin = async (trimmedName, trimmedCode, teamId = null) => {
@@ -110,9 +102,6 @@ const AudienceJoin = () => {
 
     await runJoin(trimmedName, trimmedCode);
   };
-
-  // Show team selection UI
-  console.log('🔍 Rendering check - showTeamSelection:', showTeamSelection, 'raceData:', raceData, 'selectedTeam:', selectedTeam);
 
   const validateLogin = () => {
     const newErrors = {};
@@ -175,7 +164,6 @@ const AudienceJoin = () => {
 
   if (showTeamSelection) {
     const maxStudentsPerTeam = raceData?.settings?.studentsPerTeam || 5;
-    console.log('🎨 Rendering team selection UI with', teamOptions.length, 'teams');
 
     return (
       <div className="min-h-screen bg-background flex items-center justify-center p-4 overflow-x-hidden max-w-full">

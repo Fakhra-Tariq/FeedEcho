@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, Play, Square, Eye, Users, Clock, FileText, X, BarChart3, CheckCircle, Copy, RotateCcw, Trash2, Archive, RotateCcw as Restore, Loader2, Check, Edit } from 'lucide-react';
+import { Plus, Play, Square, Eye, Users, FileText, X, BarChart3, CheckCircle, Copy, Trash2, Loader2, Check, Edit } from 'lucide-react';
 import { useHybridAlert } from '../contexts/HybridAlertContext';
 import { exitTicketsAPI } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
@@ -48,6 +48,10 @@ function attachQuestionsToTickets(ticketList, questionsTree, existingById = {}) 
 
 const TICKETS_PAGE_SIZE = 5;
 
+function displayTicketStatus(status) {
+  return status === 'archived' ? 'ended' : status;
+}
+
 function ticketListSignature(list) {
   return (list || [])
     .map((t) => `${t.id}:${t.status}:${t.responsesCount ?? 0}:${t.updatedAt || ''}`)
@@ -80,6 +84,8 @@ export default function ExitTicketDashboard() {
   const [showClearConfirm, setShowClearConfirm] = useState(false);
   const [clearingTicketId, setClearingTicketId] = useState(null);
   const [showNoSessionModal, setShowNoSessionModal] = useState(false);
+  const [pinnedActiveTicketId, setPinnedActiveTicketId] = useState(null);
+  const [isMobileTicketList, setIsMobileTicketList] = useState(false);
 
   const { list: liveTickets, loading: liveTicketsLoading, error: liveTicketsError } = useRtdbList(
     uid ? 'exit_tickets' : null,
@@ -110,14 +116,6 @@ export default function ExitTicketDashboard() {
         next = [...prev];
         next[idx] = { ...next[idx], ...updated };
       }
-      rtdbSignatureRef.current = ticketListSignature(next);
-      return next;
-    });
-  }, []);
-
-  const removeTicket = useCallback((ticketId) => {
-    setTickets((prev) => {
-      const next = prev.filter((t) => t.id !== ticketId);
       rtdbSignatureRef.current = ticketListSignature(next);
       return next;
     });
@@ -292,25 +290,40 @@ export default function ExitTicketDashboard() {
 
   // Get counts by status
   const ticketsByStatus = {
-    draft: tickets.filter(t => t.status === 'draft').length,
-    active: tickets.filter(t => t.status === 'active').length,
-    ended: tickets.filter(t => t.status === 'ended').length,
-    archived: tickets.filter(t => t.status === 'archived').length,
+    draft: tickets.filter(t => displayTicketStatus(t.status) === 'draft').length,
+    active: tickets.filter(t => displayTicketStatus(t.status) === 'active').length,
+    ended: tickets.filter(t => displayTicketStatus(t.status) === 'ended').length,
   };
 
   // Filter tickets — search runs over the full set, not just the visible page
   const normalizedSearch = searchTerm.trim().toLowerCase();
   const isSearching = normalizedSearch.length > 0;
 
+  useEffect(() => {
+    const media = window.matchMedia('(max-width: 480px)');
+    const sync = () => setIsMobileTicketList(media.matches);
+    sync();
+    media.addEventListener('change', sync);
+    return () => media.removeEventListener('change', sync);
+  }, []);
+
   const filteredTickets = useMemo(() => {
-    return tickets.filter((ticket) => {
+    const list = tickets.filter((ticket) => {
       if (normalizedSearch && !String(ticket.title || '').toLowerCase().includes(normalizedSearch)) {
         return false;
       }
       if (filter === 'all') return true;
-      return ticket.status === filter;
+      return displayTicketStatus(ticket.status) === filter;
     });
-  }, [tickets, filter, normalizedSearch]);
+
+    if (!isMobileTicketList || !pinnedActiveTicketId) return list;
+    const pinnedIdx = list.findIndex(
+      (ticket) => ticket.id === pinnedActiveTicketId && ticket.status === 'active'
+    );
+    if (pinnedIdx <= 0) return list;
+    const pinned = list[pinnedIdx];
+    return [pinned, ...list.slice(0, pinnedIdx), ...list.slice(pinnedIdx + 1)];
+  }, [tickets, filter, normalizedSearch, isMobileTicketList, pinnedActiveTicketId]);
 
   // Default view shows the 5 most recent; "Show more" reveals further batches
   const visibleTickets = useMemo(
@@ -354,6 +367,7 @@ export default function ExitTicketDashboard() {
         return;
       }
       if (response.data.data) upsertTicket(response.data.data);
+      setPinnedActiveTicketId(ticketId);
       alert.toast.success('Exit ticket resumed successfully!');
     } catch (error) {
       console.error('Resume error:', error);
@@ -370,87 +384,6 @@ export default function ExitTicketDashboard() {
       setTimeout(() => setShowCopyNotification(false), 3000);
     } catch (err) {
       console.error('Failed to copy code:', err);
-    }
-  };
-
-  const handleArchiveTicket = async (ticketId) => {
-    const confirmMessage = 'Are you sure you want to archive this exit ticket? It will be moved to the Archived section and can be restored later.';
-    const confirmed = await alert.modal.confirm(confirmMessage);
-    
-    if (confirmed) {
-      try {
-        const response = await exitTicketsAPI.update(ticketId, { status: 'archived' });
-        if (!response.data?.success) {
-          alert.toast.error('Failed to archive ticket: ' + (response.data?.error || 'Unknown error'));
-          return;
-        }
-        if (response.data.data) upsertTicket(response.data.data);
-        alert.toast.success('Exit ticket archived successfully!');
-      } catch (error) {
-        console.error('Archive error:', error);
-        alert.toast.error('Error archiving ticket: ' + (error.response?.data?.error || error.message));
-      }
-    }
-  };
-
-  const handleRestoreTicket = async (ticketId) => {
-    const ticket = tickets.find(t => t.id === ticketId);
-    const previousStatus = ticket?.previousStatus || 'ended'; // Fallback to 'ended' if no previousStatus
-    const confirmMessage = 'Are you sure you want to restore this exit ticket? It will be moved back to its previous section.';
-    const confirmed = await alert.modal.confirm(confirmMessage);
-    
-    if (confirmed) {
-      try {
-        const response = await exitTicketsAPI.update(ticketId, { status: previousStatus });
-        if (!response.data?.success) {
-          alert.toast.error('Failed to restore ticket: ' + (response.data?.error || 'Unknown error'));
-          return;
-        }
-        if (response.data.data) upsertTicket(response.data.data);
-        alert.toast.success('Exit ticket restored successfully!');
-      } catch (error) {
-        console.error('Restore error:', error);
-        alert.toast.error('Error restoring ticket: ' + (error.response?.data?.error || error.message));
-      }
-    }
-  };
-
-  const handleDeleteTicket = async (ticketId) => {
-    // Find the ticket to determine its current status
-    const ticket = tickets.find(t => t.id === ticketId);
-    const isArchived = ticket?.status === 'archived';
-    
-    const confirmMessage = isArchived 
-      ? 'Are you sure you want to permanently delete this archived exit ticket? This action cannot be undone.'
-      : 'Are you sure you want to delete this exit ticket? It will be moved to archived and can be restored later.';
-    
-    const confirmed = await alert.modal.confirm(confirmMessage);
-    if (confirmed) {
-      try {
-        if (isArchived) {
-          // Permanent deletion for archived tickets
-          const response = await exitTicketsAPI.delete(ticketId);
-
-          if (!response.data?.success) {
-            alert.toast.error('Failed to delete ticket: ' + (response.data?.error || 'Unknown error'));
-            return;
-          }
-          removeTicket(ticketId);
-          alert.toast.success('Exit ticket permanently deleted!');
-        } else {
-          const response = await exitTicketsAPI.update(ticketId, { status: 'archived' });
-
-          if (!response.data?.success) {
-            alert.toast.error('Failed to archive ticket: ' + (response.data?.error || 'Unknown error'));
-            return;
-          }
-          if (response.data.data) upsertTicket(response.data.data);
-          alert.toast.success('Exit ticket moved to archived!');
-        }
-      } catch (error) {
-        console.error('Delete error:', error);
-        alert.toast.error('Error deleting ticket: ' + (error.response?.data?.error || error.message));
-      }
     }
   };
 
@@ -472,6 +405,7 @@ export default function ExitTicketDashboard() {
         return;
       }
       upsertTicket(response.data.data);
+      setPinnedActiveTicketId(ticketId);
       alert.toast.success(`Exit ticket launched! Join code: ${response.data.data.joinCode}`);
       setLaunchedTicketCode(response.data.data.joinCode);
       setShowJoinCodeModal(true);
@@ -481,12 +415,37 @@ export default function ExitTicketDashboard() {
     }
   };
 
+  const handleDeleteTicket = async (ticketId) => {
+    const confirmed = await alert.modal.confirm('Are you sure you want to delete this exit ticket? This action cannot be undone.');
+    if (!confirmed) return;
+    try {
+      const response = await exitTicketsAPI.delete(ticketId);
+      if (response.data.success) {
+        alert.toast.success('Exit ticket deleted successfully!');
+        setTickets((prev) => {
+          const next = prev.filter((t) => t.id !== ticketId);
+          rtdbSignatureRef.current = ticketListSignature(next);
+          return next;
+        });
+        if (viewingResponses === ticketId) {
+          setViewingResponses(null);
+          setResponses([]);
+        }
+      } else {
+        alert.toast.error('Failed to delete ticket: ' + (response.data.error || 'Unknown error'));
+      }
+    } catch (error) {
+      console.error('Delete error:', error);
+      alert.toast.error('Error deleting ticket: ' + (error.response?.data?.error || error.message));
+    }
+  };
+
   const getStatusColor = (status) => {
     switch (status) {
       case 'draft': return 'bg-primary/10 text-primary';
       case 'active': return 'bg-gray-100 text-gray-800';
       case 'paused': return 'bg-yellow-100 text-yellow-800';
-      case 'ended': return 'bg-primary/10 text-primary';
+      case 'ended':
       case 'archived': return 'bg-primary/10 text-primary';
       default: return 'bg-gray-100 text-gray-800';
     }
@@ -497,8 +456,8 @@ export default function ExitTicketDashboard() {
       case 'draft': return 'Draft';
       case 'active': return 'Active';
       case 'paused': return 'Paused';
-      case 'ended': return 'Ended';
-      case 'archived': return 'Archived';
+      case 'ended':
+      case 'archived': return 'Ended';
       default: return status;
     }
   };
@@ -565,7 +524,6 @@ export default function ExitTicketDashboard() {
             { label: 'Drafts', value: ticketsByStatus.draft },
             { label: 'Active', value: ticketsByStatus.active },
             { label: 'Ended', value: ticketsByStatus.ended },
-            { label: 'Archived', value: ticketsByStatus.archived },
           ]}
         />
       </PageHeaderCard>
@@ -573,14 +531,16 @@ export default function ExitTicketDashboard() {
 
       {/* Compact mobile banner (below md) */}
       <div className="md:hidden bg-gradient-to-br from-[#6D415F] via-[#6D415F]/90 to-[#3A2E2A] border border-[#6D415F]/30 shadow-xl rounded-2xl px-3 py-3 space-y-2.5 max-w-full">
-        <div className="min-w-0">
-          <h1 className="text-xl font-bold text-white leading-tight">Exit Ticket</h1>
-          <p className="text-xs text-white/90 leading-snug mt-0.5">
+        <div className="min-w-0 max-[480px]:grid max-[480px]:grid-cols-[auto_minmax(0,1fr)] max-[480px]:items-center max-[480px]:gap-x-2 max-[480px]:gap-y-0.5 max-[480px]:[grid-template-areas:'title_how'_'desc_desc']">
+          <h1 className="text-xl font-bold text-white leading-tight max-[480px]:[grid-area:title] max-[480px]:shrink-0">
+            Exit Ticket
+          </h1>
+          <p className="text-xs text-white/90 leading-snug mt-0.5 max-[480px]:[grid-area:desc] max-[480px]:mt-0">
             Collect anonymous audience feedback and track attendance
           </p>
           <InfoRecap
             variant="onDark"
-            className="mt-0.5 text-xs"
+            className="mt-0.5 text-xs max-[480px]:[grid-area:how] max-[480px]:mt-0 max-[480px]:text-[12px] max-[480px]:whitespace-nowrap max-[480px]:justify-self-start"
             steps={[
               'Create your exit ticket questions',
               'Choose Save as Draft or Launch',
@@ -589,12 +549,11 @@ export default function ExitTicketDashboard() {
             ]}
           />
         </div>
-        <div className="grid grid-cols-4 gap-1 min-w-0">
+        <div className="grid grid-cols-3 gap-1 min-w-0">
           {[
             { label: 'Drafts', value: ticketsByStatus.draft },
             { label: 'Active', value: ticketsByStatus.active },
             { label: 'Ended', value: ticketsByStatus.ended },
-            { label: 'Archived', value: ticketsByStatus.archived },
           ].map(({ label, value }) => (
             <div key={label} className="min-w-0 text-center">
               <p className="text-[10px] leading-tight text-white/80">{label}</p>
@@ -625,13 +584,13 @@ export default function ExitTicketDashboard() {
 
       {/* Filter Tabs */}
       <ListFilterBar
-        tabs={['all', 'draft', 'active', 'ended', 'archived']}
+        tabs={['all', 'draft', 'active', 'ended']}
         activeTab={filter}
         onTabChange={setFilter}
         searchTerm={searchTerm}
         onSearchChange={setSearchTerm}
         searchPlaceholder="Search exit tickets..."
-        tabsClassName="max-md:grid max-md:grid-cols-3 max-md:w-full max-md:[&>button]:w-full max-md:[&>button]:px-2 max-md:[&>button]:text-center"
+        tabsClassName="max-md:grid max-md:grid-cols-4 max-md:w-full max-md:[&>button]:w-full max-md:[&>button]:px-1.5 max-md:[&>button]:text-center max-md:[&>button]:text-xs"
       />
 
       {/* Exit Tickets List */}
@@ -655,7 +614,28 @@ export default function ExitTicketDashboard() {
             </button>
           </div>
         ) : (
-          visibleTickets.map(ticket => (
+          visibleTickets.map(ticket => {
+            const renderCodeCopy = () =>
+              ticket.status === 'active' && ticket.joinCode ? (
+                <div className="inline-flex items-center shrink-0">
+                  <span className="font-mono text-sm tracking-widest text-text">{ticket.joinCode}</span>
+                  <button
+                    type="button"
+                    onClick={() => handleCopyJoinCode(ticket.joinCode)}
+                    className="min-h-9 min-w-9 inline-flex items-center justify-center rounded-lg text-text-light hover:text-primary hover:bg-primary/10 transition-colors"
+                    title="Copy access code"
+                    aria-label="Copy access code"
+                  >
+                    {copied ? (
+                      <Check className="w-4 h-4 text-emerald-600" />
+                    ) : (
+                      <Copy className="w-4 h-4" />
+                    )}
+                  </button>
+                </div>
+              ) : null;
+
+            return (
             <div key={ticket.id} className="bg-white rounded-lg border border-gray-200 p-4 sm:p-6 max-w-full min-w-0">
               <div className="flex items-center justify-between gap-2 mb-2">
                 <div className="flex items-center gap-2 min-w-0">
@@ -664,20 +644,23 @@ export default function ExitTicketDashboard() {
                     {getStatusLabel(ticket.status)}
                   </span>
                 </div>
-                {(ticket.status === 'active' || ticket.status === 'paused') && (
-                  <button
-                    onClick={() => handleEndTicket(ticket.id)}
-                    className="min-h-11 p-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors text-sm inline-flex items-center shrink-0"
-                    title="End Exit Ticket"
-                  >
-                    <Square className="w-4 h-4 mr-1" />
-                    End
-                  </button>
-                )}
+                <div className="flex items-center gap-2 shrink-0">
+                  <div className="hidden min-[361px]:block">{renderCodeCopy()}</div>
+                  {(ticket.status === 'active' || ticket.status === 'paused') && (
+                    <button
+                      onClick={() => handleEndTicket(ticket.id)}
+                      className="min-h-11 p-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors text-sm inline-flex items-center shrink-0"
+                      title="End Exit Ticket"
+                    >
+                      <Square className="w-4 h-4 mr-1" />
+                      End
+                    </button>
+                  )}
+                </div>
               </div>
-              <p className="text-text-light mb-4">
-                {ticket.questions?.length || 0} questions • {ticket.responsesCount || 0} responses
-              </p>
+              {ticket.status === 'active' && ticket.joinCode && (
+                <div className="min-[361px]:hidden mb-2">{renderCodeCopy()}</div>
+              )}
               <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-sm text-text-light">
                 <div className="flex items-center space-x-1">
                   <FileText className="w-4 h-4" />
@@ -687,32 +670,7 @@ export default function ExitTicketDashboard() {
                   <Users className="w-4 h-4" />
                   <span>{ticket.responsesCount || 0} responses</span>
                 </div>
-                {ticket.joinCode && (
-                  <div className="flex items-center space-x-1 min-w-0">
-                    <Clock className="w-4 h-4 shrink-0" />
-                    <span className="font-mono">Code: {ticket.joinCode}</span>
-                    <button
-                      type="button"
-                      onClick={() => handleCopyJoinCode(ticket.joinCode)}
-                      className="md:hidden min-h-9 min-w-9 inline-flex items-center justify-center rounded-lg text-text-light hover:text-primary hover:bg-primary/10 transition-colors"
-                      title="Copy access code"
-                      aria-label="Copy access code"
-                    >
-                      {copied ? (
-                        <Check className="w-4 h-4 text-emerald-600" />
-                      ) : (
-                        <Copy className="w-4 h-4" />
-                      )}
-                    </button>
-                  </div>
-                )}
               </div>
-
-              {ticket.status === 'active' && ticket.joinCode && (
-                <div className="mt-3 inline-flex items-center px-3 py-1 rounded-full bg-primary/5 text-primary text-xs font-medium">
-                  Join Code: <span className="ml-1 font-mono tracking-widest">{ticket.joinCode}</span>
-                </div>
-              )}
 
               <div className="flex flex-wrap items-center gap-2 mt-3">
                   {ticket.status === 'active' && (
@@ -737,24 +695,25 @@ export default function ExitTicketDashboard() {
                     </button>
                   )}
                   
-                  {ticket.status === 'ended' && (
+                  {displayTicketStatus(ticket.status) === 'ended' && (
                     <>
-                      <button
-                        onClick={() => fetchResponses(ticket.id)}
-                        className="min-h-11 p-2 text-primary rounded-lg border border-primary/50 hover:bg-primary/10 transition-colors text-sm inline-flex items-center"
-                        title="View Responses"
-                      >
-                        <Eye className="w-4 h-4 mr-1" />
-                        View Responses
-                      </button>
-                      <button
-                        onClick={() => handleArchiveTicket(ticket.id)}
-                        className="min-h-11 p-2 text-primary rounded-lg border border-primary/50 hover:bg-primary/10 transition-colors text-sm inline-flex items-center"
-                        title="Archive Exit Ticket"
-                      >
-                        <Archive className="w-4 h-4 mr-1" />
-                        Archive
-                      </button>
+                    <button
+                      onClick={() => fetchResponses(ticket.id)}
+                      className="min-h-11 p-2 text-primary rounded-lg border border-primary/50 hover:bg-primary/10 transition-colors text-sm inline-flex items-center"
+                      title="View Responses"
+                    >
+                      <Eye className="w-4 h-4 mr-1" />
+                      View Responses
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleDeleteTicket(ticket.id)}
+                      className="min-h-11 p-2 text-red-600 rounded-lg border border-red-300 hover:bg-red-100 transition-colors text-sm inline-flex items-center"
+                      title="Delete Exit Ticket"
+                    >
+                      <Trash2 className="w-4 h-4 mr-1" />
+                      Delete
+                    </button>
                     </>
                   )}
                   
@@ -762,7 +721,7 @@ export default function ExitTicketDashboard() {
                     <>
                       <button
                         onClick={() => navigate(`/host/exit-tickets/create?edit=${ticket.id}`)}
-                        className="min-h-11 p-2 text-gray-600 rounded-lg border border-gray-300 hover:bg-gray-100 transition-colors text-sm inline-flex items-center"
+                        className="min-h-11 p-2 text-primary rounded-lg border border-primary/50 hover:bg-primary/10 transition-colors text-sm inline-flex items-center"
                         title="Edit Exit Ticket"
                       >
                         <Edit className="w-4 h-4 mr-1" />
@@ -777,39 +736,20 @@ export default function ExitTicketDashboard() {
                         Launch
                       </button>
                       <button
-                        onClick={() => handleArchiveTicket(ticket.id)}
-                        className="min-h-11 p-2 text-primary rounded-lg border border-primary/50 hover:bg-primary/10 transition-colors text-sm inline-flex items-center"
-                        title="Archive Exit Ticket"
+                        type="button"
+                        onClick={() => handleDeleteTicket(ticket.id)}
+                        className="min-h-11 p-2 text-red-600 rounded-lg border border-red-300 hover:bg-red-100 transition-colors text-sm inline-flex items-center"
+                        title="Delete Exit Ticket"
                       >
-                        <Archive className="w-4 h-4 mr-1" />
-                        Archive
+                        <Trash2 className="w-4 h-4 mr-1" />
+                        Delete
                       </button>
                     </>
                   )}
-                  
-                  {ticket.status === 'archived' && (
-                    <div className="flex items-center space-x-2 mt-2">
-                      <button
-                        onClick={() => handleRestoreTicket(ticket.id)}
-                        className="min-h-11 p-2 text-primary rounded-lg border border-primary/50 hover:bg-primary/10 transition-colors text-sm inline-flex items-center"
-                        title="Restore Exit Ticket"
-                      >
-                        <Restore className="w-4 h-4 mr-1" />
-                        Restore
-                      </button>
-                      <button
-                        onClick={() => handleDeleteTicket(ticket.id)}
-                        className="min-h-11 p-2 text-red-600 rounded-lg border border-red-300 hover:bg-red-100 transition-colors text-sm inline-flex items-center"
-                        title="Delete Permanently"
-                      >
-                        <Trash2 className="w-4 h-4 mr-1" />
-                        Delete Permanently
-                      </button>
-                    </div>
-                  )}
                 </div>
             </div>
-          ))
+            );
+          })
         )}
       </div>
 

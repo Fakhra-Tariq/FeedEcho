@@ -35,14 +35,8 @@ export default function RedirectIfHostTeacher({ children, redirectStudent = fals
     }
   }, [isHost, isStudent, redirectStudent, userProfile]);
 
-  if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary" />
-      </div>
-    );
-  }
-
+  // Render immediately while Firebase/profile settle so login/join stay interactive.
+  // Redirect only after auth is known — same destination, no blocking spinner.
   if (isHost) {
     return <Navigate to={HOST_HOME} replace />;
   }

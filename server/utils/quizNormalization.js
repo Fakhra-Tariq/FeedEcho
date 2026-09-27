@@ -141,14 +141,16 @@ function normalizeQuizListRecord(quiz) {
   if (!quiz || typeof quiz !== 'object') return quiz;
 
   const type = normalizeQuizTypeLabel(quiz.type);
-  const questions = normalizeQuestions(quiz.questions, type);
   const { questions: _questions, ...rest } = quiz;
+  const questionCount =
+    quiz.questionCount != null
+      ? Number(quiz.questionCount)
+      : normalizeToArray(quiz.questions).length;
 
   return {
     ...rest,
     type,
-    questionCount:
-      quiz.questionCount != null ? Number(quiz.questionCount) : questions.length,
+    questionCount,
   };
 }
 

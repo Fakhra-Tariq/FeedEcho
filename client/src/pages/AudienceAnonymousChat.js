@@ -241,7 +241,7 @@ const AudienceAnonymousChat = () => {
         participantName={participantDisplayName}
         className="fixed inset-x-0 top-0 z-30"
       />
-      <div className="h-12 min-[481px]:h-16 shrink-0" aria-hidden="true" />
+      <div className="h-16 shrink-0" aria-hidden="true" />
 
       <GuestProgressLoginBanner
         contentClassName={`${AUDIENCE_ACTIVITY_PAGE_WIDTH} py-2 flex items-center justify-between gap-2 min-w-0`}

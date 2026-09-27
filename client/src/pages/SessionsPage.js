@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import clsx from 'clsx';
 import { copyToClipboard } from '../utils/copyToClipboard';
@@ -25,6 +25,8 @@ import {
   parseSessionActivities,
 } from '../utils/sessionActivityLabel';
 
+const SESSIONS_PAGE_SIZE = 5;
+
 function formatSessionDateTime(iso) {
   if (!iso) return '—';
   try {
@@ -45,12 +47,15 @@ const SessionsPage = () => {
 
   const [sessions, setSessions] = useState([]);
   const [loading, setLoading] = useState(true);
+  const hasLoadedSessionsRef = useRef(false);
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [isCreating, setIsCreating] = useState(false);
   const [sessionName, setSessionName] = useState('');
   const [showCreatedPopup, setShowCreatedPopup] = useState(false);
   const [createdSessionData, setCreatedSessionData] = useState(null);
   const [sessionToDelete, setSessionToDelete] = useState(null);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [visibleSessionCount, setVisibleSessionCount] = useState(SESSIONS_PAGE_SIZE);
 
   const isSessionActive = !!data.activeSession;
 
@@ -83,6 +88,7 @@ const SessionsPage = () => {
       alert?.toast?.error?.('Failed to load sessions');
       setSessions([]);
     } finally {
+      hasLoadedSessionsRef.current = true;
       setLoading(false);
     }
   }, [teacherId, alert?.toast]);
@@ -96,7 +102,9 @@ const SessionsPage = () => {
       setLoading(false);
       return;
     }
-    setLoading(true);
+    if (!hasLoadedSessionsRef.current) {
+      setLoading(true);
+    }
     loadSessions();
   }, [teacherId, hasActiveSession, activeSessionId, loadSessions]);
 
@@ -119,13 +127,27 @@ const SessionsPage = () => {
       return;
     }
 
+    if (isCreating) return;
+    setIsCreating(true);
     try {
       const sessionData = await createSession(sessionName);
       setCreatedSessionData(sessionData);
       setShowCreateModal(false);
       setShowCreatedPopup(true);
       setSessionName('');
-      await loadSessions();
+      setSessions((prev) => {
+        const next = [
+          {
+            ...sessionData,
+            id: sessionData.id,
+            status: 'active',
+            activities: sessionData.activities || [],
+          },
+          ...prev.filter((row) => row.id !== sessionData.id),
+        ];
+        return next;
+      });
+      void loadSessions();
       if (alert?.toast?.success) {
         alert.toast.success('Session created successfully!');
       }
@@ -133,18 +155,22 @@ const SessionsPage = () => {
       if (alert?.toast?.error) {
         alert.toast.error(error?.message || 'Failed to create session');
       }
+    } finally {
+      setIsCreating(false);
     }
   };
 
   const handleConfirmDelete = async () => {
     if (!sessionToDelete?.id || !teacherId) return;
 
+    const deletedId = sessionToDelete.id;
+    const removed = sessionToDelete;
     setIsDeleting(true);
+    setSessionToDelete(null);
+    setSessions((prev) => prev.filter((row) => row.id !== deletedId));
     try {
-      const response = await sessionsAPI.delete(sessionToDelete.id, teacherId);
+      const response = await sessionsAPI.delete(deletedId, teacherId);
       if (response.data?.success) {
-        setSessionToDelete(null);
-        await loadSessions();
         if (alert?.toast?.success) {
           alert.toast.success('Session deleted successfully');
         }
@@ -152,6 +178,7 @@ const SessionsPage = () => {
         throw new Error(response.data?.error || 'Failed to delete session');
       }
     } catch (error) {
+      setSessions((prev) => [removed, ...prev]);
       if (alert?.toast?.error) {
         alert.toast.error(error?.message || 'Failed to delete session');
       }
@@ -213,8 +240,9 @@ const SessionsPage = () => {
           </button>
         </div>
       ) : (
+        <>
         <div className="grid grid-cols-1 gap-6">
-          {sessions.map((session) => (
+          {sessions.slice(0, visibleSessionCount).map((session) => (
             <SessionCard
               key={session.id}
               session={session}
@@ -223,6 +251,18 @@ const SessionsPage = () => {
             />
           ))}
         </div>
+        {sessions.length > visibleSessionCount && (
+          <div className="flex justify-center">
+            <button
+              type="button"
+              onClick={() => setVisibleSessionCount((prev) => prev + SESSIONS_PAGE_SIZE)}
+              className="min-h-11 px-4 py-2 rounded-lg border border-primary/40 text-primary font-medium hover:bg-primary/10 transition-colors"
+            >
+              Show more
+            </button>
+          </div>
+        )}
+        </>
       )}
 
       {showCreateModal &&
@@ -270,7 +310,8 @@ const SessionsPage = () => {
                   <button
                     type="button"
                     onClick={handleCreateSession}
-                    className="flex-1 px-4 py-3 rounded-xl bg-[#6D415F] text-white font-semibold hover:bg-[#6D415F]/90 transition-colors"
+                    disabled={isCreating}
+                    className="flex-1 px-4 py-3 rounded-xl bg-[#6D415F] text-white font-semibold hover:bg-[#6D415F]/90 transition-colors disabled:opacity-50"
                   >
                     Create Session
                   </button>

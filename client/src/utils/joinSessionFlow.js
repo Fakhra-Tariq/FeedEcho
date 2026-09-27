@@ -123,6 +123,7 @@ export async function proceedWithSessionJoin({
       teamId: resolvedTeamId,
       studentUid: ctx.studentUid,
       studentEmail: ctx.studentEmail,
+      launchId: data?.currentLaunchId || null,
     });
     localStorage.setItem(
       'spaceRaceData',

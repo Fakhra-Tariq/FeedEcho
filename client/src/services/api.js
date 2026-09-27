@@ -362,40 +362,10 @@ export const handleAPIError = (error) => {
 
 const HEALTH_CHECK_TIMEOUT_MS =
   process.env.NODE_ENV === 'production' ? 90000 : 30000;
-const HEALTH_CHECK_MAX_ATTEMPTS = process.env.NODE_ENV === 'production' ? 6 : 3;
-const HEALTH_CHECK_RETRY_DELAYS_MS = [2000, 3000, 5000, 8000, 12000, 15000];
-
-const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 /** Non-blocking ping to wake a sleeping Render free-tier backend. */
 export const wakeBackend = () => {
   api.get('/health', { timeout: HEALTH_CHECK_TIMEOUT_MS }).catch(() => {});
-};
-
-// Health check with retries for cold-start backends
-export const checkServerHealth = async () => {
-  let lastError = null;
-
-  for (let attempt = 0; attempt < HEALTH_CHECK_MAX_ATTEMPTS; attempt += 1) {
-    try {
-      const response = await api.get('/health', { timeout: HEALTH_CHECK_TIMEOUT_MS });
-      return response.data;
-    } catch (error) {
-      lastError = error;
-      const apiError = handleAPIError(error);
-      const shouldRetry =
-        attempt < HEALTH_CHECK_MAX_ATTEMPTS - 1 &&
-        (apiError.isNetworkError || apiError.isTimeout || error.response?.status >= 500);
-
-      if (!shouldRetry) {
-        throw apiError;
-      }
-
-      await sleep(HEALTH_CHECK_RETRY_DELAYS_MS[attempt] ?? 15000);
-    }
-  }
-
-  throw handleAPIError(lastError);
 };
 
 export default api;

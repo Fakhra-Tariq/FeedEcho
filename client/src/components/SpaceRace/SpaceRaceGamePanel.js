@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Rocket, Trophy, Clock, Users, Star, Zap, Flame, Flag } from 'lucide-react';
 import { useRtdbList, useRtdbValue } from '../../hooks/useRtdb';
 import { spaceRacesAPI } from '../../services/api';
+import { getStoredAudienceSession } from '../../utils/audienceSession';
 
 const TimerDisplay = ({ timerInfo, onTimeUp }) => {
   const [timeLeft, setTimeLeft] = useState(0);
@@ -55,7 +56,7 @@ const TimerDisplay = ({ timerInfo, onTimeUp }) => {
 };
 
 // Join duration timer component
-const JoinDurationTimer = ({ raceData, className = '', variant = 'text' }) => {
+const JoinDurationTimer = ({ raceData, className = '' }) => {
   const [timeLeft, setTimeLeft] = useState('--:--');
   const [progress, setProgress] = useState(1);
 
@@ -106,49 +107,6 @@ const JoinDurationTimer = ({ raceData, className = '', variant = 'text' }) => {
 
     return () => clearInterval(timer);
   }, [raceData]);
-
-  const remainingRatio = progress;
-
-  if (variant === 'ring') {
-    const size = 52;
-    const stroke = 4;
-    const radius = (size - stroke) / 2;
-    const circumference = 2 * Math.PI * radius;
-    const offset = circumference * (1 - remainingRatio);
-
-    return (
-      <div className="relative w-[52px] h-[52px] shrink-0" aria-label={`Time left ${timeLeft}`}>
-        <svg className="w-full h-full -rotate-90" viewBox={`0 0 ${size} ${size}`}>
-          <circle
-            cx={size / 2}
-            cy={size / 2}
-            r={radius}
-            fill="none"
-            stroke="#F1E5EB"
-            strokeWidth={stroke}
-          />
-          <circle
-            cx={size / 2}
-            cy={size / 2}
-            r={radius}
-            fill="none"
-            stroke="#6D415F"
-            strokeWidth={stroke}
-            strokeLinecap="round"
-            strokeDasharray={circumference}
-            strokeDashoffset={offset}
-            className="transition-[stroke-dashoffset] duration-1000 linear"
-          />
-        </svg>
-        <div className="absolute inset-0 flex flex-col items-center justify-center px-0.5">
-          <span className="text-[8px] text-text/60 leading-none mb-0.5">Time left</span>
-          <span className="text-[11px] font-semibold text-primary tabular-nums leading-none">
-            {timeLeft}
-          </span>
-        </div>
-      </div>
-    );
-  }
 
   return (
     <span className={className}>
@@ -331,15 +289,35 @@ export default function SpaceRaceGamePanel({
   const leadingTeamId = sortedTeams[0]?.teamId;
   const hasQuiz = Boolean(quizId || raceData?.quizId);
   
-  // Check if participant has already attempted the quiz
+  // Current launch only — leftover answers/completedAt from a previous launch do not count
   const hasAttemptedQuiz = useMemo(() => {
     const me = effectiveParticipants.find((p) => p.id === participant?.id);
-    // Check if participant has PERSONALLY submitted answers (not inherited from teammates)
-    // or has completedAt timestamp (set when they finish the quiz)
-    const hasPersonalAnswers = me?.answers && Array.isArray(me.answers) && 
-      me.answers.some(a => a.awardedByTeammate !== true);
-    return Boolean(hasPersonalAnswers) || Boolean(me?.completedAt);
-  }, [effectiveParticipants, participant]);
+    if (!me) return false;
+
+    const launchId = raceData?.currentLaunchId;
+    if (launchId && me.launchId && String(me.launchId) !== String(launchId)) {
+      return false;
+    }
+    if (raceData?.startedAt && me.completedAt) {
+      const started = new Date(raceData.startedAt).getTime();
+      const completed = new Date(me.completedAt).getTime();
+      if (Number.isFinite(started) && Number.isFinite(completed) && completed < started) {
+        return false;
+      }
+    }
+
+    const hasPersonalAnswers = Array.isArray(me.answers) &&
+      me.answers.some((answer) => answer && answer.awardedByTeammate !== true);
+    return Boolean(hasPersonalAnswers) || Boolean(me.completedAt);
+  }, [effectiveParticipants, participant, raceData?.currentLaunchId, raceData?.startedAt]);
+
+  const handleBackToHome = useCallback(() => {
+    if (getStoredAudienceSession()) {
+      navigate('/audience/home', { replace: true });
+    } else {
+      navigate('/join', { replace: true });
+    }
+  }, [navigate]);
 
   const handleStartQuiz = async () => {
     const qId = quizId || raceData?.quizId;
@@ -530,10 +508,10 @@ export default function SpaceRaceGamePanel({
             )}
           </div>
           {!window.location.pathname.includes('/quiz/') && (
-            <JoinDurationTimer
-              raceData={raceData}
-              variant="ring"
-            />
+            <div className="flex flex-col items-end shrink-0">
+              <span className="text-text/60 text-xs">Time left</span>
+              <JoinDurationTimer raceData={raceData} className="text-base font-semibold text-primary tabular-nums" />
+            </div>
           )}
           {window.location.pathname.includes('/quiz/') && teamTimer?.endTime && (
             <div className="shrink-0 text-right">
@@ -576,6 +554,17 @@ export default function SpaceRaceGamePanel({
           </div>
         )}
       </div>
+      {hasAttemptedQuiz && !window.location.pathname.includes('/quiz/') && (
+        <div className="max-w-3xl mx-auto mt-4">
+          <button
+            type="button"
+            onClick={handleBackToHome}
+            className="w-full px-6 py-3 bg-primary text-white rounded-xl hover:bg-primary/90 transition-colors"
+          >
+            Back to Home
+          </button>
+        </div>
+      )}
     </div>
   );
 }

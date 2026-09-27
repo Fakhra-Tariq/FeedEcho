@@ -1,7 +1,6 @@
 import React from 'react';
 import { Navigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
-import { ClipLoader } from 'react-spinners';
 import { canAccessTeacherPortal } from '../../utils/userRoles';
 
 const ProtectedRoute = ({ children, requiredRole = null }) => {
@@ -10,10 +9,7 @@ const ProtectedRoute = ({ children, requiredRole = null }) => {
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
-        <div className="text-center">
-          <ClipLoader color="#7C3AED" size={50} />
-          <p className="mt-4 text-text-light">Loading...</p>
-        </div>
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary" />
       </div>
     );
   }

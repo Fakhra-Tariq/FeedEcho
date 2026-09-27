@@ -52,7 +52,7 @@ const getViewingContextBadge = (pathname, activePortal) => {
   return 'Audience';
 };
 
-const SettingsRow = ({ icon: Icon, label, onClick, danger = false }) => (
+const SettingsRow = React.memo(({ icon: Icon, label, onClick, danger = false }) => (
   <button
     type="button"
     onClick={onClick}
@@ -66,7 +66,7 @@ const SettingsRow = ({ icon: Icon, label, onClick, danger = false }) => (
     </div>
     {!danger && <ChevronRight className="w-5 h-5 text-gray-400 shrink-0" />}
   </button>
-);
+));
 
 export default function AudienceProfile() {
   const navigate = useNavigate();

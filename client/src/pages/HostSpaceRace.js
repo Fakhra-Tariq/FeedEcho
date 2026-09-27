@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, Play, Square, Settings, Users, Clock, Trophy, Star, Filter, Eye, Check, Copy, Loader2, X } from 'lucide-react';
+import { Plus, Play, Square, Edit, Users, Clock, Trophy, Star, Filter, Eye, Check, Copy, Loader2, X, Trash2 } from 'lucide-react';
 import { useHostData } from '../contexts/HostDataContext';
 import { useAuth } from '../contexts/AuthContext';
 import SpaceRaceSettings from '../components/SpaceRaceSettings';
@@ -8,6 +8,7 @@ import { quizzesAPI, spaceRacesAPI } from '../services/api';
 import { useRtdbList } from '../hooks/useRtdb';
 import {
   NO_ACTIVE_SESSION_MESSAGE,
+  requireActiveHostSession,
   resolveActiveTeacherSession,
 } from '../utils/requireActiveHostSession';
 import NoActiveSessionLaunchModal, {
@@ -28,6 +29,47 @@ import {
 } from '../utils/spaceRaceDuration';
 
 const RACES_PAGE_SIZE = 5;
+const STATUS_SORT_RANK = { active: 0, draft: 1, completed: 2 };
+const PENDING_LOCAL_RACE_MS = 15000;
+
+const getRaceStatus = (race) => {
+  if (!race) return 'draft';
+
+  const raw = race.status || 'draft';
+  const normalized = typeof raw === 'string' ? raw.toLowerCase() : raw;
+
+  switch (normalized) {
+    case 'active':
+    case 'paused':
+    case 'inactive':
+    case 'running':
+    case 'started':
+    case 'live':
+    case 'launched':
+      return 'active';
+    case 'completed':
+    case 'ended':
+    case 'finished':
+      return 'completed';
+    default:
+      return 'draft';
+  }
+};
+
+const compareRaceRecency = (a, b) =>
+  String(b.updatedAt || b.startedAt || b.createdAt || '').localeCompare(
+    String(a.updatedAt || a.startedAt || a.createdAt || '')
+  );
+
+const sortRacesForList = (list) =>
+  (list || [])
+    .slice()
+    .sort((a, b) => {
+      const rankA = STATUS_SORT_RANK[getRaceStatus(a)] ?? 3;
+      const rankB = STATUS_SORT_RANK[getRaceStatus(b)] ?? 3;
+      if (rankA !== rankB) return rankA - rankB;
+      return compareRaceRecency(a, b);
+    });
 
 const SPACE_RACE_QUIZ_COUNTDOWNS = [30, 60, 120, 300, 600, 900, 1200, 1800];
 const SPACE_RACE_JOIN_MINUTES = [5, 10, 15, 20, 30, 45, 60];
@@ -133,7 +175,7 @@ export default function HostSpaceRace() {
   const [isCreating, setIsCreating] = useState(false);
   const [quizzes, setQuizzes] = useState([]);
   const [fetchingQuizzes, setFetchingQuizzes] = useState(false);
-  const [races, setRaces] = useState([]);
+  const [races, setRaces] = useState(() => teacherData?.spaceRaces || []);
   const [settingsRace, setSettingsRace] = useState(null);
   const [copied, setCopied] = useState(false);
   const [showCopyNotification, setShowCopyNotification] = useState(false);
@@ -173,6 +215,8 @@ export default function HostSpaceRace() {
   const uidFallback = sessionStorage.getItem('feedecho-user-id');
   const { list: liveRaces, loading: liveRacesLoading, error: liveRacesError } = useRtdbList(uid ? 'spaceRaces' : null, {
     enabled: Boolean(uid),
+    orderBy: 'createdBy',
+    equalToValue: uid,
     filter: (r) => r.createdBy === uid || (uidFallback && r.createdBy === uidFallback),
     sort: (a, b) => String(b.createdAt || '').localeCompare(String(a.createdAt || '')),
   });
@@ -184,25 +228,35 @@ export default function HostSpaceRace() {
   const apiFallbackAppliedRef = useRef(false);
   const [teamScoresMap, setTeamScoresMap] = useState({});
 
-  // Fetch team scores for all races
+  // Fetch team scores in parallel for non-draft races (avoid sequential N+1)
   useEffect(() => {
     if (!uid || liveRacesLoading) return;
 
     const fetchTeamScores = async () => {
-      const scores = {};
-      for (const race of (liveRaces || [])) {
+      const targets = (liveRaces || []).filter((race) => {
         const raceId = race.id || race.raceId;
-        if (raceId && getRaceStatus(race) !== 'draft') {
+        return raceId && getRaceStatus(race) !== 'draft';
+      });
+
+      const entries = await Promise.all(
+        targets.map(async (race) => {
+          const raceId = race.id || race.raceId;
           try {
             const response = await spaceRacesAPI.getParticipants(raceId);
             if (response.data?.success && response.data?.data?.teamScores) {
-              scores[raceId] = response.data.data.teamScores;
+              return [raceId, response.data.data.teamScores];
             }
           } catch (error) {
             console.error(`Failed to fetch team scores for race ${raceId}:`, error);
           }
-        }
-      }
+          return null;
+        })
+      );
+
+      const scores = {};
+      entries.forEach((entry) => {
+        if (entry) scores[entry[0]] = entry[1];
+      });
       setTeamScoresMap(scores);
     };
 
@@ -211,37 +265,45 @@ export default function HostSpaceRace() {
 
   useEffect(() => {
     if (liveRacesLoading) return;
-    if (skipRtdbUpdate) {
-      console.log('⏭️ Skipping RTDB update to preserve local settings changes');
-      return;
-    }
-    // Always update races when liveRaces changes - remove signature check to ensure real-time updates
-    // Merge liveRaces with local state to preserve local changes
-    setRaces(prevRaces => {
+    setRaces((prevRaces) => {
       if (!liveRaces || liveRaces.length === 0) return prevRaces;
 
-      // Merge liveRaces with prevRaces, preserving local settings updates
-      return liveRaces.map(liveRace => {
-        const localRace = prevRaces.find(r => r.id === liveRace.id);
-        if (localRace) {
-          // Compare timestamps to determine which data is newer
-          const liveTime = new Date(liveRace.updatedAt || 0).getTime();
-          const localTime = new Date(localRace.updatedAt || 0).getTime();
-          
-          // If local data is newer, keep local settings
-          if (localTime > liveTime && localRace.settings) {
-            console.log(`🔄 Keeping local settings for race ${liveRace.id} (local: ${localTime} > live: ${liveTime})`);
-            return {
-              ...liveRace,
-              settings: { ...liveRace.settings, ...localRace.settings },
-              updatedAt: localRace.updatedAt
-            };
-          }
-          // Otherwise use live data
-          return liveRace;
-        }
-        return liveRace;
+      const liveIds = new Set(liveRaces.map((race) => race.id));
+      const merged = liveRaces.map((liveRace) => {
+        const localRace = prevRaces.find((race) => race.id === liveRace.id);
+        if (!localRace) return liveRace;
+
+        const liveTime = new Date(liveRace.updatedAt || 0).getTime();
+        const localTime = new Date(localRace.updatedAt || 0).getTime();
+        const localIsNewer = Number.isFinite(localTime) && localTime > liveTime;
+
+        return {
+          ...localRace,
+          ...liveRace,
+          status: localIsNewer && localRace.status ? localRace.status : (liveRace.status ?? localRace.status),
+          startedAt: localIsNewer && localRace.startedAt ? localRace.startedAt : (liveRace.startedAt ?? localRace.startedAt),
+          endedAt: localIsNewer && localRace.endedAt ? localRace.endedAt : (liveRace.endedAt ?? localRace.endedAt),
+          currentLaunchId:
+            localIsNewer && localRace.currentLaunchId
+              ? localRace.currentLaunchId
+              : (liveRace.currentLaunchId ?? localRace.currentLaunchId),
+          joinCode: liveRace.joinCode ?? localRace.joinCode,
+          accessCode: liveRace.accessCode ?? localRace.accessCode,
+          settings:
+            skipRtdbUpdate && localRace.settings
+              ? { ...(liveRace.settings || {}), ...localRace.settings }
+              : (liveRace.settings || localRace.settings),
+          updatedAt: localIsNewer ? localRace.updatedAt : (liveRace.updatedAt || localRace.updatedAt),
+        };
       });
+
+      const pendingLocal = prevRaces.filter((race) => {
+        if (!race?.id || liveIds.has(race.id)) return false;
+        const stamp = new Date(race.updatedAt || race.createdAt || 0).getTime();
+        return Number.isFinite(stamp) && Date.now() - stamp < PENDING_LOCAL_RACE_MS;
+      });
+
+      return [...pendingLocal, ...merged];
     });
   }, [liveRacesLoading, liveRaces, skipRtdbUpdate]);
 
@@ -265,7 +327,7 @@ export default function HostSpaceRace() {
     fallbackRequestedRef.current = true;
     (async () => {
       try {
-        const res = await spaceRacesAPI.getAll({ _: Date.now() });
+        const res = await spaceRacesAPI.getAll();
         if (res.data?.success) {
           apiFallbackAppliedRef.current = true;
           setRaces(res.data.data || []);
@@ -278,28 +340,6 @@ export default function HostSpaceRace() {
 
   // Helper functions
   const resolveRaceId = (race) => race?.id || race?.raceId;
-
-  const getRaceStatus = (race) => {
-    if (!race) return 'draft';
-    
-    const raw = race.status || 'draft';
-    const normalized = typeof raw === 'string' ? raw.toLowerCase() : raw;
-    
-    // Map backend statuses to frontend states
-    switch (normalized) {
-      case 'active':
-        return 'active';
-      case 'paused':
-      case 'inactive':
-        return 'active'; // Map paused/inactive to active so they appear in active tab
-      case 'completed':
-        return 'completed';
-      case 'ended':
-        return 'completed'; // Map ended to completed
-      default:
-        return 'draft';
-    }
-  };
 
   useEffect(() => {
     setVisibleRaceCount(RACES_PAGE_SIZE);
@@ -315,25 +355,22 @@ export default function HostSpaceRace() {
     { draft: 0, active: 0, completed: 0 }
   );
 
-  // Calculate filtered races
   const normalizedRaceSearch = raceSearchTerm.trim().toLowerCase();
-  const filteredRaces = (races || []).filter((race) => {
-    if (
-      normalizedRaceSearch &&
-      !String(race.title || '').toLowerCase().includes(normalizedRaceSearch)
-    ) {
-      return false;
-    }
+  const filteredRaces = sortRacesForList(
+    (races || []).filter((race) => {
+      if (
+        normalizedRaceSearch &&
+        !String(race.title || '').toLowerCase().includes(normalizedRaceSearch)
+      ) {
+        return false;
+      }
 
-    const status = getRaceStatus(race);
-    const normalizedFilter = filter.toLowerCase();
-
-    if (normalizedFilter === 'all') {
-      return true;
-    }
-
-    return status === normalizedFilter;
-  });
+      const status = getRaceStatus(race);
+      const normalizedFilter = filter.toLowerCase();
+      if (normalizedFilter === 'all') return true;
+      return status === normalizedFilter;
+    })
+  );
 
   // Default view shows the 5 most recent; "Show more" reveals further batches
   const isSearchingRaces = normalizedRaceSearch.length > 0;
@@ -540,9 +577,6 @@ export default function HostSpaceRace() {
         setCurrentStep(1);
         setSelectedQuizId('');
 
-        // Switch filter to "Draft" so new draft race is visible
-        setFilter('draft');
-
         // Fetch fresh data in background (non-blocking)
         fetchRaces().catch(err => console.log('Background fetch failed:', err));
       } else {
@@ -580,7 +614,10 @@ export default function HostSpaceRace() {
     let raceData = null; // Declare outside try block to make it accessible in catch
 
     const teacherId = user?.uid || userProfile?.uid;
-    let sessionCheck = await resolveActiveTeacherSession(teacherData.activeSession, teacherId);
+    let sessionCheck = requireActiveHostSession(teacherData.activeSession);
+    if (!sessionCheck.ok) {
+      sessionCheck = await resolveActiveTeacherSession(teacherData.activeSession, teacherId);
+    }
 
     if (!sessionCheck.ok) {
       setShowNoSessionModal(true);
@@ -651,55 +688,70 @@ export default function HostSpaceRace() {
       console.log('Starting Space Race for quiz:', selectedQuiz);
       console.log('Starting race with payload:', raceData);
 
+      const sessionJoinCode = String(sessionCheck.joinCode || '').trim().toUpperCase();
+      const pendingId = `pending-${Date.now()}`;
+      const launchedAt = new Date().toISOString();
+      const optimisticRace = {
+        id: pendingId,
+        raceId: pendingId,
+        joinCode: sessionJoinCode,
+        title: selectedQuiz.title,
+        description: selectedQuiz.description || 'Live Space Race session',
+        status: 'active',
+        startedAt: launchedAt,
+        createdAt: launchedAt,
+        updatedAt: launchedAt,
+        createdBy: user?.uid || userProfile?.uid,
+        settings: {
+          numberOfTeams: launchSettings.numberOfTeams,
+          teamAssignment: launchSettings.teamAssignment,
+          countdown: launchSettings.countdown,
+          joinDuration: launchSettings.joinDuration,
+          studentsPerTeam: launchSettings.studentsPerTeam,
+          shuffleQuestions: launchSettings.shuffleQuestions,
+          shuffleAnswers: launchSettings.shuffleAnswers,
+          showQuestionFeedback: launchSettings.showQuestionFeedback,
+          showFinalScore: launchSettings.showFinalScore,
+        },
+        timerMinutes: launchSettings.joinDuration,
+        participants: 0,
+      };
+
+      if (sessionJoinCode) {
+        setCurrentJoinCode(sessionJoinCode);
+        setShowJoinCodeModal(true);
+      }
+      setRaces((prev) => [optimisticRace, ...(prev || [])]);
+      setShowCreate(false);
+
       // Call backend start endpoint
       const res = await spaceRacesAPI.startRace(raceData);
 
       if (res.data?.raceId && res.data?.joinCode) {
         const { raceId, joinCode } = res.data;
-        const sessionJoinCode = (sessionCheck.joinCode || joinCode || '').toUpperCase();
+        const confirmedCode = (sessionJoinCode || joinCode || '').toUpperCase();
         
-        console.log('Space race launched successfully:', { raceId, joinCode: sessionJoinCode });
+        console.log('Space race launched successfully:', { raceId, joinCode: confirmedCode });
 
-        // Create new race object for immediate UI update
+        if (confirmedCode && confirmedCode !== sessionJoinCode) {
+          setCurrentJoinCode(confirmedCode);
+        }
+
         const newRace = {
+          ...optimisticRace,
           id: raceId,
           raceId: raceId,
-          joinCode: sessionJoinCode,
-          title: selectedQuiz.title,
-          description: selectedQuiz.description || 'Live Space Race session',
-          status: 'active',
-          startedAt: new Date().toISOString(),
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
-          createdBy: user?.uid || userProfile?.uid,
-          settings: {
-            numberOfTeams: launchSettings.numberOfTeams,
-            teamAssignment: launchSettings.teamAssignment,
-            countdown: launchSettings.countdown,
-            joinDuration: launchSettings.joinDuration,
-            studentsPerTeam: launchSettings.studentsPerTeam,
-            shuffleQuestions: launchSettings.shuffleQuestions,
-            shuffleAnswers: launchSettings.shuffleAnswers,
-            showQuestionFeedback: launchSettings.showQuestionFeedback,
-            showFinalScore: launchSettings.showFinalScore,
-          },
-          timerMinutes: launchSettings.joinDuration,
-          participants: 0,
+          joinCode: confirmedCode,
         };
 
-        // Add new race to existing races immediately
-        setRaces(prevRaces => [newRace, ...prevRaces]);
-
-        // Show join code modal instead of navigating
-        setCurrentJoinCode(sessionJoinCode);
-        setShowJoinCodeModal(true);
+        setRaces((prevRaces) => [
+          newRace,
+          ...(prevRaces || []).filter((race) => race.id !== pendingId && race.id !== raceId),
+        ]);
 
         // Refresh races list in background to sync with server
         fetchRaces();
 
-        // Close the create modal
-        setShowCreate(false);
-        
         // Reset form
         setSelectedQuizId('');
         setCurrentStep(1);
@@ -711,9 +763,6 @@ export default function HostSpaceRace() {
           joinDuration: 5,
           studentsPerTeam: 3
         });
-
-        // Switch filter to "Active" so new race is visible immediately
-        setFilter('active');
       } else {
         throw new Error(res.data?.message || 'No raceId or joinCode returned from server');
       }
@@ -732,6 +781,8 @@ export default function HostSpaceRace() {
         'Failed to launch Space Race. Please try again.';
 
       console.error('❌ Failed to launch Space Race:', errorMessage);
+      setShowJoinCodeModal(false);
+      setRaces((prev) => (prev || []).filter((race) => !String(race.id || '').startsWith('pending-')));
       hybridAlert.toast.error('Error: ' + errorMessage + '\n\nCheck browser console for more details.');
     } finally {
       setIsCreating(false);
@@ -740,7 +791,10 @@ export default function HostSpaceRace() {
 
   const handleStart = async (raceId) => {
     const teacherId = user?.uid || userProfile?.uid;
-    let sessionCheck = await resolveActiveTeacherSession(teacherData.activeSession, teacherId);
+    let sessionCheck = requireActiveHostSession(teacherData.activeSession);
+    if (!sessionCheck.ok) {
+      sessionCheck = await resolveActiveTeacherSession(teacherData.activeSession, teacherId);
+    }
 
     if (!sessionCheck.ok) {
       setPendingDraftLaunchId(raceId);
@@ -748,97 +802,99 @@ export default function HostSpaceRace() {
       return;
     }
 
+    const race = races.find(r => r.id === raceId);
+    if (!race) {
+      console.error('Race not found:', raceId);
+      return;
+    }
+    const previousStatus = race.status;
+    const previousJoinCode = race.joinCode;
+    const launchedAt = new Date().toISOString();
+    const joinCode = String(sessionCheck.joinCode || race.joinCode || '').trim().toUpperCase();
+
     try {
       console.log('Starting space race:', raceId);
       
-      const race = races.find(r => r.id === raceId);
-      if (!race) {
-        console.error('Race not found:', raceId);
-        return;
-      }
-      
       console.log('Found race to start:', race);
-      
-      // For draft races, update status to active using the existing race
-      if (race.status === 'draft') {
-        // Update the existing draft race to active status
-        const response = await spaceRacesAPI.updateStatus(raceId, 'active');
 
-        if (response.data.success) {
-          const updatedRace = response.data.data;
+      if (joinCode) {
+        setCurrentJoinCode(joinCode);
+        setShowJoinCodeModal(true);
+      }
+      setRaces((prev) =>
+        (prev || []).map((r) =>
+          r.id === raceId
+            ? {
+                ...r,
+                status: 'active',
+                joinCode,
+                accessCode: joinCode || r.accessCode,
+                updatedAt: launchedAt,
+                startedAt: launchedAt,
+                isPaused: false,
+              }
+            : r
+        )
+      );
 
-          if (typeof logActivity === 'function') {
-            logActivity('spaceRace', `Started Space Race: ${race.title}`);
-          } else {
-            console.error('logActivity is not available');
-          }
-          console.log('Space race started successfully:', updatedRace);
+      const response = await spaceRacesAPI.updateStatus(raceId, 'active');
 
-          // Update local state with the complete race data from backend
-          setRaces((prev) =>
-            (prev || []).map((r) =>
-              r.id === raceId
-                ? {
-                    ...r,
-                    ...updatedRace, // Merge all updated data including settings and startedAt
-                    status: 'active',
-                    joinCode: updatedRace.joinCode || r.joinCode
-                  }
-                : r
-            )
+      if (response.data.success) {
+        const updatedRace = response.data.data || {};
+
+        if (typeof logActivity === 'function') {
+          logActivity(
+            'spaceRace',
+            `${getRaceStatus(race) === 'draft' ? 'Started' : 'Resumed'} Space Race: ${race.title}`
           );
-          setFilter('active');
-
-          // Show join code modal
-          if (updatedRace.joinCode || sessionCheck.joinCode) {
-            setCurrentJoinCode((sessionCheck.joinCode || updatedRace.joinCode || '').toUpperCase());
-            setShowJoinCodeModal(true);
-          }
         } else {
-          console.error('Failed to start race:', response.data.error);
-          hybridAlert.toast.error('Failed to start race: ' + response.data.error);
-          return;
+          console.error('logActivity is not available');
         }
+        console.log('Space race started successfully:', updatedRace);
+
+        const confirmedCode = String(updatedRace.joinCode || joinCode || '').trim().toUpperCase();
+        if (confirmedCode && confirmedCode !== joinCode) {
+          setCurrentJoinCode(confirmedCode);
+        }
+
+        setRaces((prev) =>
+          (prev || []).map((r) =>
+            r.id === raceId
+              ? {
+                  ...r,
+                  ...updatedRace,
+                  status: 'active',
+                  joinCode: confirmedCode || r.joinCode,
+                  currentLaunchId: updatedRace.currentLaunchId || r.currentLaunchId,
+                  startedAt: updatedRace.startedAt || launchedAt,
+                  updatedAt: updatedRace.updatedAt || launchedAt,
+                  isPaused: false,
+                }
+              : r
+          )
+        );
       } else {
-        // For inactive races, update status to active and navigate to live view
-        const response = await spaceRacesAPI.updateStatus(raceId, 'active');
-
-        if (response.data.success) {
-          if (typeof logActivity === 'function') {
-            logActivity('spaceRace', `Resumed Space Race: ${race.title}`);
-          } else {
-            console.error('logActivity is not available');
-          }
-
-          console.log('Space race resumed successfully');
-
-          // Optimistically mark race as active in local state
-          setRaces((prev) =>
-            (prev || []).map((r) =>
-              r.id === raceId
-                ? {
-                    ...r,
-                    status: 'active',
-                    isPaused: false
-                  }
-                : r
-            )
-          );
-          setFilter('active');
-
-          // Stay on the Space Race page (this app doesn't have a /host/space-race/:id route)
-          navigate(`/host/space-race`);
-        } else {
-          console.error('Failed to resume race:', response.data.error);
-          hybridAlert.toast.error('Failed to resume race: ' + (response.data.error || 'Unknown error'));
-          return;
-        }
+        console.error('Failed to start race:', response.data.error);
+        hybridAlert.toast.error('Failed to start race: ' + (response.data.error || 'Unknown error'));
+        setShowJoinCodeModal(false);
+        setRaces((prev) =>
+          (prev || []).map((r) =>
+            r.id === raceId ? { ...r, status: previousStatus, joinCode: previousJoinCode } : r
+          )
+        );
+        return;
       }
       
       // Refresh race list to show updated status
       fetchRaces();
       
     } catch (error) {
+      setShowJoinCodeModal(false);
+      setRaces((prev) =>
+        (prev || []).map((r) =>
+          r.id === raceId ? { ...r, status: previousStatus, joinCode: previousJoinCode } : r
+        )
+      );
       console.error('Error starting space race:', error);
       hybridAlert.toast.error('Failed to start race: ' + error.message);
     }
@@ -868,14 +924,14 @@ export default function HostSpaceRace() {
         if (typeof logActivity === 'function') {
           logActivity('spaceRace', `Stopped Space Race: ${race?.title || 'Unknown'} - Status: completed`);
         }
+        const endedAt = new Date().toISOString();
         setRaces((prev) =>
           (prev || []).map((r) =>
             resolveRaceId(r) === resolvedId
-              ? { ...r, status: 'completed', isPaused: false }
+              ? { ...r, status: 'completed', isPaused: false, endedAt, updatedAt: endedAt }
               : r
           )
         );
-        setFilter('completed');
         hybridAlert.toast.success('Space Race ended');
       } else {
         hybridAlert.toast.error('Failed to stop race: ' + (response.data.error || 'Unknown error'));
@@ -885,6 +941,15 @@ export default function HostSpaceRace() {
       const msg = error.response?.data?.error || error.message || 'Failed to stop race';
       hybridAlert.toast.error('Failed to stop race: ' + msg);
     }
+  };
+
+  const handleDeleteRace = async (race) => {
+    const confirmed = await hybridAlert.modal.confirm(
+      'Delete this race? This action cannot be undone.',
+      { title: 'Delete Race', confirmText: 'Delete' }
+    );
+    if (!confirmed) return;
+    await handleDelete(resolveRaceId(race) || race.id);
   };
 
   const handleDelete = async (raceId) => {
@@ -946,18 +1011,7 @@ export default function HostSpaceRace() {
         return prev;
       });
 
-      // Refresh races from backend to ensure sync
-      setTimeout(async () => {
-        try {
-          const res = await spaceRacesAPI.getAll({ _: Date.now() });
-          if (res.data?.success) {
-            setRaces(res.data.data || []);
-            console.log('🔄 Refreshed races from backend after settings update');
-          }
-        } catch (error) {
-          console.error('Failed to refresh races after settings update:', error);
-        }
-        // Re-enable RTDB updates after refresh
+      setTimeout(() => {
         setSkipRtdbUpdate(false);
       }, 1000);
 
@@ -980,6 +1034,7 @@ return (
   <div className="px-0 md:px-6 pb-6 space-y-4 overflow-x-hidden max-w-full">
     <SessionLaunchBanner />
 
+    <div className="hidden md:block">
     <PageHeaderCard
       compact
       title="Space Race"
@@ -995,27 +1050,27 @@ return (
         />
       }
       subtitle="Gamified quiz competitions with team leaderboards"
-      actions={
-        <div className="flex flex-row items-center gap-2 w-full min-[481px]:w-auto">
-          <button
-            onClick={handleOpenCreateModal}
-            className="flex-1 min-w-0 inline-flex items-center justify-center gap-1 min-h-11 px-3 py-2 bg-white text-[#6D415F] rounded-lg text-sm font-semibold hover:bg-white/90 shadow-lg transition-colors min-[481px]:flex-none min-[481px]:px-4"
-          >
-            <Plus className="w-4 h-4 shrink-0" />
-            Create Race
-          </button>
-          {activeRace && (
+        actions={
+          <>
             <button
-              onClick={() => handleEnd(resolveRaceId(activeRace))}
-              className="flex-1 min-w-0 inline-flex items-center justify-center min-h-11 px-3 py-2 bg-red-500 text-white text-sm font-semibold rounded-lg hover:bg-red-600 transition-colors min-[481px]:flex-none"
-              title="End Race"
+              onClick={handleOpenCreateModal}
+              className="flex items-center justify-center gap-2 min-h-11 px-4 py-2 bg-white text-primary rounded-lg font-semibold hover:bg-white/90 shadow-lg transition-colors"
             >
-              <Square className="w-4 h-4 mr-1 shrink-0" />
-              End Race
+              <Plus className="w-4 h-4" />
+              Create Race
             </button>
-          )}
-        </div>
-      }
+            {activeRace && (
+              <button
+                onClick={() => handleEnd(resolveRaceId(activeRace))}
+                className="flex items-center justify-center gap-2 min-h-11 px-4 py-2 bg-red-500 text-white rounded-lg font-semibold hover:bg-red-600 transition-colors"
+                title="End Race"
+              >
+                <Square className="w-4 h-4" />
+                End Race
+              </button>
+            )}
+          </>
+        }
     >
       <HeaderCardStats
         stats={[
@@ -1025,6 +1080,59 @@ return (
         ]}
       />
     </PageHeaderCard>
+    </div>
+
+    <div className="md:hidden bg-gradient-to-br from-[#6D415F] via-[#6D415F]/90 to-[#3A2E2A] border border-[#6D415F]/30 shadow-xl rounded-2xl px-3 py-3 space-y-2.5 max-w-full">
+      <div className="min-w-0">
+        <div className="flex items-center gap-2 flex-nowrap min-w-0">
+          <h1 className="text-xl font-bold text-white leading-tight shrink-0">Space Race</h1>
+          <InfoRecap
+            variant="onDark"
+            className="mt-0 text-xs shrink-0 whitespace-nowrap"
+            steps={[
+              'Pick an existing quiz from your library to turn into a race',
+              'Set team settings (auto-assign or audience choice)',
+              'Launching requires an active session',
+              'Teams compete live and can chat within their team.',
+            ]}
+          />
+        </div>
+        <p className="text-xs text-white/90 leading-snug mt-0.5">
+          Gamified quiz competitions with team leaderboards
+        </p>
+      </div>
+      <div className="grid grid-cols-3 gap-1 min-w-0">
+        {[
+          { label: 'Draft', value: racesByStatus.draft },
+          { label: 'Active', value: racesByStatus.active },
+          { label: 'Completed', value: racesByStatus.completed },
+        ].map(({ label, value }) => (
+          <div key={label} className="min-w-0 text-center">
+            <p className="text-[10px] leading-tight text-white/80">{label}</p>
+            <p className="text-lg font-bold text-white leading-tight">{value}</p>
+          </div>
+        ))}
+      </div>
+      <div className="flex items-stretch gap-2">
+        <button
+          onClick={handleOpenCreateModal}
+          className="flex-1 min-w-0 inline-flex items-center justify-center gap-1 min-h-11 px-2 py-2 bg-white text-[#6D415F] rounded-lg text-xs font-bold hover:bg-white/90 shadow-lg transition-colors"
+        >
+          <Plus className="w-4 h-4 shrink-0" />
+          <span className="text-center leading-tight">Create Race</span>
+        </button>
+        {activeRace && (
+          <button
+            onClick={() => handleEnd(resolveRaceId(activeRace))}
+            className="flex-1 min-w-0 inline-flex items-center justify-center gap-1 min-h-11 px-2 py-2 bg-red-500 text-white rounded-lg text-xs font-semibold hover:bg-red-600 transition-colors"
+            title="End Race"
+          >
+            <Square className="w-4 h-4 shrink-0" />
+            <span className="text-center leading-tight">End Race</span>
+          </button>
+        )}
+      </div>
+    </div>
 
     <ListFilterBar
       tabs={['all', 'draft', 'active', 'completed']}
@@ -1033,43 +1141,55 @@ return (
       searchTerm={raceSearchTerm}
       onSearchChange={setRaceSearchTerm}
       searchPlaceholder="Search races..."
+      tabsClassName="max-md:grid max-md:grid-cols-4 max-md:w-full max-md:[&>button]:w-full max-md:[&>button]:px-1.5 max-md:[&>button]:text-center max-md:[&>button]:text-xs"
     />
 
       <div className="grid gap-4">
-        {visibleRaces.map(race => (
-          <div key={race.id} className="bg-white rounded-lg border border-gray-200 p-4 md:p-6 max-w-full min-w-0">
-            <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-              <div className="flex-1 min-w-0">
-                <div className="flex items-start justify-between gap-2 mb-2">
-                  <div className="flex flex-wrap items-center gap-2 md:gap-3 min-w-0">
-                  <h3 className="text-lg font-semibold text-text break-words min-w-0">{race.title}</h3>
-                  {(() => {
-                    const status = getRaceStatus(race);
-                    const badgeClasses =
-                      status === 'active'
-                        ? 'bg-[#6D415F]/20 text-[#6D415F]'
-                        : status === 'completed'
-                        ? 'bg-[#6D415F]/10 text-[#6D415F]'
-                        : 'bg-gray-100 text-gray-800';
+        {visibleRaces.map(race => {
+          const raceStatus = getRaceStatus(race);
+          const badgeClasses =
+            raceStatus === 'active'
+              ? 'bg-[#6D415F]/20 text-[#6D415F]'
+              : raceStatus === 'completed'
+              ? 'bg-[#6D415F]/10 text-[#6D415F]'
+              : 'bg-gray-100 text-gray-800';
+          const badgeLabel =
+            raceStatus === 'active' ? 'Active' : raceStatus === 'completed' ? 'Completed' : 'Draft';
+          const renderCodeCopy = () =>
+            raceStatus === 'active' && race.joinCode ? (
+              <div className="inline-flex items-center shrink-0">
+                <span className="font-mono text-sm tracking-widest text-text">{race.joinCode}</span>
+                <button
+                  type="button"
+                  onClick={() => handleCopyRaceJoinCode(race.joinCode)}
+                  className="min-h-9 min-w-9 inline-flex items-center justify-center rounded-lg text-text-light hover:text-primary hover:bg-primary/10 transition-colors"
+                  title="Copy join code"
+                  aria-label="Copy join code"
+                >
+                  {copied ? (
+                    <Check className="w-4 h-4 text-emerald-600" />
+                  ) : (
+                    <Copy className="w-4 h-4" />
+                  )}
+                </button>
+              </div>
+            ) : null;
 
-                    const label =
-                      status === 'active'
-                        ? 'Active'
-                        : status === 'completed'
-                        ? 'Completed'
-                        : 'Draft';
-
-                    return (
-                      <span className={`px-2 py-1 text-xs font-medium rounded-full ${badgeClasses}`}>
-                        {label}
-                      </span>
-                    );
-                  })()}
-                  </div>
-                  {getRaceStatus(race) === 'active' && (
+          return (
+          <div key={race.id} className="bg-white rounded-lg border border-gray-200 p-4 sm:p-6 max-w-full min-w-0">
+              <div className="flex items-center justify-between gap-2 mb-2">
+                <div className="flex items-center gap-2 min-w-0">
+                  <h3 className="text-lg font-semibold text-text truncate">{race.title}</h3>
+                  <span className={`px-2 py-1 text-xs font-medium rounded-full shrink-0 ${badgeClasses}`}>
+                    {badgeLabel}
+                  </span>
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  <div className="hidden min-[361px]:block">{renderCodeCopy()}</div>
+                  {raceStatus === 'active' && (
                     <button
                       onClick={() => handleEnd(resolveRaceId(race))}
-                      className="shrink-0 inline-flex items-center justify-center min-h-11 px-3 py-1.5 bg-red-500 text-white text-sm rounded-lg hover:bg-red-600 transition-colors"
+                      className="min-h-11 p-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors text-sm inline-flex items-center shrink-0"
                       title="End Race"
                     >
                       <Square className="w-4 h-4 mr-1" />
@@ -1077,7 +1197,10 @@ return (
                     </button>
                   )}
                 </div>
-                <p className="text-text-light mb-4 break-words">{race.description || 'Live Space Race session'}</p>
+              </div>
+              {raceStatus === 'active' && race.joinCode && (
+                <div className="min-[361px]:hidden mb-2">{renderCodeCopy()}</div>
+              )}
                 <div className="flex flex-wrap items-center gap-x-4 gap-y-2 md:gap-x-6 text-sm text-text-light">
                   <div className="flex items-center space-x-1">
                     <Users className="w-4 h-4" />
@@ -1099,7 +1222,7 @@ return (
                       )}
                     </span>
                   </div>
-                  {getRaceStatus(race) !== 'draft' && (() => {
+                  {raceStatus !== 'draft' && (() => {
                     const raceId = race.id || race.raceId;
                     const scores = teamScoresMap[raceId] || race.teamScores;
                     if (scores && Object.keys(scores).length > 0) {
@@ -1115,62 +1238,90 @@ return (
                   })()}
                 </div>
 
-                {/* Show join code for active races */}
-                {getRaceStatus(race) === 'active' && race.joinCode && (
-                  <div className="mt-3 inline-flex items-center px-3 py-1 rounded-full bg-[#6D415F]/5 text-[#6D415F] text-xs font-medium">
-                    Join Code: <span className="ml-1 font-mono tracking-widest">{race.joinCode}</span>
+              <div className="flex flex-wrap items-center gap-2 mt-3">
+                {raceStatus === 'draft' && (
+                  <>
                     <button
                       type="button"
-                      onClick={() => handleCopyRaceJoinCode(race.joinCode)}
-                      className="min-h-9 min-w-9 -mr-1 ml-0.5 inline-flex items-center justify-center rounded-full hover:bg-[#6D415F]/10 transition-colors"
-                      title="Copy join code"
-                      aria-label="Copy join code"
+                      onClick={() => setSettingsRace(race)}
+                      className="min-h-11 p-2 text-primary rounded-lg border border-primary/50 hover:bg-primary/10 transition-colors text-sm inline-flex items-center"
+                      title="Edit Race"
                     >
-                      {copied ? (
-                        <Check className="w-3.5 h-3.5" />
-                      ) : (
-                        <Copy className="w-3.5 h-3.5" />
-                      )}
+                      <Edit className="w-4 h-4 mr-1" />
+                      Edit
                     </button>
-                  </div>
-                )}
-              </div>
-              <div className="flex flex-wrap items-center gap-2 md:ml-4 shrink-0">
-                {/* Start button for draft races */}
-                {getRaceStatus(race) === 'draft' && (
-                  <button
-                    onClick={() => handleStart(race.id)}
-                    className="inline-flex items-center justify-center min-h-11 px-3 py-1.5 bg-[#6D415F] text-white text-sm rounded-lg hover:bg-[#5a364d] transition-colors"
-                  >
-                    <Play className="w-4 h-4 mr-1" />
-                    Launch
-                  </button>
-                )}
-
-                {(race.status === 'completed' || race.status === 'ended' || race.status === 'active') && (
-                  <button
-                    onClick={() => navigate(`/host/space-race/${race.id}/display`)}
-                    className="min-h-11 min-w-11 p-2 text-[#6D415F] rounded-lg border border-[#6D415F]/50 hover:bg-[#6D415F]/10 transition-colors text-sm inline-flex items-center justify-center"
-                    title="View Responses"
-                    aria-label="View Responses"
-                  >
-                    <Eye className="w-4 h-4 max-[480px]:mr-0 mr-1" />
-                    <span className="max-[480px]:hidden">View Responses</span>
-                  </button>
+                    <button
+                      type="button"
+                      onClick={() => handleStart(race.id)}
+                      className="min-h-11 p-2 text-primary rounded-lg border border-primary/50 hover:bg-primary/10 transition-colors text-sm inline-flex items-center"
+                      title="Launch Race"
+                    >
+                      <Play className="w-4 h-4 mr-1" />
+                      Launch
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleDeleteRace(race)}
+                      className="min-h-11 p-2 text-red-600 rounded-lg border border-red-300 hover:bg-red-100 transition-colors text-sm inline-flex items-center"
+                      title="Delete Race"
+                    >
+                      <Trash2 className="w-4 h-4 mr-1" />
+                      Delete
+                    </button>
+                  </>
                 )}
 
-                <button
-                  onClick={() => setSettingsRace(race)}
-                  className="min-h-11 min-w-11 p-2 text-[#6D415F] hover:bg-[#6D415F]/10 rounded-lg transition-colors inline-flex items-center justify-center"
-                  title="Race Settings"
-                  aria-label="Race Settings"
-                >
-                  <Settings className="w-4 h-4" />
-                </button>
+                {raceStatus === 'active' && (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => navigate(`/host/space-race/${race.id}/display`)}
+                      className="min-h-11 p-2 text-primary rounded-lg border border-primary/50 hover:bg-primary/10 transition-colors text-sm inline-flex items-center"
+                      title="View Responses"
+                      aria-label="View Responses"
+                    >
+                      <Eye className="w-4 h-4 mr-1" />
+                      View Responses
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setSettingsRace(race)}
+                      className="min-h-11 p-2 text-primary rounded-lg border border-primary/50 hover:bg-primary/10 transition-colors text-sm inline-flex items-center"
+                      title="Edit Race"
+                    >
+                      <Edit className="w-4 h-4 mr-1" />
+                      Edit
+                    </button>
+                  </>
+                )}
+
+                {raceStatus === 'completed' && (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => navigate(`/host/space-race/${race.id}/display`)}
+                      className="min-h-11 p-2 text-primary rounded-lg border border-primary/50 hover:bg-primary/10 transition-colors text-sm inline-flex items-center"
+                      title="View Responses"
+                      aria-label="View Responses"
+                    >
+                      <Eye className="w-4 h-4 mr-1" />
+                      View Responses
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleDeleteRace(race)}
+                      className="min-h-11 p-2 text-red-600 rounded-lg border border-red-300 hover:bg-red-100 transition-colors text-sm inline-flex items-center"
+                      title="Delete Race"
+                    >
+                      <Trash2 className="w-4 h-4 mr-1" />
+                      Delete
+                    </button>
+                  </>
+                )}
               </div>
-            </div>
           </div>
-        ))}
+          );
+        })}
         {liveRacesLoading && races.length === 0 ? (
           <div className="flex items-center justify-center py-16 text-text-light">
             <Loader2 className="w-8 h-8 animate-spin mr-3" />
@@ -1569,8 +1720,10 @@ return (
                   <label className="block text-sm font-medium text-gray-700 mb-3">
                     Audience Access Code
                   </label>
-                  <div className="text-3xl font-bold text-gray-900 tracking-widest uppercase">
-                    {currentJoinCode}
+                  <div className="text-3xl font-bold text-gray-900 tracking-widest uppercase min-h-[2.25rem] flex items-center justify-center">
+                    {currentJoinCode || (
+                      <Loader2 className="w-7 h-7 animate-spin text-[#6D415F]" aria-label="Loading join code" />
+                    )}
                   </div>
                 </div>
               </div>
@@ -1579,7 +1732,10 @@ return (
               <div className="space-y-3">
                 {/* Primary Copy Code button */}
                 <button
+                  type="button"
+                  disabled={!currentJoinCode}
                   onClick={async () => {
+                    if (!currentJoinCode) return;
                     try {
                       await navigator.clipboard.writeText(currentJoinCode);
                       setCopied(true);
@@ -1590,7 +1746,7 @@ return (
                       console.error('Failed to copy code:', err);
                     }
                   }}
-                  className="w-full flex items-center justify-center gap-2 px-6 py-3 bg-[#6D415F] text-white rounded-lg hover:bg-[#5A344D] transition-colors font-medium"
+                  className="w-full flex items-center justify-center gap-2 px-6 py-3 bg-[#6D415F] text-white rounded-lg hover:bg-[#5A344D] transition-colors font-medium disabled:opacity-60"
                 >
                   <Copy className="w-4 h-4" />
                   {copied ? 'Copied!' : 'Copy Code'}

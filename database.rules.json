@@ -34,6 +34,18 @@
         ".write": true
       }
     },
+    "quiz_submissions_by_student": {
+      "$studentUid": {
+        ".read": true,
+        ".write": true
+      }
+    },
+    "space_race_student_history": {
+      "$studentKey": {
+        ".read": true,
+        ".write": true
+      }
+    },
     "quiz_launches": {
       "$quizId": {
         ".read": true,

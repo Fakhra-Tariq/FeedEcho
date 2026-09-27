@@ -18,7 +18,6 @@ import {
   FileQuestion,
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
-import { useHostData } from '../contexts/HostDataContext';
 import { useHybridAlert } from '../contexts/HybridAlertContext';
 import { useQuizSubmissionListeners } from '../hooks/useQuizSubmissionListeners';
 import { db } from '../firebase';
@@ -32,12 +31,10 @@ import {
 import { normalizeQuizTypeLabel } from '../utils/quizQuestionNormalization';
 import PageHeaderCard from '../components/Host/PageHeaderCard';
 import {
-  mapSubmissionNodes,
-  mergeQuizSubmissionSources,
-  countJoinedParticipants,
   isSubmittedRow,
   normalizeTimeTakenSeconds,
   buildLaunchHistory,
+  collectReportDataForQuiz,
 } from '../utils/hostQuizReports';
 
 const PASS_THRESHOLD = 60;
@@ -204,63 +201,7 @@ const enrichSubmission = (submission, quiz) => ({
   answers: submission?.answers || {},
 });
 
-const buildQuizReportRow = (quiz, submissions, joinedCount = 0) => {
-  const list = (submissions || []).map((sub) => enrichSubmission(sub, quiz));
-  const submittedRows = list.filter(isSubmittedRow);
-  const submittedCount = submittedRows.length;
-  const avgScore =
-    submittedCount > 0
-      ? Math.round(
-          submittedRows.reduce((sum, s) => sum + Number(s.percentage || 0), 0) / submittedCount
-        )
-      : null;
-  const passCount = submittedRows.filter((s) => Number(s.percentage || 0) >= PASS_THRESHOLD).length;
-  const participantCount = Math.max(Number(joinedCount) || 0, submittedCount);
-
-  return {
-    quiz,
-    submissions: list,
-    participantCount,
-    joinedCount: Math.max(Number(joinedCount) || 0, submittedCount),
-    submittedCount,
-    avgScore,
-    passCount,
-    failCount: submittedCount - passCount,
-    passRate: submittedCount > 0 ? Math.round((passCount / submittedCount) * 100) : null,
-  };
-};
-
-const collectReportDataForQuiz = (quiz, submissionsByQuizId, participantsByQuizId, apiFallbackByQuizId) => {
-  const quizId = quiz.id;
-  const fallback = apiFallbackByQuizId[quizId];
-
-  const submissionRows = [
-    ...mapSubmissionNodes(submissionsByQuizId[quizId]),
-    ...(fallback?.submissions || []).map((s, idx) => ({
-      ...s,
-      participantId: s.participantId || s.id || `api-sub-${idx}`,
-    })),
-  ];
-
-  const participantRows = [
-    ...mapSubmissionNodes(participantsByQuizId[quizId]),
-    ...(fallback?.participants || []).map((p, idx) => ({
-      ...p,
-      participantId: p.participantId || p.id || `api-part-${idx}`,
-    })),
-  ];
-
-  const mergedSubmissions = mergeQuizSubmissionSources(submissionRows, participantRows, quiz);
-  const joinedCount = Math.max(
-    countJoinedParticipants(participantsByQuizId[quizId]),
-    fallback?.participants?.length ?? 0,
-    fallback?.totalParticipants ?? 0
-  );
-
-  return buildQuizReportRow(quiz, mergedSubmissions, joinedCount);
-};
-
-const OverviewStatCard = ({ label, icon: Icon, value, caption }) => (
+const OverviewStatCard = React.memo(({ label, icon: Icon, value, caption }) => (
   <div className="bg-[#F2EBF0] rounded-2xl border border-[#6D415F]/20 p-3 sm:p-5 shadow-sm min-w-0">
     <div className="flex items-center justify-between gap-2 sm:gap-3 mb-3">
       <p className="text-xs font-semibold uppercase tracking-wide text-text-light">{label}</p>
@@ -271,18 +212,148 @@ const OverviewStatCard = ({ label, icon: Icon, value, caption }) => (
     <p className="text-2xl sm:text-3xl font-bold text-text break-words">{value}</p>
     {caption && <p className="text-xs text-text-light mt-1">{caption}</p>}
   </div>
-);
+));
+
+const QuizReportMobileCard = React.memo(({ report, onView, onDelete }) => (
+  <article className="bg-[#F2EBF0] rounded-2xl border border-[#6D415F]/20 p-4 shadow-sm min-w-0">
+    <p className="font-semibold text-text break-words">
+      {report.quiz.title || 'Untitled Quiz'}
+    </p>
+    <p className="text-xs text-text-light mt-0.5 break-words">
+      {normalizeQuizTypeLabel(report.quiz.type || 'Quiz')} ·{' '}
+      {report.quiz.questionCount ??
+        normalizeQuestionsList(report.quiz.questions).length ??
+        0}{' '}
+      questions
+    </p>
+    <dl className="mt-3 space-y-2 min-w-0">
+      <div className="flex items-start justify-between gap-3 min-w-0">
+        <dt className="text-xs font-semibold uppercase tracking-wide text-text-light shrink-0">
+          Audience Joined
+        </dt>
+        <dd className="text-sm text-text text-right break-words min-w-0">
+          {report.participantCount}
+        </dd>
+      </div>
+      <div className="flex items-start justify-between gap-3 min-w-0">
+        <dt className="text-xs font-semibold uppercase tracking-wide text-text-light shrink-0">
+          Avg Score
+        </dt>
+        <dd className="text-sm font-medium text-text text-right break-words min-w-0">
+          {report.avgScore != null ? `${report.avgScore}%` : '—'}
+        </dd>
+      </div>
+      <div className="flex items-start justify-between gap-3 min-w-0">
+        <dt className="text-xs font-semibold uppercase tracking-wide text-text-light shrink-0">
+          Pass / Fail
+        </dt>
+        <dd className="text-sm text-right break-words min-w-0">
+          {report.submittedCount > 0 ? (
+            <span>
+              <span className="text-green-700 font-medium">{report.passCount} passed</span>
+              <span className="text-text-light"> · </span>
+              <span className="text-red-600 font-medium">{report.failCount} failed</span>
+            </span>
+          ) : report.participantCount > 0 ? (
+            <span className="text-text-light">Joined · no score yet</span>
+          ) : (
+            <span className="text-text-light">—</span>
+          )}
+        </dd>
+      </div>
+      <div className="flex items-start justify-between gap-3 min-w-0">
+        <dt className="text-xs font-semibold uppercase tracking-wide text-text-light shrink-0">
+          Date
+        </dt>
+        <dd className="text-sm text-text-light text-right break-words min-w-0">
+          {formatDate(report.quiz.createdAt || report.quiz.updatedAt)}
+        </dd>
+      </div>
+    </dl>
+    <div className="mt-4 grid grid-cols-2 gap-2">
+      <button
+        type="button"
+        onClick={() => onView(report)}
+        className="inline-flex items-center justify-center gap-1.5 min-h-11 min-w-0 px-3 py-2 text-sm font-medium text-primary border border-primary/20 rounded-lg hover:bg-primary/10 transition-colors"
+      >
+        <Eye className="w-4 h-4 shrink-0" />
+        View
+      </button>
+      <button
+        type="button"
+        onClick={() => onDelete(report.quiz.id)}
+        className="inline-flex items-center justify-center gap-1.5 min-h-11 min-w-0 px-3 py-2 text-sm font-medium text-red-600 border border-red-200 rounded-lg hover:bg-red-50 transition-colors"
+      >
+        <Trash2 className="w-4 h-4 shrink-0" />
+        Delete
+      </button>
+    </div>
+  </article>
+));
+
+const QuizReportTableRow = React.memo(({ report, onView, onDelete }) => (
+  <tr className="hover:bg-primary/5 transition-colors">
+    <td className="px-5 py-4">
+      <p className="font-medium text-text">{report.quiz.title || 'Untitled Quiz'}</p>
+      <p className="text-xs text-text-light mt-0.5">
+        {normalizeQuizTypeLabel(report.quiz.type || 'Quiz')} ·{' '}
+        {report.quiz.questionCount ??
+          normalizeQuestionsList(report.quiz.questions).length ??
+          0}{' '}
+        questions
+      </p>
+    </td>
+    <td className="px-5 py-4 text-sm text-text">{report.participantCount}</td>
+    <td className="px-5 py-4 text-sm font-medium text-text">
+      {report.avgScore != null ? `${report.avgScore}%` : '—'}
+    </td>
+    <td className="px-5 py-4 text-sm">
+      {report.submittedCount > 0 ? (
+        <span>
+          <span className="text-green-700 font-medium">{report.passCount} passed</span>
+          <span className="text-text-light"> · </span>
+          <span className="text-red-600 font-medium">{report.failCount} failed</span>
+        </span>
+      ) : report.participantCount > 0 ? (
+        <span className="text-text-light">Joined · no score yet</span>
+      ) : (
+        <span className="text-text-light">—</span>
+      )}
+    </td>
+    <td className="px-5 py-4 text-sm text-text-light whitespace-nowrap">
+      {formatDate(report.quiz.createdAt || report.quiz.updatedAt)}
+    </td>
+    <td className="px-5 py-4">
+      <div className="flex items-center justify-end gap-2">
+        <button
+          type="button"
+          onClick={() => onView(report)}
+          className="inline-flex items-center gap-1.5 min-h-11 px-3 py-2 text-sm font-medium text-primary border border-primary/20 rounded-lg hover:bg-primary/10 transition-colors"
+        >
+          <Eye className="w-4 h-4" />
+          View
+        </button>
+        <button
+          type="button"
+          onClick={() => onDelete(report.quiz.id)}
+          className="inline-flex items-center gap-1.5 min-h-11 px-3 py-2 text-sm font-medium text-red-600 border border-red-200 rounded-lg hover:bg-red-50 transition-colors"
+        >
+          <Trash2 className="w-4 h-4" />
+          Delete
+        </button>
+      </div>
+    </td>
+  </tr>
+));
 
 export default function HostReports() {
   const { user, userProfile } = useAuth();
   const teacherUid = userProfile?.uid || user?.uid;
-  const { syncQuizzes } = useHostData();
   const { alert } = useHybridAlert();
 
   const [loadingQuizzes, setLoadingQuizzes] = useState(true);
   const [quizzes, setQuizzes] = useState([]);
   const [apiFallbackByQuizId, setApiFallbackByQuizId] = useState({});
-  const [loadingResults, setLoadingResults] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedReport, setSelectedReport] = useState(null);
   const [selectedLaunch, setSelectedLaunch] = useState(null);
@@ -295,7 +366,7 @@ export default function HostReports() {
 
   const quizIds = useMemo(() => quizzes.map((q) => q.id).filter(Boolean), [quizzes]);
 
-  const { submissionsByQuizId, participantsByQuizId } =
+  const { submissionsByQuizId, participantsByQuizId, ready: listenersReady } =
     useQuizSubmissionListeners(quizIds, { listenParticipants: true });
 
   const refreshQuizzes = useCallback(async () => {
@@ -324,77 +395,33 @@ export default function HostReports() {
       }
 
       setQuizzes(list);
-      await syncQuizzes();
       setApiFallbackByQuizId({});
     } finally {
       setLoadingQuizzes(false);
     }
-  }, [teacherUid, syncQuizzes]);
+  }, [teacherUid]);
 
   useEffect(() => {
     refreshQuizzes();
   }, [refreshQuizzes]);
 
-  useEffect(() => {
-    if (!teacherUid || !quizzes.length) return undefined;
-
-    let cancelled = false;
-    setLoadingResults(true);
-
-    Promise.all(
-      quizzes.map(async (quiz) => {
-        try {
-          const response = await quizSubmissionsAPI.getResults(quiz.id);
-          return [quiz.id, response.data?.data || null];
-        } catch {
-          return [quiz.id, null];
-        }
-      })
-    )
-      .then((pairs) => {
-        if (cancelled) return;
-        const next = {};
-        pairs.forEach(([quizId, data]) => {
-          if (data) next[quizId] = data;
-        });
-        setApiFallbackByQuizId(next);
-      })
-      .finally(() => {
-        if (!cancelled) setLoadingResults(false);
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [teacherUid, quizzes]);
-
   const quizReports = useMemo(() => {
     if (!quizzes.length) return [];
     return quizzes
       .map((quiz) =>
-        collectReportDataForQuiz(quiz, submissionsByQuizId, participantsByQuizId, apiFallbackByQuizId)
+        collectReportDataForQuiz(
+          quiz,
+          submissionsByQuizId,
+          participantsByQuizId,
+          apiFallbackByQuizId,
+          { includeDetails: false }
+        )
       )
       // Only show quizzes that at least one student has joined and attempted
       .filter((report) => Number(report.submittedCount) > 0);
   }, [quizzes, submissionsByQuizId, participantsByQuizId, apiFallbackByQuizId]);
 
-  const hasRtdbReportData = useMemo(
-    () =>
-      Object.values(submissionsByQuizId).some(
-        (node) => node && typeof node === 'object' && Object.keys(node).length > 0
-      ) ||
-      Object.values(participantsByQuizId).some(
-        (node) => node && typeof node === 'object' && Object.keys(node).length > 0
-      ),
-    [submissionsByQuizId, participantsByQuizId]
-  );
-
-  const loading =
-    loadingQuizzes ||
-    (loadingResults &&
-      quizzes.length > 0 &&
-      !Object.keys(apiFallbackByQuizId).length &&
-      !hasRtdbReportData);
+  const loading = loadingQuizzes || (quizIds.length > 0 && !listenersReady);
 
   const overviewStats = useMemo(() => {
     const allSubmissions = quizReports.flatMap((r) => r.submissions).filter(isSubmittedRow);
@@ -438,7 +465,8 @@ export default function HostReports() {
               report.quiz,
               submissionsByQuizId,
               participantsByQuizId,
-              next
+              next,
+              { includeDetails: true }
             );
             setSelectedReport(refreshed);
             const launches = buildLaunchHistory(
@@ -489,8 +517,16 @@ export default function HostReports() {
 
   useEffect(() => {
     if (!selectedReport?.quiz?.id || !reportModalView) return;
-    const updated = quizReports.find((r) => r.quiz.id === selectedReport.quiz.id);
-    if (!updated) return;
+    const quiz = quizzes.find((q) => q.id === selectedReport.quiz.id);
+    if (!quiz) return;
+    const updated = collectReportDataForQuiz(
+      quiz,
+      submissionsByQuizId,
+      participantsByQuizId,
+      apiFallbackByQuizId,
+      { includeDetails: true }
+    );
+    if (Number(updated.submittedCount) <= 0) return;
 
     setSelectedReport(updated);
     const fallback = apiFallbackByQuizId[updated.quiz.id];
@@ -519,12 +555,14 @@ export default function HostReports() {
       if (refreshedSub) setSelectedSubmission(refreshedSub);
     }
   }, [
-    quizReports,
+    quizzes,
+    submissionsByQuizId,
+    participantsByQuizId,
+    apiFallbackByQuizId,
     selectedReport?.quiz?.id,
     selectedLaunch?.id,
     selectedSubmission?.participantId,
     reportModalView,
-    apiFallbackByQuizId,
   ]);
 
   const handleDeleteQuiz = async () => {
@@ -729,83 +767,12 @@ export default function HostReports() {
           <>
             <div className="md:hidden p-4 space-y-3">
               {filteredReports.map((report) => (
-                <article
+                <QuizReportMobileCard
                   key={report.quiz.id}
-                  className="bg-[#F2EBF0] rounded-2xl border border-[#6D415F]/20 p-4 shadow-sm min-w-0"
-                >
-                  <p className="font-semibold text-text break-words">
-                    {report.quiz.title || 'Untitled Quiz'}
-                  </p>
-                  <p className="text-xs text-text-light mt-0.5 break-words">
-                    {normalizeQuizTypeLabel(report.quiz.type || 'Quiz')} ·{' '}
-                    {report.quiz.questionCount ??
-                      normalizeQuestionsList(report.quiz.questions).length ??
-                      0}{' '}
-                    questions
-                  </p>
-                  <dl className="mt-3 space-y-2 min-w-0">
-                    <div className="flex items-start justify-between gap-3 min-w-0">
-                      <dt className="text-xs font-semibold uppercase tracking-wide text-text-light shrink-0">
-                        Audience Joined
-                      </dt>
-                      <dd className="text-sm text-text text-right break-words min-w-0">
-                        {report.participantCount}
-                      </dd>
-                    </div>
-                    <div className="flex items-start justify-between gap-3 min-w-0">
-                      <dt className="text-xs font-semibold uppercase tracking-wide text-text-light shrink-0">
-                        Avg Score
-                      </dt>
-                      <dd className="text-sm font-medium text-text text-right break-words min-w-0">
-                        {report.avgScore != null ? `${report.avgScore}%` : '—'}
-                      </dd>
-                    </div>
-                    <div className="flex items-start justify-between gap-3 min-w-0">
-                      <dt className="text-xs font-semibold uppercase tracking-wide text-text-light shrink-0">
-                        Pass / Fail
-                      </dt>
-                      <dd className="text-sm text-right break-words min-w-0">
-                        {report.submittedCount > 0 ? (
-                          <span>
-                            <span className="text-green-700 font-medium">{report.passCount} passed</span>
-                            <span className="text-text-light"> · </span>
-                            <span className="text-red-600 font-medium">{report.failCount} failed</span>
-                          </span>
-                        ) : report.participantCount > 0 ? (
-                          <span className="text-text-light">Joined · no score yet</span>
-                        ) : (
-                          <span className="text-text-light">—</span>
-                        )}
-                      </dd>
-                    </div>
-                    <div className="flex items-start justify-between gap-3 min-w-0">
-                      <dt className="text-xs font-semibold uppercase tracking-wide text-text-light shrink-0">
-                        Date
-                      </dt>
-                      <dd className="text-sm text-text-light text-right break-words min-w-0">
-                        {formatDate(report.quiz.createdAt || report.quiz.updatedAt)}
-                      </dd>
-                    </div>
-                  </dl>
-                  <div className="mt-4 grid grid-cols-2 gap-2">
-                    <button
-                      type="button"
-                      onClick={() => openQuizReport(report)}
-                      className="inline-flex items-center justify-center gap-1.5 min-h-11 min-w-0 px-3 py-2 text-sm font-medium text-primary border border-primary/20 rounded-lg hover:bg-primary/10 transition-colors"
-                    >
-                      <Eye className="w-4 h-4 shrink-0" />
-                      View
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setDeleteConfirmQuizId(report.quiz.id)}
-                      className="inline-flex items-center justify-center gap-1.5 min-h-11 min-w-0 px-3 py-2 text-sm font-medium text-red-600 border border-red-200 rounded-lg hover:bg-red-50 transition-colors"
-                    >
-                      <Trash2 className="w-4 h-4 shrink-0" />
-                      Delete
-                    </button>
-                  </div>
-                </article>
+                  report={report}
+                  onView={openQuizReport}
+                  onDelete={setDeleteConfirmQuizId}
+                />
               ))}
             </div>
             <div className="hidden md:block overflow-x-auto max-w-full">
@@ -822,59 +789,13 @@ export default function HostReports() {
             </thead>
               <tbody className="divide-y divide-primary/10">
                 {filteredReports.map((report) => (
-                  <tr key={report.quiz.id} className="hover:bg-primary/5 transition-colors">
-                    <td className="px-5 py-4">
-                      <p className="font-medium text-text">{report.quiz.title || 'Untitled Quiz'}</p>
-                      <p className="text-xs text-text-light mt-0.5">
-                        {normalizeQuizTypeLabel(report.quiz.type || 'Quiz')} ·{' '}
-                        {report.quiz.questionCount ??
-                          normalizeQuestionsList(report.quiz.questions).length ??
-                          0}{' '}
-                        questions
-                      </p>
-                    </td>
-                    <td className="px-5 py-4 text-sm text-text">{report.participantCount}</td>
-                    <td className="px-5 py-4 text-sm font-medium text-text">
-                      {report.avgScore != null ? `${report.avgScore}%` : '—'}
-                    </td>
-                    <td className="px-5 py-4 text-sm">
-                      {report.submittedCount > 0 ? (
-                        <span>
-                          <span className="text-green-700 font-medium">{report.passCount} passed</span>
-                          <span className="text-text-light"> · </span>
-                          <span className="text-red-600 font-medium">{report.failCount} failed</span>
-                        </span>
-                      ) : report.participantCount > 0 ? (
-                        <span className="text-text-light">Joined · no score yet</span>
-                      ) : (
-                        <span className="text-text-light">—</span>
-                      )}
-                    </td>
-                    <td className="px-5 py-4 text-sm text-text-light whitespace-nowrap">
-                      {formatDate(report.quiz.createdAt || report.quiz.updatedAt)}
-                  </td>
-                    <td className="px-5 py-4">
-                      <div className="flex items-center justify-end gap-2">
-                        <button
-                          type="button"
-                          onClick={() => openQuizReport(report)}
-                          className="inline-flex items-center gap-1.5 min-h-11 px-3 py-2 text-sm font-medium text-primary border border-primary/20 rounded-lg hover:bg-primary/10 transition-colors"
-                        >
-                          <Eye className="w-4 h-4" />
-                          View
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setDeleteConfirmQuizId(report.quiz.id)}
-                          className="inline-flex items-center gap-1.5 min-h-11 px-3 py-2 text-sm font-medium text-red-600 border border-red-200 rounded-lg hover:bg-red-50 transition-colors"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                          Delete
-                        </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
+                  <QuizReportTableRow
+                    key={report.quiz.id}
+                    report={report}
+                    onView={openQuizReport}
+                    onDelete={setDeleteConfirmQuizId}
+                  />
+                ))}
             </tbody>
           </table>
         </div>

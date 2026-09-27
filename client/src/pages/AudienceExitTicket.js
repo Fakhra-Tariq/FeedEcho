@@ -266,6 +266,7 @@ const AudienceExitTicket = () => {
       <AudienceActivityHeader
         title={exitTicket?.title}
         participantName={participantDisplayName}
+        trueCenterTitle
       />
 
       <GuestProgressLoginBanner />

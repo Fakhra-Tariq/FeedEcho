@@ -10,6 +10,7 @@ export function useQuizSubmissionListeners(quizIds, { listenParticipants = false
   const [submissionsByQuizId, setSubmissionsByQuizId] = useState({});
   const [participantsByQuizId, setParticipantsByQuizId] = useState({});
   const [loading, setLoading] = useState(false);
+  const [readyForKey, setReadyForKey] = useState('');
 
   const stableIds = useMemo(() => {
     const ids = [...new Set((quizIds || []).filter(Boolean))];
@@ -18,12 +19,14 @@ export function useQuizSubmissionListeners(quizIds, { listenParticipants = false
   }, [quizIds]);
 
   const idsKey = stableIds.join(',');
+  const ready = !idsKey || readyForKey === idsKey;
 
   useEffect(() => {
     if (!idsKey) {
       setSubmissionsByQuizId({});
       setParticipantsByQuizId({});
       setLoading(false);
+      setReadyForKey('');
       return undefined;
     }
 
@@ -31,6 +34,16 @@ export function useQuizSubmissionListeners(quizIds, { listenParticipants = false
     const subsAcc = {};
     const partsAcc = {};
     const unsubs = [];
+    const received = new Set();
+    const expected = stableIds.length * (listenParticipants ? 2 : 1);
+    const markReady = (key) => {
+      if (received.has(key)) return;
+      received.add(key);
+      if (received.size >= expected) {
+        setLoading(false);
+        setReadyForKey(idsKey);
+      }
+    };
 
     stableIds.forEach((quizId) => {
       const subRef = dbRef(db, `quiz_submissions/${quizId}`);
@@ -39,12 +52,12 @@ export function useQuizSubmissionListeners(quizIds, { listenParticipants = false
         (snap) => {
           subsAcc[quizId] = snap.exists() ? snap.val() || {} : {};
           setSubmissionsByQuizId({ ...subsAcc });
-          setLoading(false);
+          markReady(`sub:${quizId}`);
         },
         () => {
           subsAcc[quizId] = {};
           setSubmissionsByQuizId({ ...subsAcc });
-          setLoading(false);
+          markReady(`sub:${quizId}`);
         }
       );
       unsubs.push(() => {
@@ -62,10 +75,12 @@ export function useQuizSubmissionListeners(quizIds, { listenParticipants = false
           (snap) => {
             partsAcc[quizId] = snap.exists() ? snap.val() || {} : {};
             setParticipantsByQuizId({ ...partsAcc });
+            markReady(`part:${quizId}`);
           },
           () => {
             partsAcc[quizId] = {};
             setParticipantsByQuizId({ ...partsAcc });
+            markReady(`part:${quizId}`);
           }
         );
         unsubs.push(() => {
@@ -83,5 +98,5 @@ export function useQuizSubmissionListeners(quizIds, { listenParticipants = false
     };
   }, [idsKey, listenParticipants, stableIds]);
 
-  return { submissionsByQuizId, participantsByQuizId, loading };
+  return { submissionsByQuizId, participantsByQuizId, loading, ready };
 }

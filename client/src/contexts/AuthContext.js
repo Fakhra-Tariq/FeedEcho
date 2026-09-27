@@ -129,12 +129,29 @@ export const useAuth = () => {
   return context;
 };
 
+const bootstrapCachedProfile = () => {
+  const uid = readAuthUid();
+  const role = readStoredRole(uid);
+  if (!uid || (role !== 'teacher' && role !== 'student')) return null;
+  let email = '';
+  try {
+    email = JSON.parse(localStorage.getItem('authUser') || 'null')?.email || '';
+  } catch {
+    email = '';
+  }
+  return buildProfileFromFirebase({ uid, email, displayName: '' }, role);
+};
+
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
-  const [userProfile, setUserProfile] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const [userProfile, setUserProfile] = useState(bootstrapCachedProfile);
+  const [loading, setLoading] = useState(() => !bootstrapCachedProfile());
   // Tab-scoped host vs audience session — never derive from email alone
-  const [activePortal, setActivePortalState] = useState(null);
+  const [activePortal, setActivePortalState] = useState(() => {
+    const cached = bootstrapCachedProfile();
+    if (!cached?.uid) return getActivePortal();
+    return restoreActivePortalForUser(cached.uid) || getActivePortal();
+  });
 
   const markActivePortal = (portal, uid = null) => {
     persistActivePortal(portal, uid);

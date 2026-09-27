@@ -125,7 +125,7 @@ const HostLaunch = () => {
         }
       />
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
+      <div className="launch-options-grid grid grid-cols-1 lg:grid-cols-4 gap-4 sm:gap-6">
         {launchOptions.map((option) => (
           <LaunchOptionCard
             key={option.key}
@@ -335,20 +335,20 @@ const LaunchOptionCard = ({ icon: Icon, title, description, tone, selected, dimm
       }
     }}
     className={clsx(
-      'flex flex-col w-full text-left focus:outline-none',
+      'flex flex-col w-full min-w-0 text-left focus:outline-none',
       'focus-visible:ring-2 focus-visible:ring-primary/25 focus-visible:ring-offset-2 focus-visible:ring-offset-background',
       selected && 'border-primary/30 ring-2 ring-primary/25',
       dimmed && 'opacity-50'
     )}
   >
-    <div className="w-14 h-14 rounded-full bg-primary flex items-center justify-center shrink-0 mb-4 shadow-sm">
+    <div className="launch-option-icon w-14 h-14 rounded-full bg-primary flex items-center justify-center shrink-0 mb-4 shadow-sm">
       <Icon className="w-7 h-7 text-white" />
     </div>
 
     <h3 className="text-base sm:text-lg font-semibold text-text mb-1.5 leading-snug">{title}</h3>
     <p className="text-sm text-text-light leading-relaxed">{description}</p>
 
-    <div className="mt-auto pt-4">
+    <div className="launch-option-cta mt-auto pt-4">
       <span
         className={clsx(
           'inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-semibold transition-all',

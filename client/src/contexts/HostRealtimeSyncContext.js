@@ -1,5 +1,5 @@
 import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
-import { off, onValue, ref as dbRef } from 'firebase/database';
+import { equalTo, off, onValue, orderByChild, query, ref as dbRef } from 'firebase/database';
 import { db } from '../firebase';
 import { useAuth } from './AuthContext';
 
@@ -30,7 +30,7 @@ export function HostRealtimeSyncProvider({ children }) {
     // activeSession/singleton is handled by HostDataContext — omit to avoid duplicate revision bumps
     const paths = ['quizzes', 'exit_tickets', 'spaceRaces', 'chat_sessions'];
     const unsubs = paths.map((p) => {
-      const r = dbRef(db, p);
+      const r = query(dbRef(db, p), orderByChild('createdBy'), equalTo(uid));
       return onValue(
         r,
         () => bump(),

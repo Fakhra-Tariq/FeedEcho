@@ -241,8 +241,17 @@ const enrichSubmission = (submission, quiz) => ({
 });
 
 /** Build per-quiz report metrics — same logic as Teacher Reports overview. */
-export const buildQuizReportRow = (quiz, submissions, joinedCount = 0) => {
-  const list = (submissions || []).map((sub) => enrichSubmission(sub, quiz));
+export const buildQuizReportRow = (quiz, submissions, joinedCount = 0, { includeDetails = true } = {}) => {
+  const list = (submissions || []).map((sub) =>
+    includeDetails
+      ? enrichSubmission(sub, quiz)
+      : {
+          ...sub,
+          quizType: sub?.quizType || quiz?.type || '',
+          answers: sub?.answers || {},
+          questions: sub?.questions || [],
+        }
+  );
   const submittedRows = list.filter(isSubmittedRow);
   const submittedCount = submittedRows.length;
   const avgScore =
@@ -271,7 +280,8 @@ export const collectReportDataForQuiz = (
   quiz,
   submissionsByQuizId,
   participantsByQuizId,
-  apiFallbackByQuizId
+  apiFallbackByQuizId,
+  options = {}
 ) => {
   const quizId = quiz.id;
   const fallback = apiFallbackByQuizId[quizId];
@@ -299,7 +309,7 @@ export const collectReportDataForQuiz = (
     fallback?.totalParticipants ?? 0
   );
 
-  return buildQuizReportRow(quiz, mergedSubmissions, joinedCount);
+  return buildQuizReportRow(quiz, mergedSubmissions, joinedCount, options);
 };
 
 /**

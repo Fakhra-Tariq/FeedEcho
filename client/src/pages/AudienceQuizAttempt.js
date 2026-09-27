@@ -2443,14 +2443,21 @@ const AudienceQuizAttempt = ({
 
           {isSpaceRace && isCurrentQuestionSubmitted && (
             <div
-              className="mt-4 p-3 rounded-lg font-semibold text-sm flex items-center gap-2"
+              className="mt-4 p-3 max-[480px]:px-3.5 max-[480px]:py-3.5 rounded-lg font-semibold text-sm"
               style={{
                 backgroundColor: '#f5eef2',
                 border: '1.5px solid #6d415f',
                 color: '#6d415f',
               }}
             >
-              🔒 Answer submitted by <strong>{submittedByName}</strong> — click Next to continue
+              <p className="m-0 leading-relaxed">
+                <span className="mr-1.5" aria-hidden="true">🔒</span>
+                Answer submitted by <strong className="break-words">{submittedByName}</strong>
+                <span className="max-[480px]:hidden"> — click Next to continue</span>
+              </p>
+              <p className="hidden max-[480px]:block mt-1 text-xs font-medium leading-relaxed opacity-80">
+                Click Next to continue
+              </p>
             </div>
           )}
 

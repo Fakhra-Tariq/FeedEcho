@@ -5,6 +5,7 @@ import LaunchQuizModal from '../components/LaunchQuizModal';
 import NoActiveSessionLaunchModal, {
   LaunchRequiresSessionHint,
 } from '../components/Host/NoActiveSessionLaunchModal';
+import { TEACHER_PAGE_GUTTER_MD } from '../components/Host/HostLayout';
 import { quizzesAPI, handleAPIError } from '../services/api';
 import { useHostData } from '../contexts/HostDataContext';
 import { AI_GENERATED_QUIZ_SOURCE } from '../utils/aiGeneratedQuiz';
@@ -153,7 +154,7 @@ const CreateTrueFalseQuiz = () => {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-orange-50 via-white to-purple-50 overflow-x-hidden max-w-full">
-      <div className="w-full max-w-full py-2 sm:py-3 lg:py-4 max-md:px-4 max-md:pt-8 max-md:pb-4">
+      <div className={`w-full max-w-full py-2 sm:py-3 lg:py-4 max-md:px-4 max-md:pt-8 max-md:pb-4 ${TEACHER_PAGE_GUTTER_MD}`}>
         {/* Page Header with Navigation */}
         <div className="mb-2 sm:mb-3 lg:mb-4 max-md:mb-5">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
@@ -165,7 +166,7 @@ const CreateTrueFalseQuiz = () => {
                 Add your quiz title and start creating questions
               </p>
             </div>
-            <div className="flex flex-wrap items-stretch gap-2 w-full sm:w-auto sm:justify-end max-md:flex-col">
+            <div className="flex flex-wrap items-stretch gap-2 w-full sm:w-auto sm:justify-end max-md:flex-col md:items-center md:gap-3">
               {/* Save Quiz Button */}
               <button
                 onClick={saveQuiz}
@@ -199,7 +200,7 @@ const CreateTrueFalseQuiz = () => {
                     <Rocket className="w-4 h-4 sm:w-5 sm:h-5" />
                     <span>Launch Quiz</span>
                   </button>
-                  <LaunchRequiresSessionHint />
+                  <LaunchRequiresSessionHint className="md:hidden" />
                 </div>
               )}
             </div>

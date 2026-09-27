@@ -421,22 +421,25 @@ export default function HostAnonymousChat() {
     }
   };
 
-  const handleEndChat = async () => {
-    if (!selectedChat) return;
+  const handleEndChat = async (chatOrEvent) => {
+    const chat = chatOrEvent?.id ? chatOrEvent : selectedChat;
+    if (!chat) return;
 
     try {
-      await updateAnonymousChat(selectedChat.id, {
+      await updateAnonymousChat(chat.id, {
         status: 'ended',
         isActive: false,
         endedAt: new Date().toISOString(),
       });
 
-      logActivity({ type: 'anonymousChat', title: `Ended chat: ${selectedChat.title}` });
-      setSelectedChat(null);
-      setMobileShowConversation(false);
-      syncMobileConversationUrl(null);
-      lastMessageCountRef.current = 0;
-      shouldAutoScrollRef.current = true;
+      logActivity({ type: 'anonymousChat', title: `Ended chat: ${chat.title}` });
+      if (selectedChat?.id === chat.id) {
+        setSelectedChat(null);
+        setMobileShowConversation(false);
+        syncMobileConversationUrl(null);
+        lastMessageCountRef.current = 0;
+        shouldAutoScrollRef.current = true;
+      }
       await loadChatsFromApi();
     } catch (error) {
       console.error('Error ending chat:', error);
@@ -499,7 +502,7 @@ export default function HostAnonymousChat() {
             : 'bg-white border-primary/10 hover:bg-background'
         )}
       >
-        <div className="flex items-start justify-between gap-2">
+        <div className="flex items-center justify-between gap-2 w-full">
           <div className="flex items-center gap-2 min-w-0">
             <span
               className={clsx(
@@ -507,7 +510,14 @@ export default function HostAnonymousChat() {
                 ended ? 'bg-text-light/40' : 'bg-emerald-500'
               )}
             />
-            <h4 className="font-medium text-text text-sm truncate">{chat.title}</h4>
+            <h4
+              className={clsx(
+                'text-text truncate',
+                ended ? 'font-medium text-sm' : 'font-semibold text-base'
+              )}
+            >
+              {chat.title}
+            </h4>
           </div>
           <div className="flex items-center gap-1 shrink-0">
             {unread > 0 && (
@@ -515,8 +525,22 @@ export default function HostAnonymousChat() {
                 {unread > 9 ? '9+' : unread}
               </span>
             )}
+            {!ended && (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleEndChat(chat);
+                }}
+                className="min-h-8 px-4 py-1 bg-red-500 text-white text-sm rounded-lg hover:bg-red-600 transition-colors shrink-0"
+                title="End Chat"
+              >
+                End
+              </button>
+            )}
             {ended && (
               <button
+                type="button"
                 onClick={(e) => {
                   e.stopPropagation();
                   handleDeleteChat(chat.id);

@@ -414,19 +414,114 @@ router.post('/join', async (req, res) => {
       }
 
       const trimmedName = name.trim();
+      const currentLaunchId = race.currentLaunchId || null;
 
-      // Check for duplicate participant
+      const isCurrentLaunchParticipant = (participant) => {
+        if (!participant) return false;
+        if (!currentLaunchId) return true;
+        if (!participant.launchId) {
+          if (race.startedAt && participant.completedAt) {
+            const started = new Date(race.startedAt).getTime();
+            const completed = new Date(participant.completedAt).getTime();
+            if (Number.isFinite(started) && Number.isFinite(completed) && completed < started) {
+              return false;
+            }
+          }
+          return true;
+        }
+        return String(participant.launchId) === String(currentLaunchId);
+      };
+
       const existingParticipantsSnap = await raceParticipantsRef(effectiveSession.sessionId).get();
-      if (existingParticipantsSnap.exists()) {
-        const existing = existingParticipantsSnap.val() || {};
-        const dup = Object.values(existing).some((p) => p && p.name === trimmedName);
-        if (dup) {
-        console.log('Duplicate participant name:', trimmedName);
-        return res.status(400).json({
-          success: false,
-          message: 'Participant with this name already exists'
+      const existingParticipants = existingParticipantsSnap.exists()
+        ? (existingParticipantsSnap.val() || {})
+        : {};
+      const existingMatch = Object.entries(existingParticipants).find(([, participant]) => {
+        if (!participant) return false;
+        if (studentUid && participant.studentUid && String(participant.studentUid) === String(studentUid)) {
+          return true;
+        }
+        return participant.name === trimmedName;
+      });
+
+      if (existingMatch) {
+        const [existingId, existingParticipant] = existingMatch;
+        const completedThisLaunch =
+          isCurrentLaunchParticipant(existingParticipant) &&
+          Boolean(
+            existingParticipant.completedAt ||
+              (Array.isArray(existingParticipant.answers) &&
+                existingParticipant.answers.some((answer) => answer && answer.awardedByTeammate !== true))
+          );
+
+        if (completedThisLaunch) {
+          return res.status(400).json({
+            success: false,
+            error: 'You have already attempted this quiz',
+            message: 'You have already attempted this quiz.',
+          });
+        }
+
+        const reusedTeamId = existingParticipant.teamId || 1;
+        if (currentLaunchId && existingParticipant.launchId !== currentLaunchId) {
+          await raceParticipantsRef(effectiveSession.sessionId).child(existingId).update({
+            launchId: currentLaunchId,
+            answers: [],
+            completedAt: null,
+            score: Number(existingParticipant.score || 0),
+          });
+        }
+
+        let quizData = null;
+        if (race.quiz && race.quiz.questions && Array.isArray(race.quiz.questions)) {
+          quizData = race.quiz;
+        } else if (race.quizId) {
+          const qSnap = await quizRef(race.quizId).get();
+          if (qSnap.exists()) quizData = qSnap.val();
+        }
+
+        const resolvedQuizId = race.quizId || null;
+        const quizWithLaunchSettings = quizData && quizData.questions && Array.isArray(quizData.questions)
+          ? {
+              ...quizData,
+              id: resolvedQuizId,
+              launched: true,
+              launchSettings: {
+                ...(quizData.launchSettings || {}),
+                timeLimit: Math.round((race.settings?.countdown || 300) / 60),
+                countdown: race.settings?.countdown || 300,
+                endTime: race.endTime?.toDate?.() ? race.endTime.toDate().toISOString() : null,
+                spaceRaceSettings: {
+                  shuffleQuestions: race.settings?.shuffleQuestions ?? false,
+                  shuffleAnswers: race.settings?.shuffleAnswers ?? false,
+                  requireNames: race.settings?.requireNames ?? false,
+                  showQuestionFeedback: race.settings?.showQuestionFeedback ?? false,
+                  showFinalScore: race.settings?.showFinalScore ?? true,
+                  oneAttempt: race.settings?.oneAttempt ?? false,
+                }
+              },
+            }
+          : null;
+
+        return res.json({
+          success: true,
+          type: 'spaceRace',
+          raceId: effectiveSession.sessionId,
+          quizId: resolvedQuizId,
+          participantId: existingId,
+          teamId: reusedTeamId,
+          data: {
+            id: effectiveSession.sessionId,
+            ...race,
+            quizId: quizWithLaunchSettings ? resolvedQuizId : null,
+            quiz: quizWithLaunchSettings,
+            endTime: race.endTime,
+            timerSeconds: race.timerSeconds,
+            timerMinutes: race.timerMinutes,
+            currentLaunchId,
+          },
+          message: `🚀 Welcome back! You've been assigned to Team ${reusedTeamId}!`,
         });
-      }
       }
 
       // Auto-assign team
@@ -518,6 +613,7 @@ router.post('/join', async (req, res) => {
         joinedAt: new Date().toISOString(),
         score: 0,
         teamId: assignedTeamId,
+        ...(currentLaunchId ? { launchId: currentLaunchId } : {}),
         ...(studentUid ? { studentUid } : {}),
         ...(studentEmail ? { studentEmail } : {}),
       };
@@ -625,6 +721,7 @@ router.post('/join', async (req, res) => {
         endTime: race.endTime,
         timerSeconds: race.timerSeconds,
         timerMinutes: race.timerMinutes,
+        currentLaunchId,
       };
 
       // Generate themed team assignment alert
@@ -1139,8 +1236,6 @@ router.get('/teacher/:teacherId', async (req, res) => {
       return res.status(400).json({ success: false, error: 'Teacher ID is required' });
     }
 
-    await reconcileTeacherActiveSessions(teacherId);
-
     const sessions = [];
     let snap;
 
@@ -1168,6 +1263,11 @@ router.get('/teacher/:teacherId', async (req, res) => {
       const bActive = String(b.status || '').toLowerCase() === 'active';
       if (aActive !== bActive) return aActive ? -1 : 1;
       return String(b.createdAt || '').localeCompare(String(a.createdAt || ''));
+    });
+
+    // Repair stale actives after listing so the page is not blocked on reconcile
+    reconcileTeacherActiveSessions(teacherId).catch((err) => {
+      console.warn('Background session reconcile failed:', err?.message || err);
     });
 
     return res.json({ success: true, data: sessions });

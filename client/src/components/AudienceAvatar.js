@@ -24,6 +24,7 @@ export default function AudienceAvatar({
       <img
         src={imageUrl}
         alt=""
+        decoding="async"
         className={`${className} rounded-full object-cover shrink-0`}
       />
     );

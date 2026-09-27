@@ -1,69 +1,71 @@
-import React from 'react';
+import React, { lazy, Suspense } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
-// Context
-import { useAuth } from './contexts/AuthContext';
 import ToastContainer from './components/ToastContainer';
 import InlineAlertContainer from './components/InlineAlertContainer';
 import CustomModalContainer from './components/CustomModalContainer';
 import ErrorBoundary from './components/ErrorBoundary';
-import ServerHealthCheck from './components/ServerHealthCheck';
 
 // Components
 import Navbar from './components/Layout/Navbar';
 import Footer from './components/Layout/Footer';
 import ProtectedRoute from './components/Auth/ProtectedRoute';
 import RedirectIfHostTeacher from './components/Auth/RedirectIfHostTeacher';
+import ScrollToTop from './components/ScrollToTop';
 
-// Pages
+// Eager: landing + both login pages so they paint without waiting on other routes
 import Home from './pages/Home';
 import About from './pages/Courses';
 import Contact from './pages/Contact';
-import Profile from './pages/Profile';
-import NotFound from './pages/NotFound';
-import CreateMultipleChoiceQuiz from './pages/CreateMultipleChoiceQuiz';
-import CreateTrueFalseQuiz from './pages/CreateTrueFalseQuiz';
-import CreateShortAnswerQuiz from './pages/CreateShortAnswerQuiz';
-import CreateLongAnswerQuiz from './pages/CreateLongAnswerQuiz';
-import MixedTypeQuizEditor from './pages/MixedTypeQuizEditor';
-import QuizLibrary from './pages/QuizLibrary';
-
 import AudienceJoin from './pages/AudienceJoin';
-import AudienceSession from './pages/AudienceSession';
-import AudienceJoinSession from './pages/AudienceJoinSession';
-import AudienceQuizAttempt from './pages/AudienceQuizAttempt';
-import AudienceExitTicket from './pages/AudienceExitTicket';
-import AudienceSpaceRaceJoin from './pages/AudienceSpaceRaceJoin';
 import AudienceHome from './pages/AudienceHome';
-import AudienceProgress from './pages/AudienceProgress';
-import AudienceProfile from './pages/AudienceProfile';
-import AudienceSignup from './pages/AudienceSignup';
-import AudienceForgotPassword from './pages/AudienceForgotPassword';
-import QuizHistory from './pages/QuizHistory';
-import SpaceRaceGame from './pages/SpaceRaceGame';
-import AudienceSpaceRacePage from './pages/AudienceSpaceRacePage';
-import SpaceRaceHistory from './pages/SpaceRaceHistory';
-import AudienceAnonymousChat from './pages/AudienceAnonymousChat';
 import HostSignIn from './pages/HostSignIn';
-import HostSignUp from './pages/HostSignUp';
-import HostForgotPassword from './pages/HostForgotPassword';
 import HostDashboard from './pages/HostDashboard';
-// Teacher Pages
-import HostLaunch from './pages/HostLaunch';
-import HostQuizzes from './pages/HostQuizzes';
-import HostExitTickets from './pages/HostExitTickets';
-import ExitTicketDashboard from './pages/ExitTicketDashboard';
-import CreateExitTicketPage from './pages/CreateExitTicketPage';
-import AudienceExitTicketJoin from './pages/AudienceExitTicketJoin';
-import ExitTicketResponses from './pages/ExitTicketResponses';
-import HostExitTicketResponses from './pages/HostExitTicketResponses';
 import HostSpaceRace from './pages/HostSpaceRace';
-import HostSpaceRaceDisplay from './pages/HostSpaceRaceDisplay';
-import HostReports from './pages/HostReports';
-import HostAnonymousChat from './pages/HostAnonymousChat';
-import HostProfile from './pages/HostProfile';
-import HostLayout from './components/Host/HostLayout';
 import SessionsPage from './pages/SessionsPage';
-import ScrollToTop from './components/ScrollToTop';
+import HostLayout from './components/Host/HostLayout';
+import HostReports from './pages/HostReports';
+import HostProfile from './pages/HostProfile';
+import AudienceProfile from './pages/AudienceProfile';
+
+const NotFound = lazy(() => import('./pages/NotFound'));
+const Profile = lazy(() => import('./pages/Profile'));
+const CreateMultipleChoiceQuiz = lazy(() => import('./pages/CreateMultipleChoiceQuiz'));
+const CreateTrueFalseQuiz = lazy(() => import('./pages/CreateTrueFalseQuiz'));
+const CreateShortAnswerQuiz = lazy(() => import('./pages/CreateShortAnswerQuiz'));
+const CreateLongAnswerQuiz = lazy(() => import('./pages/CreateLongAnswerQuiz'));
+const MixedTypeQuizEditor = lazy(() => import('./pages/MixedTypeQuizEditor'));
+const QuizLibrary = lazy(() => import('./pages/QuizLibrary'));
+const AudienceSession = lazy(() => import('./pages/AudienceSession'));
+const AudienceJoinSession = lazy(() => import('./pages/AudienceJoinSession'));
+const AudienceQuizAttempt = lazy(() => import('./pages/AudienceQuizAttempt'));
+const AudienceExitTicket = lazy(() => import('./pages/AudienceExitTicket'));
+const AudienceSpaceRaceJoin = lazy(() => import('./pages/AudienceSpaceRaceJoin'));
+const AudienceProgress = lazy(() => import('./pages/AudienceProgress'));
+const AudienceSignup = lazy(() => import('./pages/AudienceSignup'));
+const AudienceForgotPassword = lazy(() => import('./pages/AudienceForgotPassword'));
+const QuizHistory = lazy(() => import('./pages/QuizHistory'));
+const SpaceRaceGame = lazy(() => import('./pages/SpaceRaceGame'));
+const AudienceSpaceRacePage = lazy(() => import('./pages/AudienceSpaceRacePage'));
+const SpaceRaceHistory = lazy(() => import('./pages/SpaceRaceHistory'));
+const AudienceAnonymousChat = lazy(() => import('./pages/AudienceAnonymousChat'));
+const HostSignUp = lazy(() => import('./pages/HostSignUp'));
+const HostForgotPassword = lazy(() => import('./pages/HostForgotPassword'));
+const HostLaunch = lazy(() => import('./pages/HostLaunch'));
+const HostQuizzes = lazy(() => import('./pages/HostQuizzes'));
+const ExitTicketDashboard = lazy(() => import('./pages/ExitTicketDashboard'));
+const CreateExitTicketPage = lazy(() => import('./pages/CreateExitTicketPage'));
+const AudienceExitTicketJoin = lazy(() => import('./pages/AudienceExitTicketJoin'));
+const HostExitTicketResponses = lazy(() => import('./pages/HostExitTicketResponses'));
+const HostSpaceRaceDisplay = lazy(() => import('./pages/HostSpaceRaceDisplay'));
+const HostAnonymousChat = lazy(() => import('./pages/HostAnonymousChat'));
+
+function RouteFallback() {
+  return (
+    <div className="min-h-screen flex items-center justify-center">
+      <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary" />
+    </div>
+  );
+}
 
 /** Redirect old /teacher/* and /student/* URLs to /host/* and /audience/* */
 function LegacyPathRedirect({ fromPrefix, toPrefix }) {
@@ -91,21 +93,12 @@ function AppContent() {
   const isStudentRoute =
     location.pathname.startsWith('/audience') && !isPublicAuthPage;
   const hidePublicChrome = isStudentRoute || location.pathname === '/space-race';
-  const isLibraryRoute = location.pathname === '/quiz-library'; // Library shows Navbar/Footer (not used to hide them)
-  const { user, loading } = useAuth();
-
-  if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
-      </div>
-    );
-  }
 
   return (
     <div className="min-h-screen">
       {!isTeacherRoute && !isCreateQuizRoute && !hidePublicChrome && <Navbar />}
       <main className="flex-grow">
+        <Suspense fallback={<RouteFallback />}>
           <Routes>
             {/* Public Routes */}
             <Route path="/" element={<RedirectIfHostTeacher redirectStudent><Home /></RedirectIfHostTeacher>} />
@@ -139,16 +132,12 @@ function AppContent() {
             <Route path="/host-login" element={<Navigate to="/host/signin" replace />} />
             <Route path="/host/signin" element={
               <RedirectIfHostTeacher redirectStudent>
-                <ServerHealthCheck>
-                  <HostSignIn />
-                </ServerHealthCheck>
+                <HostSignIn />
               </RedirectIfHostTeacher>
             } />
             <Route path="/host/signup" element={
               <RedirectIfHostTeacher redirectStudent>
-                <ServerHealthCheck>
-                  <HostSignUp />
-                </ServerHealthCheck>
+                <HostSignUp />
               </RedirectIfHostTeacher>
             } />
             <Route path="/host/forgot" element={<RedirectIfHostTeacher redirectStudent><HostForgotPassword /></RedirectIfHostTeacher>} />
@@ -218,14 +207,15 @@ function AppContent() {
             {/* 404 Route */}
             <Route path="*" element={<NotFound />} />
           </Routes>
-        </main>
-        {!isTeacherRoute && !isCreateQuizRoute && !hidePublicChrome && <Footer />}
-        
-        {/* Hybrid Alert System */}
-        <ToastContainer position="top-center" />
-        <InlineAlertContainer />
-        <CustomModalContainer />
-      </div>
+        </Suspense>
+      </main>
+      {!isTeacherRoute && !isCreateQuizRoute && !hidePublicChrome && <Footer />}
+
+      {/* Hybrid Alert System */}
+      <ToastContainer position="top-center" />
+      <InlineAlertContainer />
+      <CustomModalContainer />
+    </div>
   );
 }
 

@@ -3,7 +3,7 @@ import React from 'react';
 /**
  * Shared 3-column stats row for Student and Host profile pages.
  */
-export default function ProfileStatsRow({ items = [], loading = false }) {
+function ProfileStatsRow({ items = [], loading = false }) {
   return (
     <div
       className="grid grid-cols-3 w-full rounded-xl overflow-hidden mb-5 shadow-sm"
@@ -31,3 +31,5 @@ export default function ProfileStatsRow({ items = [], loading = false }) {
     </div>
   );
 }
+
+export default React.memo(ProfileStatsRow);

@@ -40,6 +40,7 @@ const persistJoinSession = (trimmedName, trimmedCode, joinPayload) => {
     name: trimmedName,
     raceId,
     teamId: resolvedTeamId,
+    launchId: data?.currentLaunchId || null,
   });
   localStorage.setItem(
     'spaceRaceData',
@@ -138,6 +139,48 @@ export default function AudienceSpaceRacePage() {
       }
     }
   }, [routeRaceId, participant, loadStoredSession]);
+
+  useEffect(() => {
+    if (!activeRaceId) return undefined;
+    const raceLiveRef = dbRef(db, `spaceRaces/${activeRaceId}`);
+    const unsub = onValue(raceLiveRef, (snap) => {
+      if (!snap.exists()) return;
+      const live = snap.val() || {};
+      const liveLaunchId = live.currentLaunchId;
+      if (!liveLaunchId) return;
+
+      setRaceData((prev) => {
+        if (!prev) return prev;
+        if (
+          String(prev.currentLaunchId || '') === String(liveLaunchId) &&
+          String(prev.status || '') === String(live.status || '')
+        ) {
+          return prev;
+        }
+        return {
+          ...prev,
+          currentLaunchId: liveLaunchId,
+          startedAt: live.startedAt,
+          status: live.status,
+        };
+      });
+
+      setParticipant((prev) => {
+        if (!prev) return prev;
+        if (String(prev.launchId || '') === String(liveLaunchId)) return prev;
+        const updated = { ...prev, launchId: liveLaunchId };
+        saveSpaceRaceParticipant(updated);
+        return updated;
+      });
+    });
+    return () => {
+      try {
+        unsub();
+      } catch {
+        off(raceLiveRef);
+      }
+    };
+  }, [activeRaceId]);
 
   // Keep participant teamId/score in sync with RTDB (works for dashboard + public join)
   useEffect(() => {
@@ -490,6 +533,7 @@ export default function AudienceSpaceRacePage() {
               onLogoClick={handleLeave}
               showAvatar
               compactMobileZones
+              trueCenterTitle
               rightAddon={
                 isQuizView && quizTimerLabel != null ? (
                   <span className="hidden md:inline-flex items-center gap-1 font-semibold text-primary text-sm whitespace-nowrap tabular-nums shrink-0">

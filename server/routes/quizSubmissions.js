@@ -284,6 +284,24 @@ router.post('/:quizId/submit', async (req, res) => {
       if (launchId) {
         await writeLaunchSubmission(quizId, launchId, participantId, submission, participantUpdates);
       }
+      if (studentUid) {
+        db.ref(`quiz_submissions_by_student/${studentUid}/${quizId}/${participantId}`)
+          .set({
+            quizId,
+            participantId,
+            quizTitle: quiz.title || 'Quiz',
+            percentage,
+            correctAnswers,
+            totalQuestions,
+            submittedAt: submission.submittedAt,
+            quizType: quiz.type || '',
+            timeTaken: submission.timeTaken ?? null,
+            studentUid,
+          })
+          .catch((indexError) => {
+            console.warn('[quiz-submit] student activity index write failed', indexError?.message);
+          });
+      }
     } catch (writeError) {
       console.error('[quiz-submit] RTDB write failed', {
         ...logContext,

@@ -533,8 +533,37 @@ const AudienceHome = () => {
     setIsPanelExpanded(true);
   };
 
+  const applyPastedCode = (raw) => {
+    const pastedText = String(raw || '')
+      .toUpperCase()
+      .replace(/[^A-Z0-9]/g, '')
+      .slice(0, 6);
+
+    if (!pastedText) return false;
+
+    const newCode = ['', '', '', '', '', ''];
+    for (let i = 0; i < pastedText.length && i < 6; i += 1) {
+      newCode[i] = pastedText[i];
+    }
+
+    setClassCode(newCode);
+
+    const focusIndex = Math.min(pastedText.length, 5);
+    setTimeout(() => {
+      document.getElementById(`code-input-${focusIndex}`)?.focus();
+    }, 0);
+    return true;
+  };
+
   const handleCodeInput = (index, value) => {
-    const char = value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(-1);
+    const cleaned = value.toUpperCase().replace(/[^A-Z0-9]/g, '');
+    // Mobile paste often arrives as a multi-char onChange (no clipboard paste event).
+    if (cleaned.length > 1) {
+      applyPastedCode(cleaned);
+      return;
+    }
+
+    const char = cleaned.slice(-1);
     const newCode = [...classCode];
     newCode[index] = char;
     setClassCode(newCode);
@@ -585,25 +614,7 @@ const AudienceHome = () => {
 
   const handlePaste = (e) => {
     e.preventDefault();
-    const pastedText = e.clipboardData
-      .getData('text')
-      .toUpperCase()
-      .replace(/[^A-Z0-9]/g, '')
-      .slice(0, 6);
-
-    if (!pastedText) return;
-
-    const newCode = ['', '', '', '', '', ''];
-    for (let i = 0; i < pastedText.length && i < 6; i += 1) {
-      newCode[i] = pastedText[i];
-    }
-
-    setClassCode(newCode);
-
-    const focusIndex = Math.min(pastedText.length, 5);
-    setTimeout(() => {
-      document.getElementById(`code-input-${focusIndex}`)?.focus();
-    }, 0);
+    applyPastedCode(e.clipboardData?.getData('text') || '');
   };
 
   const executeJoin = async (code) => {
@@ -739,7 +750,7 @@ const AudienceHome = () => {
                   key={index}
                   id={`code-input-${index}`}
                   type="text"
-                  maxLength="1"
+                  maxLength={6}
                   value={digit}
                   onChange={(e) => handleCodeInput(index, e.target.value)}
                   onKeyDown={(e) => handleKeyDown(index, e)}

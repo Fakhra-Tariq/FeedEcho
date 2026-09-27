@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { off, onValue, ref as dbRef } from 'firebase/database';
+import { equalTo, off, onValue, orderByChild, query, ref as dbRef } from 'firebase/database';
 import { db } from '../firebase';
 
 /** Stable empty list — avoids new array references on every render when using useRtdbList */
@@ -18,7 +18,7 @@ const snapshotsEqual = (prev, next) => {
   }
 };
 
-export function useRtdbValue(path, { enabled = true } = {}) {
+export function useRtdbValue(path, { enabled = true, orderBy, equalToValue } = {}) {
   const [value, setValue] = useState(null);
   const [loading, setLoading] = useState(Boolean(enabled && path));
   const [error, setError] = useState(null);
@@ -36,7 +36,11 @@ export function useRtdbValue(path, { enabled = true } = {}) {
     setLoading(true);
     setError(null);
 
-    const r = dbRef(db, path);
+    const baseRef = dbRef(db, path);
+    const r =
+      orderBy != null && equalToValue != null && equalToValue !== ''
+        ? query(baseRef, orderByChild(orderBy), equalTo(equalToValue))
+        : baseRef;
     const unsub = onValue(
       r,
       (snap) => {
@@ -61,7 +65,7 @@ export function useRtdbValue(path, { enabled = true } = {}) {
         off(r);
       }
     };
-  }, [enabled, path]);
+  }, [enabled, path, orderBy, equalToValue]);
 
   return { value, loading, error };
 }
@@ -74,9 +78,11 @@ export function useRtdbList(
     filter,
     map,
     empty = RTDB_EMPTY_LIST,
+    orderBy,
+    equalToValue,
   } = {}
 ) {
-  const { value, loading, error } = useRtdbValue(path, { enabled });
+  const { value, loading, error } = useRtdbValue(path, { enabled, orderBy, equalToValue });
 
   // Keep latest transform fns without re-running useMemo when inline callbacks change identity
   const filterRef = useRef(filter);

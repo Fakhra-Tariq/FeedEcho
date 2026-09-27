@@ -5,6 +5,7 @@ import LaunchQuizModal from '../components/LaunchQuizModal';
 import NoActiveSessionLaunchModal, {
   LaunchRequiresSessionHint,
 } from '../components/Host/NoActiveSessionLaunchModal';
+import { TEACHER_PAGE_GUTTER_MD } from '../components/Host/HostLayout';
 import { quizzesAPI, handleAPIError } from '../services/api';
 import { useHostData } from '../contexts/HostDataContext';
 import {
@@ -156,11 +157,11 @@ const CreateLongAnswerQuiz = () => {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-orange-50 via-white to-purple-50">
-      <div className="container mx-auto px-3 sm:px-4 lg:px-6 py-4 sm:py-6 lg:py-8 max-md:px-4 max-md:pt-8">
+      <div className={`container mx-auto px-3 sm:px-4 py-4 sm:py-6 lg:py-8 max-md:px-4 max-md:pt-8 ${TEACHER_PAGE_GUTTER_MD}`}>
         {/* Page Header with Navigation */}
         <div className="mb-6 sm:mb-8 lg:mb-10">
           <div className="flex items-center justify-end max-md:justify-stretch">
-            <div className="flex items-center space-x-3 max-md:flex-col max-md:items-stretch max-md:space-x-0 max-md:gap-2 max-md:w-full">
+            <div className="flex items-center space-x-3 max-md:flex-col max-md:items-stretch max-md:space-x-0 max-md:gap-2 max-md:w-full md:gap-3 md:space-x-0">
               {/* Save Quiz Button */}
               <button
                 onClick={saveQuiz}
@@ -194,7 +195,7 @@ const CreateLongAnswerQuiz = () => {
                     <Rocket className="w-4 h-4 sm:w-5 sm:h-5" />
                     <span>Launch Quiz</span>
                   </button>
-                  <LaunchRequiresSessionHint />
+                  <LaunchRequiresSessionHint className="md:hidden" />
                 </div>
               )}
             </div>

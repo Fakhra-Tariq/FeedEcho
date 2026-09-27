@@ -137,6 +137,38 @@ function canManageRace(race, uid) {
   return String(race.createdBy) === String(uid);
 }
 
+/** Start a new launch session: new launchId + clear prior attempt/score state. */
+async function beginRaceLaunchSession(raceId) {
+  const launchId = racesRef().push().key;
+  const now = new Date().toISOString();
+
+  const sessionUpdates = {
+    [`spaceRaces/${raceId}/currentLaunchId`]: launchId,
+    [`spaceRaces/${raceId}/quizStartedAt`]: null,
+    [`spaceRaces/${raceId}/endTime`]: null,
+    [`space_race_team_scores/${raceId}`]: null,
+    [`space_race_team_selection/${raceId}`]: null,
+    [`space_race_team_timers/${raceId}`]: null,
+    [`space_race_responses/${raceId}`]: null,
+  };
+
+  const participantsSnap = await raceParticipantsRef(raceId).get();
+  if (participantsSnap.exists()) {
+    Object.entries(participantsSnap.val() || {}).forEach(([pid, participant]) => {
+      if (!participant || typeof participant !== 'object') return;
+      sessionUpdates[`space_race_participants/${raceId}/${pid}/answers`] = [];
+      sessionUpdates[`space_race_participants/${raceId}/${pid}/completedAt`] = null;
+      sessionUpdates[`space_race_participants/${raceId}/${pid}/score`] = 0;
+      sessionUpdates[`space_race_participants/${raceId}/${pid}/finalScoreCalculated`] = null;
+      sessionUpdates[`space_race_participants/${raceId}/${pid}/autoEndedAt`] = null;
+      sessionUpdates[`space_race_participants/${raceId}/${pid}/launchId`] = launchId;
+    });
+  }
+
+  await db.ref().update(sessionUpdates);
+  return { launchId, startedAt: now };
+}
+
 async function resolveRaceRecord(idOrCode) {
   if (!idOrCode) return null;
 
@@ -296,6 +328,7 @@ router.get('/join/:joinCode', async (req, res) => {
           score: 0,
           teamId: assignedTeamId,
           answers: [],
+          ...(raceData.currentLaunchId ? { launchId: raceData.currentLaunchId } : {}),
           ...(studentUid ? { studentUid: String(studentUid).trim() } : {}),
           ...(studentEmail ? { studentEmail: String(studentEmail).toLowerCase().trim() } : {}),
         };
@@ -933,6 +966,7 @@ router.post('/start', async (req, res) => {
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
       startedAt: new Date().toISOString(),
+      currentLaunchId: raceId,
       endedAt: null,
       participants: 0,
       teams: numberOfTeams || settings?.numberOfTeams || 0,
@@ -1939,6 +1973,7 @@ router.post('/:id/end', async (req, res) => {
       isPaused: false,
       endTime: new Date().toISOString(),
       manuallyEnded: true,
+      updatedAt: new Date().toISOString(),
     });
 
     const code = race.joinCode || race.accessCode;
@@ -2107,7 +2142,12 @@ router.put('/status/:id', async (req, res) => {
         return res.status(400).json({ success: false, error: launchPrep.error });
       }
 
-      updateData.startedAt = new Date().toISOString();
+      const launchSession = await beginRaceLaunchSession(raceId);
+      updateData.startedAt = launchSession.startedAt;
+      updateData.currentLaunchId = launchSession.launchId;
+      updateData.quizStartedAt = null;
+      updateData.endTime = null;
+      updateData.endedAt = null;
       updateData.isPaused = false;
       updateData.accessCode = launchPrep.sessionCode;
       updateData.joinCode = launchPrep.sessionCode;
@@ -2152,7 +2192,11 @@ router.put('/status/:id', async (req, res) => {
     return res.json({
       success: true,
       message: `Space race status updated to ${status}`,
-      data: updatedRaceData || updateData
+      data: {
+        id: raceId,
+        ...(updatedRaceData || updateData),
+        status,
+      }
     });
   } catch (error) {
     console.error('Update space race status error:', error);

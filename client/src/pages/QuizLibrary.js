@@ -1,15 +1,12 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Rocket, Edit, Trash2, Calendar, AlertTriangle, Library, Copy, Flag, Clock, Lock, Plus } from 'lucide-react';
+import { Rocket, Edit, Trash2, Calendar, AlertTriangle, Copy, Flag, Clock, Lock, Plus } from 'lucide-react';
 import { useHybridAlert } from '../contexts/HybridAlertContext';
 import LaunchQuizModal from '../components/LaunchQuizModal';
 import { quizzesAPI, handleAPIError } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
 import { useHostData } from '../contexts/HostDataContext';
-import {
-  NO_ACTIVE_SESSION_MESSAGE,
-  resolveActiveTeacherSession,
-} from '../utils/requireActiveHostSession';
+import { resolveActiveTeacherSession } from '../utils/requireActiveHostSession';
 import NoActiveSessionLaunchModal, {
   LaunchRequiresSessionHint,
 } from '../components/Host/NoActiveSessionLaunchModal';
@@ -24,13 +21,77 @@ import {
   normalizeQuizTypeLabel,
 } from '../utils/quizQuestionNormalization';
 
+function isHydratedQuizList(list) {
+  return (list || []).some((quiz) => quiz.type || quiz.createdBy || quiz.launchSettings);
+}
+
+function getQuizTimeRemaining(quiz) {
+  if (!quiz.launched || !quiz.launchSettings?.endTime) {
+    return null;
+  }
+
+  const now = new Date();
+  const endTime = new Date(quiz.launchSettings.endTime);
+  const remaining = endTime.getTime() - now.getTime();
+
+  if (remaining <= 0) {
+    return 0;
+  }
+
+  return Math.floor(remaining / 1000);
+}
+
+function formatQuizTime(seconds) {
+  if (!seconds || seconds <= 0) {
+    return '00:00';
+  }
+
+  const minutes = Math.floor(seconds / 60);
+  const secs = seconds % 60;
+  return `${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+}
+
+function QuizTimer({ quiz, onExpire }) {
+  const [timeLeft, setTimeLeft] = useState(() => getQuizTimeRemaining(quiz));
+  const [isExpired, setIsExpired] = useState(() => getQuizTimeRemaining(quiz) === 0);
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      const remaining = getQuizTimeRemaining(quiz);
+      setTimeLeft(remaining);
+
+      if (remaining === 0 && !isExpired) {
+        setIsExpired(true);
+        onExpire(quiz.id);
+      }
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [quiz, isExpired, onExpire]);
+
+  if (timeLeft === null) {
+    return null;
+  }
+
+  return (
+    <div className={`flex items-center space-x-2 text-sm font-medium ${
+      timeLeft === 0 ? 'text-red-600' : timeLeft < 300 ? 'text-orange-600' : 'text-blue-600'
+    }`}>
+      <Clock className="w-4 h-4" />
+      <span className={timeLeft < 300 ? 'animate-pulse' : ''}>
+        Time left: {formatQuizTime(timeLeft)}
+      </span>
+    </div>
+  );
+}
+
 const QuizLibrary = () => {
   const navigate = useNavigate();
   const { alert } = useHybridAlert();
   const { user, userProfile } = useAuth();
   const teacherUid = userProfile?.uid || user?.uid;
   const { data: teacherData, syncQuizzes } = useHostData();
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(() => !isHydratedQuizList(teacherData.quizzes));
   const [deleteConfirmQuiz, setDeleteConfirmQuiz] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [activeFilter, setActiveFilter] = useState('all');
@@ -68,8 +129,14 @@ const QuizLibrary = () => {
       return undefined;
     }
 
+    const hasCachedList = isHydratedQuizList(teacherData.quizzes);
+    if (hasCachedList) {
+      setLoading(false);
+    } else {
+      setLoading(true);
+    }
+
     let cancelled = false;
-    setLoading(true);
     syncQuizzes().finally(() => {
       if (!cancelled) setLoading(false);
     });
@@ -79,8 +146,7 @@ const QuizLibrary = () => {
     };
   }, [teacherUid, syncQuizzes]);
 
-  // Finish quiz and mark as completed
-  const finishQuiz = async (quizId) => {
+  const finishQuiz = useCallback(async (quizId) => {
     try {
       const res = await quizzesAPI.finish(quizId);
       if (res.data.success) {
@@ -91,16 +157,14 @@ const QuizLibrary = () => {
       const apiErr = handleAPIError(err);
       alert.toast.error(apiErr.message || 'Failed to finish quiz');
     }
-  };
+  }, [refreshQuizzes, alert]);
 
-  // Check if there's currently an active quiz
   const hasActiveQuiz = savedQuizzes.some((q) => {
     const s = String(q.status || '').toLowerCase();
     return q.launched && (s === 'launched' || s === 'active');
   });
 
-  // Calculate quiz statistics
-  const getQuizStats = () => {
+  const quizStats = useMemo(() => {
     const total = savedQuizzes.length;
     const active = savedQuizzes.filter((q) => {
       const s = String(q.status || '').toLowerCase();
@@ -115,46 +179,37 @@ const QuizLibrary = () => {
       return s === 'finished' || s === 'completed';
     }).length;
     return { total, active, ready, finished };
-  };
+  }, [savedQuizzes]);
 
-  // Filter quizzes based on search and filter
-  const getFilteredQuizzes = () => {
+  const filteredQuizzes = useMemo(() => {
     let filtered = savedQuizzes;
-    
-    // Apply search filter
+
     if (searchTerm.trim()) {
-      filtered = filtered.filter(quiz => 
+      filtered = filtered.filter((quiz) =>
         quiz.title.toLowerCase().includes(searchTerm.toLowerCase())
       );
     }
-    
-    // Apply status filter
+
     switch (activeFilter) {
       case 'ready':
-        filtered = filtered.filter((q) => {
+        return filtered.filter((q) => {
           const s = String(q.status || '').toLowerCase();
           return !q.launched && (s === 'ready' || s === 'draft');
         });
-        break;
       case 'launched':
-        filtered = filtered.filter((q) => {
+        return filtered.filter((q) => {
           const s = String(q.status || '').toLowerCase();
           return q.launched && (s === 'launched' || s === 'active');
         });
-        break;
       case 'finished':
-        filtered = filtered.filter((q) => {
+        return filtered.filter((q) => {
           const s = String(q.status || '').toLowerCase();
           return s === 'finished' || s === 'completed';
         });
-        break;
       default:
-        // 'all' - no additional filtering
-        break;
+        return filtered;
     }
-    
-    return filtered;
-  };
+  }, [savedQuizzes, searchTerm, activeFilter]);
 
   const formatDate = (dateString) => {
     const date = new Date(dateString);
@@ -249,70 +304,6 @@ const QuizLibrary = () => {
     setDeleteConfirmQuiz(null);
   };
 
-  // Get time remaining for a specific quiz
-  const getQuizTimeRemaining = (quiz) => {
-    if (!quiz.launched || !quiz.launchSettings?.endTime) {
-      return null;
-    }
-
-    const now = new Date();
-    const endTime = new Date(quiz.launchSettings.endTime);
-    const remaining = endTime.getTime() - now.getTime();
-
-    if (remaining <= 0) {
-      return 0;
-    }
-
-    return Math.floor(remaining / 1000); // Return seconds
-  };
-
-  // Format time for display
-  const formatTime = (seconds) => {
-    if (!seconds || seconds <= 0) {
-      return '00:00';
-    }
-
-    const minutes = Math.floor(seconds / 60);
-    const secs = seconds % 60;
-    return `${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
-  };
-
-  // Timer component for quiz cards
-  const QuizTimer = ({ quiz }) => {
-    const [timeLeft, setTimeLeft] = useState(() => getQuizTimeRemaining(quiz));
-    const [isExpired, setIsExpired] = useState(false);
-
-    useEffect(() => {
-      const interval = setInterval(() => {
-        const remaining = getQuizTimeRemaining(quiz);
-        setTimeLeft(remaining);
-        
-        if (remaining === 0 && !isExpired) {
-          setIsExpired(true);
-          // Auto-finish the quiz
-          finishQuiz(quiz.id);
-        }
-      }, 1000);
-
-      return () => clearInterval(interval);
-    }, [quiz, isExpired]);
-
-    if (timeLeft === null) {
-      return null;
-    }
-
-    return (
-      <div className={`flex items-center space-x-2 text-sm font-medium ${
-        timeLeft === 0 ? 'text-red-600' : timeLeft < 300 ? 'text-orange-600' : 'text-blue-600'
-      }`}>
-        <Clock className="w-4 h-4" />
-        <span className={timeLeft < 300 ? 'animate-pulse' : ''}>
-          Time left: {formatTime(timeLeft)}
-        </span>
-      </div>
-    );
-  };
-
   return (
     <div className="min-h-screen bg-[#F4F1EC] overflow-x-hidden max-w-full">
       <div className="w-full max-w-full py-0">
@@ -320,21 +311,44 @@ const QuizLibrary = () => {
         <div className="mb-4 space-y-4">
           <SessionLaunchBanner />
 
-          <PageHeaderCard
-            compact
-            icon={Library}
-            title="Quiz Library"
-            subtitle="Manage and organize your quizzes"
-          >
-            <HeaderCardStats
-              stats={[
-                { label: 'Total', value: getQuizStats().total },
-                { label: 'Ready', value: getQuizStats().ready },
-                { label: 'Active', value: getQuizStats().active },
-                { label: 'Finished', value: getQuizStats().finished },
-              ]}
-            />
-          </PageHeaderCard>
+          <div className="hidden md:block">
+            <PageHeaderCard
+              compact
+              title="Quiz Library"
+              subtitle="Manage and organize your quizzes"
+            >
+              <HeaderCardStats
+                stats={[
+                  { label: 'Total', value: quizStats.total },
+                  { label: 'Ready', value: quizStats.ready },
+                  { label: 'Active', value: quizStats.active },
+                  { label: 'Finished', value: quizStats.finished },
+                ]}
+              />
+            </PageHeaderCard>
+          </div>
+
+          <div className="md:hidden bg-gradient-to-br from-[#6D415F] via-[#6D415F]/90 to-[#3A2E2A] border border-[#6D415F]/30 shadow-xl rounded-2xl px-3 py-3 space-y-2.5 max-w-full">
+            <div className="min-w-0">
+              <h1 className="text-xl font-bold text-white leading-tight">Quiz Library</h1>
+              <p className="text-xs text-white/90 leading-snug mt-0.5">
+                Manage and organize your quizzes
+              </p>
+            </div>
+            <div className="grid grid-cols-4 gap-1 min-w-0">
+              {[
+                { label: 'Total', value: quizStats.total },
+                { label: 'Ready', value: quizStats.ready },
+                { label: 'Active', value: quizStats.active },
+                { label: 'Finished', value: quizStats.finished },
+              ].map(({ label, value }) => (
+                <div key={label} className="min-w-0 text-center">
+                  <p className="text-[10px] leading-tight text-white/80">{label}</p>
+                  <p className="text-lg font-bold text-white leading-tight">{value}</p>
+                </div>
+              ))}
+            </div>
+          </div>
 
           {/* Filter and Search Row */}
           <ListFilterBar
@@ -350,7 +364,7 @@ const QuizLibrary = () => {
         {/* Quiz Cards */}
         {loading && teacherUid ? (
           <div className="text-center py-20 text-gray-600">Loading quizzes…</div>
-        ) : getFilteredQuizzes().length === 0 ? (
+        ) : filteredQuizzes.length === 0 ? (
           <div className="text-center py-16 sm:py-24">
             <div className="bg-white/80 backdrop-blur-sm rounded-3xl p-6 sm:p-12 md:p-16 max-w-lg mx-auto border border-[#8E7CC3]/20 shadow-xl">
               <div className="text-6xl sm:text-7xl mb-6">
@@ -399,7 +413,7 @@ const QuizLibrary = () => {
             )}
             
             <div className="grid grid-cols-1 min-[481px]:grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-8">
-            {getFilteredQuizzes().map((quiz) => (
+            {filteredQuizzes.map((quiz) => (
               <div key={quiz.id} className="group bg-white/90 backdrop-blur-sm rounded-2xl shadow-lg hover:shadow-2xl border border-[#8E7CC3]/20 p-4 sm:p-8 transition-all duration-300 hover:scale-[1.02] max-w-full min-w-0">
                 {/* Quiz Header */}
                 <div className="flex items-start justify-between mb-4 gap-2">
@@ -428,7 +442,7 @@ const QuizLibrary = () => {
                     {/* Live Timer for Launched Quizzes */}
                     {quiz.launched && quiz.launchSettings?.endTime && (
                       <div className="mt-3">
-                        <QuizTimer quiz={quiz} />
+                        <QuizTimer quiz={quiz} onExpire={finishQuiz} />
                       </div>
                     )}
                   </div>

@@ -7,6 +7,7 @@ import LaunchQuizModal from '../components/LaunchQuizModal';
 import NoActiveSessionLaunchModal, {
   LaunchRequiresSessionHint,
 } from '../components/Host/NoActiveSessionLaunchModal';
+import { TEACHER_PAGE_GUTTER_MD } from '../components/Host/HostLayout';
 import QuestionTypeDropdown from '../components/QuestionTypeDropdown';
 import AiQuizGeneratorPanel from '../components/AiQuizGeneratorPanel';
 import { quizzesAPI, handleAPIError } from '../services/api';
@@ -424,7 +425,7 @@ const MixedTypeQuizEditor = () => {
   return (
     <div className="min-h-screen bg-gradient-to-br from-orange-50 via-white to-purple-50 overflow-x-hidden max-w-full">
       {!showAiPanel && (
-      <div className="w-full max-w-full py-4 sm:py-6 lg:py-8 max-md:px-4 max-md:pt-8 max-md:pb-6">
+      <div className={`w-full max-w-full py-4 sm:py-6 lg:py-8 max-md:px-4 max-md:pt-8 max-md:pb-6 ${TEACHER_PAGE_GUTTER_MD}`}>
         {/* Page Header with Navigation */}
         <div className="mb-6 sm:mb-8 lg:mb-10">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
@@ -436,7 +437,7 @@ const MixedTypeQuizEditor = () => {
                 Add your quiz title and start creating questions with different types
               </p>
             </div>
-            <div className="flex flex-wrap items-stretch gap-2 w-full sm:w-auto sm:justify-end max-md:flex-col">
+            <div className="flex flex-wrap items-stretch gap-2 w-full sm:w-auto sm:justify-end max-md:flex-col md:items-center md:gap-3">
               <button
                 type="button"
                 onClick={() => setShowAiPanel(true)}
@@ -490,7 +491,7 @@ const MixedTypeQuizEditor = () => {
                     <Rocket className="w-4 h-4 sm:w-5 sm:h-5" />
                     <span>{isQuizLaunched ? 'Launched' : 'Launch Quiz'}</span>
                   </button>
-                  {!isQuizLaunched && <LaunchRequiresSessionHint />}
+                  {!isQuizLaunched && <LaunchRequiresSessionHint className="md:hidden" />}
                 </div>
               )}
             </div>

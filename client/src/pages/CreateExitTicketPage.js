@@ -9,9 +9,7 @@ import {
   NO_ACTIVE_SESSION_MESSAGE,
   resolveActiveTeacherSession,
 } from '../utils/requireActiveHostSession';
-import NoActiveSessionLaunchModal, {
-  LaunchRequiresSessionHint,
-} from '../components/Host/NoActiveSessionLaunchModal';
+import NoActiveSessionLaunchModal from '../components/Host/NoActiveSessionLaunchModal';
 
 const LIKERT_OPTIONS = [
   "Strongly Agree",
@@ -659,41 +657,49 @@ export default function CreateExitTicketPage() {
               </div>
             </div>
 
-            <div>
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <div className="flex flex-wrap items-center gap-2">
-                  <button
-                    onClick={() => goToStep(2)}
-                    className="min-h-11 px-4 py-2 bg-white font-normal border border-gray-300 text-text-light rounded-lg hover:bg-gray-50 transition-colors inline-flex items-center justify-center shadow-none"
-                  >
-                    Back to Edit
-                  </button>
-                  <button
-                    onClick={goBack}
-                    className="min-h-11 px-4 py-2 bg-white font-normal border border-gray-300 text-text-light rounded-lg hover:bg-gray-50 transition-colors inline-flex items-center justify-center shadow-none"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    onClick={handleSaveDraft}
-                    disabled={isSaving}
-                    className="min-h-11 px-4 py-2 bg-white font-normal border border-gray-300 text-text-light rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center justify-center shadow-none"
-                  >
-                    {isSaving ? 'Saving...' : 'Save as Draft'}
-                  </button>
-                </div>
+            <div className="space-y-2">
+              <div className="grid grid-cols-3 gap-2">
                 <button
-                  onClick={handleLaunch}
-                  disabled={isSaving || !isFormValid}
-                  className="min-h-11 px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center justify-center text-center"
+                  type="button"
+                  onClick={() => goToStep(2)}
+                  aria-label="Back to Edit"
+                  className="min-h-11 min-w-0 px-1.5 sm:px-4 py-2 bg-white font-normal border border-gray-300 text-text-light rounded-lg hover:bg-gray-50 transition-colors inline-flex items-center justify-center text-center text-xs sm:text-sm leading-tight shadow-none"
                 >
-                  {isSaving ? 'Launching...' : 'Launch Exit Ticket'}
-                  <Sparkles className="w-4 h-4 ml-2 inline shrink-0" />
+                  <span className="max-[480px]:hidden">Back to Edit</span>
+                  <span className="min-[481px]:hidden">Back</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={goBack}
+                  aria-label="Cancel"
+                  className="min-h-11 min-w-0 px-1.5 sm:px-4 py-2 bg-white font-normal border border-gray-300 text-text-light rounded-lg hover:bg-gray-50 transition-colors inline-flex items-center justify-center text-center text-xs sm:text-sm leading-tight shadow-none"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleSaveDraft}
+                  disabled={isSaving}
+                  aria-label="Save as Draft"
+                  className="min-h-11 min-w-0 px-1.5 sm:px-4 py-2 bg-white font-normal border border-gray-300 text-text-light rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center justify-center text-center text-xs sm:text-sm leading-tight shadow-none"
+                >
+                  {isSaving ? 'Saving...' : (
+                    <>
+                      <span className="max-[480px]:hidden">Save as Draft</span>
+                      <span className="min-[481px]:hidden">Draft</span>
+                    </>
+                  )}
                 </button>
               </div>
-              <div className="flex justify-end">
-                <LaunchRequiresSessionHint />
-              </div>
+              <button
+                type="button"
+                onClick={handleLaunch}
+                disabled={isSaving || !isFormValid}
+                className="w-full min-h-11 px-4 py-2 bg-primary text-white font-semibold rounded-lg hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center justify-center text-center"
+              >
+                {isSaving ? 'Launching...' : 'Launch Exit Ticket'}
+                <Sparkles className="w-4 h-4 ml-2 inline shrink-0" />
+              </button>
             </div>
           </div>
         </div>

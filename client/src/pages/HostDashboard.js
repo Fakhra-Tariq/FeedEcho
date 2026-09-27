@@ -22,7 +22,6 @@ import clsx from 'clsx';
 import { useHostData } from '../contexts/HostDataContext';
 import { getSessionActivityLabel, normalizeSessionCurrentActivity } from '../utils/sessionActivityLabel';
 import { useHybridAlert } from '../contexts/HybridAlertContext';
-import { toParticipantCount } from '../utils/toParticipantCount';
 import { copyToClipboard } from '../utils/copyToClipboard';
 import PageHeaderCard from '../components/Host/PageHeaderCard';
 import EndSessionButton from '../components/Host/EndSessionButton';
@@ -47,6 +46,7 @@ const HostDashboard = () => {
 
   // Session creation state
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [isCreating, setIsCreating] = useState(false);
   const [sessionName, setSessionName] = useState('');
   const [showCreatedPopup, setShowCreatedPopup] = useState(false);
   const [createdSessionData, setCreatedSessionData] = useState(null);
@@ -59,6 +59,8 @@ const HostDashboard = () => {
       return;
     }
 
+    if (isCreating) return;
+    setIsCreating(true);
     try {
       const sessionData = await createSession(sessionName);
       setCreatedSessionData(sessionData);
@@ -72,6 +74,8 @@ const HostDashboard = () => {
       if (alert?.toast?.error) {
         alert.toast.error(error?.message || 'Failed to create session');
       }
+    } finally {
+      setIsCreating(false);
     }
   };
 
@@ -178,68 +182,56 @@ const HostDashboard = () => {
 
       {/* Session Bar - shown when any session is active */}
       {activeSession && (
-        <div className="bg-white dark:bg-[#3A2E2A] rounded-2xl px-4 sm:px-6 py-4 shadow-lg border border-[#6D415F]/30 max-w-full">
-          <div className="grid grid-cols-[auto_minmax(0,1fr)] items-center gap-x-3 gap-y-2.5 md:grid-cols-[auto_minmax(0,1fr)_auto] md:gap-y-0 md:gap-x-3">
-            <div className="w-10 h-10 bg-[#6D415F]/10 rounded-full flex items-center justify-center shrink-0 row-start-1 col-start-1 md:row-span-2 md:self-center">
+        <div className="bg-white dark:bg-[#3A2E2A] rounded-2xl px-4 sm:px-6 py-3 shadow-lg border border-[#6D415F]/30 max-w-full">
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="w-10 h-10 bg-[#6D415F]/10 rounded-full flex items-center justify-center shrink-0">
               <Activity className="w-5 h-5 text-[#6D415F]" />
             </div>
-            <h3 className="text-lg font-bold text-[#2E1F2A] dark:text-white break-words min-w-0 row-start-1 col-start-2 self-center">
+            <h3 className="text-lg font-bold text-[#2E1F2A] dark:text-white break-words min-w-0">
               {activeSession.sessionName || 'Session'}
             </h3>
-            <div className="flex flex-wrap items-center gap-x-2 gap-y-1 min-w-0 col-span-2 row-start-2 md:col-span-1 md:col-start-2 md:row-start-2 md:gap-x-4 md:gap-y-2">
-              <div className="flex items-center gap-2 shrink-0">
-                <span className="text-sm text-[#5A4A55] dark:text-white/70">Code:</span>
-                <span className="text-xl font-bold text-[#6D415F]">{activeSession.joinCode}</span>
-                <button
-                  type="button"
-                  onClick={(e) => handleCopyCode(activeSession.joinCode, e)}
-                  className="min-h-11 min-w-11 inline-flex items-center justify-center hover:bg-[#6D415F]/10 rounded transition-colors"
-                  title="Copy code"
-                  aria-label="Copy session code"
-                >
-                  <Copy className="w-4 h-4 text-[#6D415F]" />
-                </button>
-              </div>
-              {activeActivityLabel ? (
-                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#6D415F]/10 text-[#6D415F] text-sm font-semibold whitespace-nowrap">
-                  <span className="w-2 h-2 rounded-full bg-[#6D415F] animate-pulse" aria-hidden />
-                  {activeActivityLabel}
-                </span>
-              ) : (
-                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-gray-100 text-gray-600 text-sm font-semibold whitespace-nowrap">
-                  No Active Activity
-                </span>
-              )}
+          </div>
+          <div className="flex items-center justify-between gap-3 mt-2 min-w-0">
+            <div className="flex items-center gap-2 min-w-0">
+              <span className="text-sm text-[#5A4A55] dark:text-white/70">Code:</span>
+              <span className="text-xl font-bold text-[#6D415F]">{activeSession.joinCode}</span>
+              <button
+                type="button"
+                onClick={(e) => handleCopyCode(activeSession.joinCode, e)}
+                className="min-h-11 min-w-11 inline-flex items-center justify-center hover:bg-[#6D415F]/10 rounded transition-colors"
+                title="Copy code"
+                aria-label="Copy session code"
+              >
+                <Copy className="w-4 h-4 text-[#6D415F]" />
+              </button>
             </div>
-            <div className="flex items-center justify-between gap-3 min-w-0 col-span-2 row-start-3 max-[360px]:flex-col max-[360px]:items-stretch sm:gap-5 md:col-span-1 md:col-start-3 md:row-start-1 md:row-span-2 md:self-center md:justify-self-end md:justify-start md:flex-wrap">
-              <div className="flex items-center gap-2 min-w-0">
-                <Users className="w-4 h-4 text-[#6D415F] shrink-0" />
-                <span className="text-sm text-[#5A4A55] dark:text-white/70">{toParticipantCount(activeSession.participants)} participants</span>
-              </div>
-              <EndSessionButton
-                className="flex items-center justify-center gap-2 min-h-11 px-4 py-2.5 rounded-xl bg-red-500 text-white font-semibold hover:bg-red-600 transition-colors max-[360px]:w-full"
-                labelClassName=""
-              />
-            </div>
+            <EndSessionButton
+              className="flex items-center justify-center gap-2 min-h-11 px-4 py-2.5 rounded-xl bg-red-500 text-white font-semibold hover:bg-red-600 transition-colors shrink-0"
+              labelClassName=""
+            />
           </div>
         </div>
       )}
 
       {/* Action Buttons Grid */}
-      <div className="grid grid-cols-1 min-[481px]:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-6">
+      <div className="grid grid-cols-2 min-[481px]:grid-cols-2 lg:grid-cols-4 gap-3 max-[480px]:gap-2.5 sm:gap-6">
         {actionButtons.map((action, index) => (
           <button
             key={index}
             onClick={action.onClick}
-            className={`group relative overflow-hidden rounded-2xl p-6 transition-all duration-300 transform hover:scale-105 hover:shadow-xl ${action.color} ${action.hoverColor} border border-[#6D415F]/20`}
+            className={`group relative overflow-hidden rounded-2xl p-6 max-[480px]:p-3 transition-all duration-300 transform hover:scale-105 hover:shadow-xl ${action.color} ${action.hoverColor} border border-[#6D415F]/20`}
           >
             <div className="absolute inset-0 bg-gradient-to-br from-transparent to-[#6D415F]/5 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
-            <div className="relative z-10">
-              <div className={`w-14 h-14 rounded-2xl ${action.iconBg} flex items-center justify-center mb-4 shadow-lg group-hover:shadow-xl transition-shadow duration-300`}>
-                <action.icon className={`w-7 h-7 ${action.iconColor}`} />
+            <div className="relative z-10 max-[480px]:flex max-[480px]:flex-col max-[480px]:items-center max-[480px]:text-center">
+              <div className={`w-14 h-14 max-[480px]:w-9 max-[480px]:h-9 rounded-2xl ${action.iconBg} flex items-center justify-center mb-4 max-[480px]:mb-2 shadow-lg group-hover:shadow-xl transition-shadow duration-300`}>
+                <action.icon className={`w-7 h-7 max-[480px]:w-4 max-[480px]:h-4 ${action.iconColor}`} />
               </div>
-              <h3 className={`text-lg font-bold ${action.titleColor} mb-2`}>{action.title}</h3>
-              <p className={`text-sm text-center ${action.descriptionColor} font-medium`}>{action.description}</p>
+              <h3 className={`text-lg max-[480px]:text-[13px] font-bold ${action.titleColor} mb-2 max-[480px]:mb-1 max-[480px]:text-center`}>
+                {action.title}
+              </h3>
+              <p className={`text-sm max-[480px]:text-[11px] max-[480px]:leading-snug max-[480px]:break-words text-center ${action.descriptionColor} font-medium`}>
+                {action.description}
+              </p>
             </div>
             <div className="absolute top-0 right-0 w-20 h-20 bg-gradient-to-br from-[#6D415F]/10 to-transparent rounded-full -mr-10 -mt-10" />
           </button>
@@ -320,7 +312,8 @@ const HostDashboard = () => {
                 </button>
                 <button
                   onClick={handleCreateSession}
-                  className="flex-1 px-4 py-3 rounded-xl bg-[#6D415F] text-white font-semibold hover:bg-[#6D415F]/90 transition-colors"
+                  disabled={isCreating}
+                  className="flex-1 px-4 py-3 rounded-xl bg-[#6D415F] text-white font-semibold hover:bg-[#6D415F]/90 transition-colors disabled:opacity-50"
                 >
                   Create Session
                 </button>

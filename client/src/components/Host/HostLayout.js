@@ -16,7 +16,9 @@ const navItems = [
 ];
 
 /** Shared horizontal layout with navbar — keeps logo and page content left-aligned */
-const TEACHER_PAGE_GUTTER = 'max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8';
+export const TEACHER_PAGE_GUTTER = 'max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8';
+/** Same gutter from tablet/desktop (768px+) only — leaves max-md page padding unchanged */
+export const TEACHER_PAGE_GUTTER_MD = 'md:max-w-7xl md:mx-auto md:w-full md:px-6 lg:px-8';
 
 const HostLayout = () => {
   const navigate = useNavigate();
@@ -94,8 +96,8 @@ const HostLayout = () => {
       )}
       <header className="fixed inset-x-0 top-0 z-40 bg-white/80 backdrop-blur-md border-b border-gray-200">
         <div className={TEACHER_PAGE_GUTTER}>
-          <div className="relative flex items-center h-16 w-full min-w-0 gap-2 lg:gap-8 xl:gap-12">
-            <div className="relative z-10 flex h-16 min-w-0 shrink items-center max-[480px]:pointer-events-none">
+          <div className="relative flex items-center justify-start h-16 w-full min-w-0 gap-2 max-[480px]:gap-1 lg:gap-8 xl:gap-12">
+            <div className="relative z-10 flex h-16 min-w-0 shrink items-center justify-start max-md:overflow-hidden max-md:mr-auto max-[480px]:pointer-events-none">
               <img
                 src="/FeedEcho-logo.png.png"
                 alt="FeedEcho"
@@ -120,12 +122,17 @@ const HostLayout = () => {
               ))}
             </nav>
 
+            <div
+              className="hidden max-md:block max-md:flex-1 max-md:min-w-0"
+              aria-hidden="true"
+            />
+
             <div className="flex shrink-0 items-center gap-1 ml-auto lg:ml-0">
               <div className="relative" ref={profileDropdownRef}>
                 <button
                   type="button"
                   onClick={() => setProfileOpen((prev) => !prev)}
-                  className="flex items-center space-x-2 min-h-11 px-3 py-2 rounded-lg border border-gray-200 hover:bg-primary-extralight transition-colors"
+                  className="flex items-center space-x-2 min-h-11 min-w-11 px-3 py-2 rounded-lg border border-gray-200 hover:bg-primary-extralight transition-colors"
                 >
                   <div className="w-8 h-8 bg-gradient-to-br from-primary to-secondary rounded-full flex items-center justify-center">
                     <span className="text-white font-semibold text-sm">
