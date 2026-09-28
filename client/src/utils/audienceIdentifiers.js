@@ -29,7 +29,7 @@ export const matchesStudent = (recordName, identifiers) => {
   return identifiers.some((id) => n === id || n.includes(id) || id.includes(n));
 };
 
-export const matchesStudentRecord = (record, student, options = {}) => {
+export const matchesStudentRecord = (record, student, _options = {}) => {
   if (!student) {
     const recordName = record?.studentName || record?.name || '';
     return matchesStudent(recordName, []);
@@ -37,31 +37,20 @@ export const matchesStudentRecord = (record, student, options = {}) => {
 
   const studentUid = student.uid ? String(student.uid).trim() : '';
   const studentEmail = student.email ? String(student.email).toLowerCase().trim() : '';
-  const profileName = student.name ? String(student.name).toLowerCase().trim() : '';
 
-  if (record?.studentUid && studentUid) {
-    return String(record.studentUid).trim() === studentUid;
+  // Logged-in audience: only show attempts recorded with this account's identity.
+  // Never fall back to name matching — that pulls in prior guest attempts.
+  if (studentUid) {
+    return Boolean(record?.studentUid) && String(record.studentUid).trim() === studentUid;
   }
-  if (record?.studentEmail && studentEmail) {
-    return String(record.studentEmail).toLowerCase().trim() === studentEmail;
-  }
-
-  if (studentUid || studentEmail) {
-    const recordName = String(record?.studentName || record?.name || '').toLowerCase().trim();
-    const recordHasIdentity = Boolean(record?.studentUid || record?.studentEmail);
-
-    if (!recordHasIdentity) {
-      if (options.allowLegacyNameMatch !== false && profileName && recordName && recordName === profileName) {
-        return true;
-      }
-      if (options.allowLegacyNameMatch !== false) {
-        const identifiers = getStudentIdentifiers(student);
-        if (recordName && matchesStudent(recordName, identifiers)) return true;
-      }
-    }
-    return false;
+  if (studentEmail) {
+    return (
+      Boolean(record?.studentEmail) &&
+      String(record.studentEmail).toLowerCase().trim() === studentEmail
+    );
   }
 
+  // Guest viewer (no account): match by name identifiers only.
   const identifiers = getStudentIdentifiers(student);
   return matchesStudent(record?.studentName || record?.name, identifiers);
 };

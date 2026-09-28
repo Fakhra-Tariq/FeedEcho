@@ -529,7 +529,12 @@ router.post('/:id/respond', async (req, res) => {
     await ticketRef(id).update({ updatedAt: new Date().toISOString() });
     
     console.log('Response submitted successfully for ticket:', req.params.id);
-    return res.json({ success: true, message: 'Response submitted successfully' });
+    return res.json({
+      success: true,
+      message: 'Response submitted successfully',
+      submittedAt: responseData.submittedAt,
+      responseId,
+    });
   } catch (error) {
     console.error('Submit response error:', error);
     return res.status(500).json({ success: false, error: error.message });

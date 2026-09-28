@@ -91,20 +91,79 @@ const mergeActivityItems = (existing, incoming) => {
   const other = base === incoming ? existing : incoming;
   const merged = { ...other, ...base, id: getActivityDedupeKey(base) || getActivityDedupeKey(other) };
   if (merged.type === 'quiz') {
+    const isTrusted = (item) =>
+      item?.source === 'firebase' ||
+      item?.source === 'api' ||
+      item?.source === 'index' ||
+      item?.serverSynced === true;
     const a = existing.submittedAt || existing.sortKey;
     const b = incoming.submittedAt || incoming.sortKey;
-    const ta = a ? new Date(a).getTime() : NaN;
-    const tb = b ? new Date(b).getTime() : NaN;
-    if (!Number.isNaN(tb) && (Number.isNaN(ta) || tb > ta)) {
-      merged.submittedAt = b;
-      merged.sortKey = incoming.sortKey || b;
-    } else if (!Number.isNaN(ta)) {
+    if (isTrusted(existing) && !isTrusted(incoming) && a) {
       merged.submittedAt = a;
       merged.sortKey = existing.sortKey || a;
+    } else if (isTrusted(incoming) && !isTrusted(existing) && b) {
+      merged.submittedAt = b;
+      merged.sortKey = incoming.sortKey || b;
+    } else {
+      const ta = a ? new Date(a).getTime() : NaN;
+      const tb = b ? new Date(b).getTime() : NaN;
+      // Prefer the earlier stamp when both are present (avoids a skewed client clock winning).
+      if (!Number.isNaN(ta) && !Number.isNaN(tb)) {
+        if (ta <= tb) {
+          merged.submittedAt = a;
+          merged.sortKey = existing.sortKey || a;
+        } else {
+          merged.submittedAt = b;
+          merged.sortKey = incoming.sortKey || b;
+        }
+      } else if (!Number.isNaN(tb)) {
+        merged.submittedAt = b;
+        merged.sortKey = incoming.sortKey || b;
+      } else if (!Number.isNaN(ta)) {
+        merged.submittedAt = a;
+        merged.sortKey = existing.sortKey || a;
+      }
     }
     const parts = formatQuizDateTimeParts(merged);
     merged.date = parts.date;
     merged.time = parts.time;
+  }
+  if (merged.type === 'exitTicket') {
+    const a = existing.submittedAt || existing.sortKey;
+    const b = incoming.submittedAt || incoming.sortKey;
+    const existingIsLocal = String(existing.id || '').includes('-local-');
+    const incomingIsLocal = String(incoming.id || '').includes('-local-');
+    if (!existingIsLocal && incomingIsLocal && a) {
+      merged.submittedAt = a;
+      merged.sortKey = existing.sortKey || a;
+    } else if (!incomingIsLocal && existingIsLocal && b) {
+      merged.submittedAt = b;
+      merged.sortKey = incoming.sortKey || b;
+    } else if (a || b) {
+      const ta = a ? new Date(a).getTime() : NaN;
+      const tb = b ? new Date(b).getTime() : NaN;
+      if (!Number.isNaN(ta) && (Number.isNaN(tb) || ta <= tb)) {
+        merged.submittedAt = a;
+        merged.sortKey = existing.sortKey || a;
+      } else if (!Number.isNaN(tb)) {
+        merged.submittedAt = b;
+        merged.sortKey = incoming.sortKey || b;
+      }
+    }
+    if (merged.joinedAt == null && (existing.joinedAt || incoming.joinedAt)) {
+      merged.joinedAt = existing.joinedAt || incoming.joinedAt;
+    }
+    const parts = formatSessionDate(merged.submittedAt || merged.sortKey);
+    merged.date = parts.date;
+    merged.time = parts.time;
+  }
+  if (merged.type === 'spaceRace') {
+    const joinedAt = merged.joinedAt || existing.joinedAt || incoming.joinedAt || null;
+    if (joinedAt) merged.joinedAt = joinedAt;
+    const parts = formatSessionDate(joinedAt || merged.sessionDate || merged.sortKey);
+    merged.date = parts.date;
+    merged.time = parts.time;
+    merged.sortKey = joinedAt || merged.sortKey || '';
   }
   return merged;
 };
@@ -529,7 +588,7 @@ export default function AudienceProgress() {
       const title = race.title || race.quiz?.title || 'Space Race';
       const sessionDate = race.startedAt || race.createdAt || null;
       const joinedAt = p.joinedAt || null;
-      const attempt = formatSessionDate(sessionDate || joinedAt);
+      const attempt = formatSessionDate(joinedAt || sessionDate);
       const teamLabel = p.teamId ? `Team ${p.teamId}` : 'Joined';
       const scorePts = Number(p.score);
       const raceItem = {
@@ -546,7 +605,7 @@ export default function AudienceProgress() {
         joinedAt,
         date: attempt.date,
         time: attempt.time,
-        sortKey: p.joinedAt || '',
+        sortKey: joinedAt || sessionDate || '',
       };
       const existing = latestRaceById.get(p.raceId);
       if (!existing || String(raceItem.sortKey).localeCompare(String(existing.sortKey)) > 0) {
@@ -872,7 +931,8 @@ export default function AudienceProgress() {
       const race = item.raceId ? spaceRacesTree?.[item.raceId] : null;
       const sessionDate = race?.startedAt || race?.createdAt || item.sessionDate || null;
       const joinedAt = item.joinedAt || null;
-      const attempt = formatSessionDate(sessionDate || joinedAt || item.sortKey);
+      // Show the student's join/attempt time, not the host race create/start time.
+      const attempt = formatSessionDate(joinedAt || sessionDate || item.sortKey);
       const joined = formatSessionDate(joinedAt || sessionDate || item.sortKey);
       return {
         date: attempt.date,

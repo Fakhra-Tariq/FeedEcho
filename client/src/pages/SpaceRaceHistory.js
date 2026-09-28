@@ -33,30 +33,18 @@ const mapResource = (resource, index) => ({
   linkTitle: resource.linkTitle,
 });
 
-const RESOURCE_FILTERS = ['All', 'Documents', 'Images', 'Files', 'Links'];
+const RESOURCE_FILTERS = ['All', 'Documents', 'Images', 'Links'];
 
 const getFileExtension = (fileName = '') => {
   const parts = String(fileName).toLowerCase().split('.');
   return parts.length > 1 ? parts.pop() : '';
 };
 
-const isDocumentResource = (resource) => {
-  if (resource.type === 'link' || resource.type === 'image') return false;
-  const ext = getFileExtension(resource.fileName);
-  return ext === 'pdf' || ext === 'doc' || ext === 'docx';
-};
-
-const isFileResource = (resource) => {
-  if (resource.type === 'link' || resource.type === 'image') return false;
-  return !isDocumentResource(resource);
-};
-
 const getResourceCategory = (resource) => {
   if (resource.type === 'link') return 'Links';
   if (resource.type === 'image') return 'Images';
-  if (isDocumentResource(resource)) return 'Documents';
-  if (isFileResource(resource)) return 'Files';
-  return 'Files';
+  // PDFs, Word docs, and any other uploaded file types share the Documents category.
+  return 'Documents';
 };
 
 const filterResources = (resources, activeFilter) => {
@@ -247,7 +235,7 @@ export default function SpaceRaceHistory() {
 
         const sessionsWithResources = await Promise.all(
           historyRows.map(async (row) => {
-            const { date, time, timestamp } = formatSessionDate(row.sessionDate || row.joinedAt);
+            const { date, time, timestamp } = formatSessionDate(row.joinedAt || row.sessionDate);
             let resources = [];
 
             if (row.raceId && row.teamId != null) {
@@ -419,7 +407,10 @@ export default function SpaceRaceHistory() {
             ) : (
             sessions.map((session) => {
               const isExpanded = expandedRaceId === session.raceId;
-              const activeFilter = resourceFilters[session.raceId] || 'All';
+              const activeFilter =
+                resourceFilters[session.raceId] === 'Files'
+                  ? 'All'
+                  : resourceFilters[session.raceId] || 'All';
               const filteredResources = filterResources(session.resources, activeFilter);
 
               return (

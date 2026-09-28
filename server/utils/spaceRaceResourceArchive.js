@@ -27,8 +27,7 @@ const matchesStudent = (recordName, identifiers) => {
   return identifiers.some((id) => n === id || n.includes(id) || id.includes(n));
 };
 
-const getSessionDate = (race = {}) =>
-  race.startedAt || race.createdAt || new Date().toISOString();
+const getSessionDate = (race = {}) => race.startedAt || race.createdAt || null;
 
 const getQuizName = (race = {}) =>
   race.title || race.quiz?.title || 'Space Race';
@@ -41,7 +40,7 @@ async function archiveSharedResource(race, raceId, message) {
     raceId,
     quizId: race.quizId || race.quiz?.id || null,
     quizName: getQuizName(race),
-    sessionDate: getSessionDate(race),
+    sessionDate: getSessionDate(race) || message.timestamp || null,
     teamId: Number(message.teamId),
     participantId: message.participantId,
     senderName: message.senderName,
@@ -62,14 +61,16 @@ async function saveStudentParticipation({ raceId, teamId, participantId, student
   const trimmedName = String(studentName || '').trim();
   if (!trimmedName || !raceId) return;
 
+  const joinedAt = new Date().toISOString();
   const entry = {
     raceId,
     teamId: Number(teamId),
     participantId,
     studentName: trimmedName,
     quizName: getQuizName(race),
-    sessionDate: getSessionDate(race),
-    joinedAt: new Date().toISOString(),
+    // Prefer the student's join/attempt time for history display; race start is secondary.
+    sessionDate: getSessionDate(race) || joinedAt,
+    joinedAt,
     ...(studentUid ? { studentUid: String(studentUid).trim() } : {}),
     ...(studentEmail ? { studentEmail: String(studentEmail).toLowerCase().trim() } : {}),
   };
@@ -83,10 +84,11 @@ async function saveStudentParticipation({ raceId, teamId, participantId, student
   }
 }
 
-async function loadHistoryFromParticipants(identifiers) {
+async function loadHistoryFromParticipants(identifiers, studentUid = '') {
   const snap = await db.ref('space_race_participants').get();
   if (!snap.exists()) return [];
 
+  const uid = studentUid ? String(studentUid).trim() : '';
   const rows = [];
   const tree = snap.val() || {};
 
@@ -97,7 +99,11 @@ async function loadHistoryFromParticipants(identifiers) {
       let matched = null;
       Object.entries(participants).forEach(([participantId, p]) => {
         if (!p || typeof p !== 'object') return;
-        if (!matchesStudent(p.name, identifiers)) return;
+        if (uid) {
+          if (!p.studentUid || String(p.studentUid).trim() !== uid) return;
+        } else if (!matchesStudent(p.name, identifiers)) {
+          return;
+        }
         if (!matched || String(p.joinedAt || '') > String(matched.joinedAt || '')) {
           matched = { ...p, raceId, participantId };
         }
@@ -128,7 +134,9 @@ async function loadHistoryFromIndex(identifiers) {
 
   await Promise.all(
     identifiers.map(async (identifier) => {
-      const key = normalizeStudentKey(identifier);
+      const raw = String(identifier || '').trim();
+      // uid: keys are stored with the raw Firebase uid (case-sensitive); do not normalize.
+      const key = raw.startsWith('uid:') ? raw : normalizeStudentKey(identifier);
       if (!key) return;
 
       const snap = await studentHistoryRef(key).get();
@@ -153,7 +161,29 @@ async function loadHistoryFromIndex(identifiers) {
 }
 
 async function getStudentHistory(query = {}) {
+  const studentUid = query.uid ? String(query.uid).trim() : '';
   const identifiers = getStudentIdentifiers(query);
+
+  // Logged-in: uid index + participants with matching studentUid only (exclude guest name keys).
+  if (studentUid) {
+    const [fromParticipants, fromIndex] = await Promise.all([
+      loadHistoryFromParticipants([], studentUid),
+      loadHistoryFromIndex([`uid:${studentUid}`]),
+    ]);
+
+    const byRaceId = new Map();
+    [...fromParticipants, ...fromIndex].forEach((row) => {
+      const existing = byRaceId.get(row.raceId);
+      if (!existing || String(row.joinedAt || '') > String(existing.joinedAt || '')) {
+        byRaceId.set(row.raceId, row);
+      }
+    });
+
+    return Array.from(byRaceId.values()).sort((a, b) =>
+      String(b.joinedAt || b.sessionDate || '').localeCompare(String(a.joinedAt || a.sessionDate || ''))
+    );
+  }
+
   if (!identifiers.length) {
     return [];
   }
@@ -172,7 +202,7 @@ async function getStudentHistory(query = {}) {
   });
 
   return Array.from(byRaceId.values()).sort((a, b) =>
-    String(b.sessionDate || b.joinedAt || '').localeCompare(String(a.sessionDate || a.joinedAt || ''))
+    String(b.joinedAt || b.sessionDate || '').localeCompare(String(a.joinedAt || a.sessionDate || ''))
   );
 }
 

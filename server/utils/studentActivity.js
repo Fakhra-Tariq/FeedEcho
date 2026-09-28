@@ -17,55 +17,24 @@ const matchesStudent = (recordName, identifiers) => {
 const matchesStudentRecord = (record, query = {}) => {
   const studentUid = query.uid ? String(query.uid).trim() : '';
   const studentEmail = query.email ? String(query.email).toLowerCase().trim() : '';
-  const profileName = query.name ? String(query.name).toLowerCase().trim() : '';
 
-  if (record?.studentUid && studentUid) {
-    return String(record.studentUid).trim() === studentUid;
+  // Authenticated query: require stored account identity — never name-match guests.
+  if (studentUid) {
+    return Boolean(record?.studentUid) && String(record.studentUid).trim() === studentUid;
   }
-  if (record?.studentEmail && studentEmail) {
-    return String(record.studentEmail).toLowerCase().trim() === studentEmail;
-  }
-
-  if (studentUid || studentEmail) {
-    const recordName = String(record?.studentName || record?.name || '').toLowerCase().trim();
-    if (!record?.studentUid && !record?.studentEmail && profileName && recordName === profileName) {
-      return true;
-    }
-    return false;
+  if (studentEmail) {
+    return (
+      Boolean(record?.studentEmail) &&
+      String(record.studentEmail).toLowerCase().trim() === studentEmail
+    );
   }
 
   const identifiers = getStudentIdentifiers(query);
   return matchesStudent(record?.studentName || record?.name, identifiers);
 };
 
-/** Quiz submissions: uid/email first; fall back to name for legacy guest rows. */
-const matchesQuizSubmissionRecord = (record, query = {}) => {
-  const studentUid = query.uid ? String(query.uid).trim() : '';
-  const studentEmail = query.email ? String(query.email).toLowerCase().trim() : '';
-  const profileName = query.name ? String(query.name).toLowerCase().trim() : '';
-
-  if (record?.studentUid && studentUid) {
-    return String(record.studentUid).trim() === studentUid;
-  }
-  if (record?.studentEmail && studentEmail) {
-    return String(record.studentEmail).toLowerCase().trim() === studentEmail;
-  }
-
-  const recordName = String(record?.studentName || record?.name || '').toLowerCase().trim();
-  const hasStoredIdentity = Boolean(record?.studentUid || record?.studentEmail);
-
-  if (studentUid || studentEmail) {
-    if (!hasStoredIdentity) {
-      if (profileName && recordName && recordName === profileName) return true;
-      const identifiers = getStudentIdentifiers(query);
-      if (recordName && matchesStudent(recordName, identifiers)) return true;
-    }
-    return false;
-  }
-
-  const identifiers = getStudentIdentifiers(query);
-  return matchesStudent(recordName, identifiers);
-};
+/** Quiz submissions: same rule as other activity types (uid/email only when authenticated). */
+const matchesQuizSubmissionRecord = (record, query = {}) => matchesStudentRecord(record, query);
 
 const normalizeQuestionsArray = (questions) => {
   if (Array.isArray(questions)) return questions;
@@ -203,11 +172,15 @@ async function loadIndexedQuizActivities(studentUid) {
 
 async function loadIndexedRaceActivities(studentUid, identifiers) {
   const keys = [];
-  if (studentUid) keys.push(`uid:${studentUid}`);
-  identifiers.forEach((id) => {
-    const key = historyStudentKey(id);
-    if (key) keys.push(key);
-  });
+  // Authenticated: only the uid-scoped history index (never name keys — those hold guest joins).
+  if (studentUid) {
+    keys.push(`uid:${studentUid}`);
+  } else {
+    identifiers.forEach((id) => {
+      const key = historyStudentKey(id);
+      if (key) keys.push(key);
+    });
+  }
   if (!keys.length) return null;
 
   const snaps = await Promise.all(

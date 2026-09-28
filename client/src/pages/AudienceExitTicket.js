@@ -108,7 +108,7 @@ const AudienceExitTicket = () => {
       const result = await exitTicketsAPI.submitResponse(exitTicket.id, responseData);
       
       if (result.data.success) {
-        const submittedAt = new Date().toISOString();
+        const submittedAt = result.data.submittedAt || new Date().toISOString();
         try {
           const raw = JSON.parse(localStorage.getItem('exitTicketSubmissions') || '[]');
           const list = Array.isArray(raw) ? raw : [];
