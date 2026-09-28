@@ -33,6 +33,7 @@ import {
   getQuizActivityDedupeKey,
   getQuizAttemptCollapseKey,
 } from '../utils/audienceQuizAttempts';
+import { formatSessionDate } from '../utils/formatLocalDateTime';
 
 const PASS_THRESHOLD = 60;
 const LIKERT_SCORES = {
@@ -44,29 +45,25 @@ const LIKERT_SCORES = {
 };
 const CONFUSED_PATTERNS = ['confused', 'disagree', 'strongly disagree', 'not sure', "don't understand", 'unclear'];
 
-const formatDateTime = (iso) => {
-  if (!iso) return '—';
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return '—';
-  const date = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-  const time = d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
-  return `${date} · ${time}`;
-};
-
 /** Local date/time parts from a raw ISO timestamp. Falls back to stored strings for legacy rows. */
 const formatQuizDateTimeParts = (row) => {
   const iso = row?.submittedAt || row?.sortKey || null;
   if (iso) {
-    const dt = formatDateTime(iso);
-    if (dt !== '—') {
-      const [date, time] = dt.split(' · ');
-      return { date, time: time || '—' };
+    const parts = formatSessionDate(iso);
+    if (parts.date !== '—') {
+      return { date: parts.date, time: parts.time };
     }
   }
   return { date: row?.date || '—', time: row?.time || '—' };
 };
 
-const getActivityDedupeKey = (item) => getQuizActivityDedupeKey(item);
+const getActivityDedupeKey = (item) => {
+  if (item?.type === 'exitTicket' && item.ticketId && item.submittedAt) {
+    const bucket = Math.floor(new Date(item.submittedAt).getTime() / 60000);
+    if (!Number.isNaN(bucket)) return `exit-${item.ticketId}-${bucket}`;
+  }
+  return getQuizActivityDedupeKey(item);
+};
 
 const activityRichnessScore = (item) => {
   if (!item) return 0;
@@ -286,6 +283,7 @@ export default function AudienceProgress() {
   const [expandedRowId, setExpandedRowId] = useState(null);
   const [chartRange, setChartRange] = useState(7);
   const [localSubmissions, setLocalSubmissions] = useState([]);
+  const [localExitSubmissions, setLocalExitSubmissions] = useState([]);
   const [showChatbot, setShowChatbot] = useState(false);
   const [chatMessages, setChatMessages] = useState([
     {
@@ -330,6 +328,15 @@ export default function AudienceProgress() {
     }
   }, []);
 
+  const refreshLocalExitSubmissions = useCallback(() => {
+    try {
+      const raw = JSON.parse(localStorage.getItem('exitTicketSubmissions') || '[]');
+      setLocalExitSubmissions(Array.isArray(raw) ? raw : []);
+    } catch {
+      setLocalExitSubmissions([]);
+    }
+  }, []);
+
   useEffect(() => {
     const loggedInAudience = getStoredAudienceSession();
     if (!loggedInAudience) {
@@ -339,7 +346,8 @@ export default function AudienceProgress() {
     setStudent(loggedInAudience);
     setUserName(loggedInAudience.name || localStorage.getItem('feedecho_name') || 'Audience');
     refreshLocalSubmissions();
-  }, [navigate, refreshLocalSubmissions]);
+    refreshLocalExitSubmissions();
+  }, [navigate, refreshLocalSubmissions, refreshLocalExitSubmissions]);
 
   useEffect(() => {
     if (!student) {
@@ -391,16 +399,18 @@ export default function AudienceProgress() {
   useEffect(() => {
     const onStorage = (e) => {
       if (e.key === 'quizSubmissions') refreshLocalSubmissions();
+      if (e.key === 'exitTicketSubmissions') refreshLocalExitSubmissions();
     };
     window.addEventListener('storage', onStorage);
     return () => window.removeEventListener('storage', onStorage);
-  }, [refreshLocalSubmissions]);
+  }, [refreshLocalSubmissions, refreshLocalExitSubmissions]);
 
   useEffect(() => {
     if (!student) return undefined;
 
     const refreshQuizTimesSilent = () => {
       refreshLocalSubmissions();
+      refreshLocalExitSubmissions();
       studentsAPI
         .getQuizHistory({ ...getStudentQueryParams(student), limit: 200 })
         .then((response) => {
@@ -427,7 +437,7 @@ export default function AudienceProgress() {
       document.removeEventListener('visibilitychange', onVisibility);
       window.removeEventListener('quizSubmissionSaved', onSubmitted);
     };
-  }, [student, refreshLocalSubmissions, reloadActivity]);
+  }, [student, refreshLocalSubmissions, refreshLocalExitSubmissions, reloadActivity]);
 
   const firebaseQuizRows = useMemo(
     () => flattenQuizSubmissionsFromMap(submissionsByQuizId, student),
@@ -517,8 +527,9 @@ export default function AudienceProgress() {
     flattenSpaceRaceParticipations(spaceParticipantsTree, student).forEach((p) => {
       const race = spaceRacesTree?.[p.raceId] || {};
       const title = race.title || race.quiz?.title || 'Space Race';
-      const when = formatDateTime(p.joinedAt);
-      const [date, time] = when === '—' ? ['—', '—'] : when.split(' · ');
+      const sessionDate = race.startedAt || race.createdAt || null;
+      const joinedAt = p.joinedAt || null;
+      const attempt = formatSessionDate(sessionDate || joinedAt);
       const teamLabel = p.teamId ? `Team ${p.teamId}` : 'Joined';
       const scorePts = Number(p.score);
       const raceItem = {
@@ -531,8 +542,10 @@ export default function AudienceProgress() {
         subtitle: teamLabel,
         score: Number.isFinite(scorePts) && scorePts > 0 ? `${scorePts} pts` : null,
         teamId: p.teamId,
-        date,
-        time,
+        sessionDate,
+        joinedAt,
+        date: attempt.date,
+        time: attempt.time,
         sortKey: p.joinedAt || '',
       };
       const existing = latestRaceById.get(p.raceId);
@@ -543,16 +556,35 @@ export default function AudienceProgress() {
     latestRaceById.forEach((raceItem) => items.push(raceItem));
 
     flattenExitResponses(exitResponsesTree, student).forEach((resp) => {
-      const when = formatDateTime(resp.submittedAt || resp.createdAt);
-      const [date, time] = when === '—' ? ['—', '—'] : when.split(' · ');
+      const submittedAt = resp.submittedAt || resp.createdAt || null;
+      const when = formatSessionDate(submittedAt);
       items.push({
         id: `exit-${resp.ticketId}-${resp.responseId}`,
         type: 'exitTicket',
+        ticketId: resp.ticketId,
         title: resp.ticketTitle || 'Exit Ticket',
         subtitle: 'Submitted exit ticket',
-        date,
-        time,
-        sortKey: resp.submittedAt || resp.createdAt || '',
+        submittedAt,
+        date: when.date,
+        time: when.time,
+        sortKey: submittedAt || '',
+      });
+    });
+
+    localExitSubmissions.forEach((resp) => {
+      if (!matchesStudentRecord(resp, student, { allowLegacyNameMatch: true })) return;
+      const submittedAt = resp.submittedAt || null;
+      const when = formatSessionDate(submittedAt);
+      items.push({
+        id: `exit-${resp.ticketId}-local-${submittedAt || ''}`,
+        type: 'exitTicket',
+        ticketId: resp.ticketId,
+        title: resp.ticketTitle || 'Exit Ticket',
+        subtitle: 'Submitted exit ticket',
+        submittedAt,
+        date: when.date,
+        time: when.time,
+        sortKey: submittedAt || '',
       });
     });
 
@@ -564,6 +596,7 @@ export default function AudienceProgress() {
     spaceParticipantsTree,
     spaceRacesTree,
     exitResponsesTree,
+    localExitSubmissions,
   ]);
 
   const mergedActivityHistory = useMemo(() => {
@@ -830,6 +863,43 @@ export default function AudienceProgress() {
     [allQuizAttempts, getQuizQuestions, quizzesTree]
   );
 
+  const getActivityDisplayTimes = useCallback((item) => {
+    if (!item) {
+      return { date: '—', time: '—', joinedDate: '—', joinedTime: '—' };
+    }
+
+    if (item.type === 'spaceRace') {
+      const race = item.raceId ? spaceRacesTree?.[item.raceId] : null;
+      const sessionDate = race?.startedAt || race?.createdAt || item.sessionDate || null;
+      const joinedAt = item.joinedAt || null;
+      const attempt = formatSessionDate(sessionDate || joinedAt || item.sortKey);
+      const joined = formatSessionDate(joinedAt || sessionDate || item.sortKey);
+      return {
+        date: attempt.date,
+        time: attempt.time,
+        joinedDate: joined.date,
+        joinedTime: joined.time,
+      };
+    }
+
+    if (item.type === 'exitTicket') {
+      const parts = formatSessionDate(item.submittedAt || item.createdAt || item.sortKey);
+      return { date: parts.date, time: parts.time, joinedDate: parts.date, joinedTime: parts.time };
+    }
+
+    if (item.type === 'quiz') {
+      const parts = formatQuizDateTimeParts(item);
+      return { date: parts.date, time: parts.time, joinedDate: parts.date, joinedTime: parts.time };
+    }
+
+    return {
+      date: item.date || '—',
+      time: item.time || '—',
+      joinedDate: item.date || '—',
+      joinedTime: item.time || '—',
+    };
+  }, [spaceRacesTree]);
+
   const formatChatTime = () =>
     new Date().toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
 
@@ -946,7 +1016,9 @@ export default function AudienceProgress() {
             <p className="text-center text-gray-500 py-12">No activity recorded yet.</p>
           ) : (
             <div className="space-y-3" style={{ marginTop: '12px' }}>
-              {visibleActivityHistory.map((item) => (
+              {visibleActivityHistory.map((item) => {
+                const shown = getActivityDisplayTimes(item);
+                return (
                 <div
                   key={item.id}
                   className="bg-white rounded-xl p-[14px_18px] border border-gray-200 flex items-center justify-between"
@@ -954,7 +1026,7 @@ export default function AudienceProgress() {
                 >
                   <div className="flex-1">
                     <p className="font-medium mb-1" style={{ color: '#1a1a1a' }}>{item.title}</p>
-                    <p className="text-sm text-gray-600 mb-1">{item.date} · {item.time}</p>
+                    <p className="text-sm text-gray-600 mb-1">{shown.date} · {shown.time}</p>
                     <p className="text-sm text-gray-600 mb-2">
                       {item.score
                         ? `Score: ${item.score}`
@@ -1022,7 +1094,8 @@ export default function AudienceProgress() {
                     </button>
                   </div>
                 </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>
@@ -1037,12 +1110,16 @@ export default function AudienceProgress() {
           >
             <div
               onClick={(e) => e.stopPropagation()}
-              className="bg-white rounded-xl shadow-lg p-6 max-w-lg w-full mx-4 border border-gray-200"
+              className="bg-white rounded-xl shadow-lg p-6 max-w-lg w-full mx-4 border border-gray-200 min-h-0 max-h-[calc(100dvh-2rem)] overflow-y-auto overscroll-contain"
               style={{ borderRadius: '16px', padding: '24px', maxWidth: '520px' }}
             >
               <div className="flex items-center justify-between mb-4">
                 <h3 className="text-xl font-bold" style={{ color: '#7c3f5e' }}>
-                  {viewModal.type === 'quiz' ? 'Quiz Details' : 'Space Race Details'}
+                  {viewModal.type === 'quiz'
+                    ? 'Quiz Details'
+                    : viewModal.type === 'exitTicket'
+                    ? 'Exit Ticket Details'
+                    : 'Space Race Details'}
                 </h3>
                 <button
                   onClick={() => setViewModal(null)}
@@ -1056,14 +1133,10 @@ export default function AudienceProgress() {
                   {viewModal.data.title || viewModal.data.quizTitle}
                 </p>
                 <p className="text-sm text-gray-600">
-                  Date: {viewModal.type === 'quiz'
-                    ? formatQuizDateTimeParts(viewModal.data).date
-                    : (viewModal.data.date || formatDateTime(viewModal.data.submittedAt).split(' · ')[0])}
+                  Date: {getActivityDisplayTimes(viewModal.data).date}
                 </p>
                 <p className="text-sm text-gray-600">
-                  Time: {viewModal.type === 'quiz'
-                    ? formatQuizDateTimeParts(viewModal.data).time
-                    : (viewModal.data.time || formatDateTime(viewModal.data.submittedAt).split(' · ')[1])}
+                  Time: {getActivityDisplayTimes(viewModal.data).time}
                 </p>
                 {viewModal.type === 'quiz' && (
                   <>
@@ -1085,7 +1158,7 @@ export default function AudienceProgress() {
                     <p className="text-sm font-medium mb-3" style={{ color: '#7c3f5e' }}>
                       Question breakdown:
                     </p>
-                    <div className="space-y-3 text-sm max-h-64 overflow-y-auto">
+                    <div className="space-y-3 text-sm">
                       {(viewModal.data.questions?.length
                         ? viewModal.data.questions
                         : Object.keys(viewModal.data.answers || {}).map((k, i) => ({
@@ -1136,13 +1209,13 @@ export default function AudienceProgress() {
                     {viewModal.data.score ? (
                       <p className="text-sm text-gray-600">Score: {viewModal.data.score}</p>
                     ) : null}
-                    <p className="text-sm text-gray-600">Joined: {viewModal.data.date} · {viewModal.data.time}</p>
+                    <p className="text-sm text-gray-600">Joined: {getActivityDisplayTimes(viewModal.data).joinedDate} · {getActivityDisplayTimes(viewModal.data).joinedTime}</p>
                   </>
                 )}
                 {viewModal.type === 'exitTicket' && (
                   <>
                     <p className="text-sm text-gray-600">{viewModal.data.subtitle || 'Exit ticket submitted'}</p>
-                    <p className="text-sm text-gray-600">Submitted: {viewModal.data.date} · {viewModal.data.time}</p>
+                    <p className="text-sm text-gray-600">Submitted: {getActivityDisplayTimes(viewModal.data).date} · {getActivityDisplayTimes(viewModal.data).time}</p>
                   </>
                 )}
               </div>

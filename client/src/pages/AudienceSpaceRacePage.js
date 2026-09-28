@@ -534,6 +534,7 @@ export default function AudienceSpaceRacePage() {
               showAvatar
               compactMobileZones
               trueCenterTitle
+              leftAlignMobileTitle
               rightAddon={
                 isQuizView && quizTimerLabel != null ? (
                   <span className="hidden md:inline-flex items-center gap-1 font-semibold text-primary text-sm whitespace-nowrap tabular-nums shrink-0">
@@ -545,7 +546,7 @@ export default function AudienceSpaceRacePage() {
             />
           </div>
           <GuestProgressLoginBanner
-            contentClassName={`${AUDIENCE_ACTIVITY_PAGE_WIDTH} py-2 flex items-center justify-between gap-3`}
+            contentClassName={`${AUDIENCE_ACTIVITY_PAGE_WIDTH} max-md:!px-3 py-2 flex items-center justify-between gap-2 min-w-0`}
           />
         </div>
         {isQuizView ? (

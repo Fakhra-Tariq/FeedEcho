@@ -21,17 +21,7 @@ import { spaceRacesAPI } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
 import AudienceDashboardNavbar from '../components/Audience/AudienceDashboardNavbar';
 import { getStoredAudienceSession, getStudentQueryParams } from '../utils/audienceSession';
-
-const formatSessionDate = (iso) => {
-  if (!iso) return { date: '—', time: '—', timestamp: null };
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return { date: '—', time: '—', timestamp: null };
-  return {
-    date: d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
-    time: d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }),
-    timestamp: d,
-  };
-};
+import { formatSessionDate } from '../utils/formatLocalDateTime';
 
 const mapResource = (resource, index) => ({
   id: resource.id || resource.resourceId || `res-${index}`,
@@ -90,7 +80,7 @@ const ResourceIcon = ({ resource }) => {
         <img
           src={resource.url}
           alt={resource.fileName || 'Shared image'}
-          className="w-10 h-10 rounded-lg object-cover border border-neutral-200"
+          className="block w-full h-full object-cover"
         />
       );
     }
@@ -113,7 +103,7 @@ const ResourceIcon = ({ resource }) => {
 };
 
 const actionButtonClass =
-  'inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-primary border border-primary/30 rounded-lg hover:bg-primary/5 transition-colors';
+  'inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-primary border border-primary/30 rounded-lg hover:bg-primary/5 transition-colors max-[640px]:h-10 max-[640px]:flex-1 max-[640px]:justify-center max-[640px]:px-3 max-[640px]:whitespace-nowrap max-[640px]:min-w-0 max-[640px]:overflow-hidden';
 
 const ResourceActions = ({ resource, onPreview, onDeleteRequest }) => {
   const isImage = resource.type === 'image';
@@ -121,7 +111,7 @@ const ResourceActions = ({ resource, onPreview, onDeleteRequest }) => {
   const hasDownloadUrl = resource.url && resource.url !== '#';
 
   return (
-    <div className="flex items-center gap-2">
+    <div className="flex items-center gap-2 max-[640px]:w-full">
       {isLink && resource.url && (
         <a
           href={resource.url}
@@ -129,7 +119,7 @@ const ResourceActions = ({ resource, onPreview, onDeleteRequest }) => {
           rel="noopener noreferrer"
           className={actionButtonClass}
         >
-          <ExternalLink className="w-4 h-4" />
+          <ExternalLink className="w-4 h-4 shrink-0" />
           Open
         </a>
       )}
@@ -137,7 +127,7 @@ const ResourceActions = ({ resource, onPreview, onDeleteRequest }) => {
       {isImage && (
         <>
           <button type="button" onClick={() => onPreview(resource)} className={actionButtonClass}>
-            <Eye className="w-4 h-4" />
+            <Eye className="w-4 h-4 shrink-0" />
             Preview
           </button>
           {hasDownloadUrl && (
@@ -148,7 +138,7 @@ const ResourceActions = ({ resource, onPreview, onDeleteRequest }) => {
               rel="noopener noreferrer"
               className={actionButtonClass}
             >
-              <Download className="w-4 h-4" />
+              <Download className="w-4 h-4 shrink-0" />
               Download
             </a>
           )}
@@ -164,12 +154,12 @@ const ResourceActions = ({ resource, onPreview, onDeleteRequest }) => {
             rel="noopener noreferrer"
             className={actionButtonClass}
           >
-            <Download className="w-4 h-4" />
+            <Download className="w-4 h-4 shrink-0" />
             Download
           </a>
         ) : (
           <button type="button" className={actionButtonClass} disabled>
-            <Download className="w-4 h-4" />
+            <Download className="w-4 h-4 shrink-0" />
             Download
           </button>
         )
@@ -178,7 +168,7 @@ const ResourceActions = ({ resource, onPreview, onDeleteRequest }) => {
       <button
         type="button"
         onClick={() => onDeleteRequest(resource)}
-        className="p-2 rounded-lg text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors"
+        className="p-2 rounded-lg text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors shrink-0 max-[640px]:w-10 max-[640px]:h-10 max-[640px]:inline-flex max-[640px]:items-center max-[640px]:justify-center"
         aria-label="Delete resource"
       >
         <Trash2 className="w-4 h-4" />
@@ -409,7 +399,7 @@ export default function SpaceRaceHistory() {
         </div>
 
         <div
-          className="shadow-sm"
+          className="shadow-sm overflow-hidden"
           style={{ backgroundColor: '#FFFFFF', border: '0.5px solid #E8E0F0', borderRadius: '12px' }}
         >
           <div className="p-6" style={{ borderBottom: '0.5px solid #E8E0F0' }}>
@@ -440,32 +430,37 @@ export default function SpaceRaceHistory() {
                     className="w-full p-6 flex items-center justify-between text-left hover:bg-primary/5 transition-colors"
                   >
                     <div className="flex-1 min-w-0">
-                      <div className="flex items-center space-x-3 mb-2">
+                      <div className="flex items-center space-x-3 mb-2 min-w-0">
                         <h3 className="text-lg font-bold truncate" style={{ color: '#1a1a1a' }}>
                           {session.quizName}
                         </h3>
                         <span
-                          className="px-3 py-1 text-xs font-medium flex-shrink-0"
+                          className="px-3 py-1 text-xs font-medium flex-shrink-0 whitespace-nowrap"
                           style={{ backgroundColor: '#F3EEF8', color: '#6B2D5C', borderRadius: '20px' }}
                         >
                           Team {session.teamId}
                         </span>
                       </div>
 
-                      <div className="flex items-center space-x-6 text-sm" style={{ color: '#6B7280' }}>
-                        <div className="flex items-center space-x-1">
-                          <Calendar className="w-4 h-4" />
+                      <div
+                        className="flex items-center space-x-6 text-sm max-[640px]:flex-wrap max-[640px]:items-center max-[640px]:space-x-0 max-[640px]:gap-x-3 max-[640px]:gap-y-1"
+                        style={{ color: '#6B7280' }}
+                      >
+                        <div className="flex items-center space-x-1 max-[640px]:shrink-0 max-[640px]:whitespace-nowrap">
+                          <Calendar className="w-4 h-4 shrink-0" />
                           <span>{session.date}</span>
                         </div>
-                        <div className="flex items-center space-x-1">
-                          <Clock className="w-4 h-4" />
+                        <div className="flex items-center space-x-1 max-[640px]:shrink-0 max-[640px]:whitespace-nowrap">
+                          <Clock className="w-4 h-4 shrink-0" />
                           <span>{session.time}</span>
                         </div>
-                        <span>{session.resources.length} resources</span>
+                        <span className="max-[640px]:shrink-0 max-[640px]:whitespace-nowrap">
+                          {session.resources.length} resources
+                        </span>
                       </div>
                     </div>
 
-                    <div className="ml-4 flex-shrink-0 text-primary">
+                    <div className="ml-4 flex-shrink-0 self-center text-primary max-[640px]:ml-2 max-[640px]:min-h-11 max-[640px]:min-w-11 max-[640px]:inline-flex max-[640px]:items-center max-[640px]:justify-center">
                       {isExpanded ? (
                         <ChevronUp className="w-5 h-5" />
                       ) : (
@@ -475,9 +470,9 @@ export default function SpaceRaceHistory() {
                   </button>
 
                   {isExpanded && (
-                    <div className="px-6 pb-6 pt-0">
+                    <div className="px-6 pb-6 pt-0 min-w-0 max-[640px]:px-3">
                       <div
-                        className="rounded-xl p-4"
+                        className="rounded-xl p-4 min-w-0 overflow-hidden max-[640px]:p-3"
                         style={{ backgroundColor: '#FAF8FC', border: '0.5px solid #E8E0F0' }}
                       >
                         <div className="flex flex-wrap gap-2 mb-4">
@@ -503,22 +498,25 @@ export default function SpaceRaceHistory() {
                             No {activeFilter === 'All' ? '' : activeFilter.toLowerCase()} resources in this session.
                           </p>
                         ) : (
-                          <ul className="space-y-3">
+                          <ul className="space-y-3 min-w-0">
                             {filteredResources.map((resource) => (
                               <li
                                 key={resource.id}
-                                className="flex items-center justify-between gap-4 p-3 bg-white rounded-lg"
+                                className="box-border flex w-full min-w-0 items-center justify-between gap-4 overflow-hidden p-3 bg-white rounded-lg max-[640px]:flex-col max-[640px]:items-stretch max-[640px]:gap-3"
                                 style={{ border: '0.5px solid #E8E0F0' }}
                               >
-                                <div className="flex items-center gap-3 min-w-0 flex-1">
+                                <div className="flex items-center gap-3 min-w-0 flex-1 max-[640px]:w-full">
                                   <div
-                                    className="flex-shrink-0 w-10 h-10 flex items-center justify-center rounded-lg"
+                                    className={`flex-shrink-0 w-10 h-10 overflow-hidden flex items-center justify-center rounded-lg max-[640px]:w-12 max-[640px]:h-12 ${resource.type === 'image' ? 'border border-neutral-200' : ''}`}
                                     style={{ backgroundColor: '#F3EEF8' }}
                                   >
                                     <ResourceIcon resource={resource} />
                                   </div>
-                                  <div className="min-w-0">
-                                    <p className="font-medium truncate" style={{ color: '#1a1a1a' }}>
+                                  <div className="min-w-0 flex-1">
+                                    <p
+                                      className="font-medium min-[641px]:truncate max-[640px]:line-clamp-2"
+                                      style={{ color: '#1a1a1a' }}
+                                    >
                                       {getResourceLabel(resource)}
                                     </p>
                                     <p className="text-xs truncate" style={{ color: '#6B7280' }}>
@@ -532,7 +530,7 @@ export default function SpaceRaceHistory() {
                                     </p>
                                   </div>
                                 </div>
-                                <div className="flex-shrink-0">
+                                <div className="flex-shrink-0 max-[640px]:w-full">
                                   <ResourceActions
                                     resource={resource}
                                     onPreview={handlePreviewImage}

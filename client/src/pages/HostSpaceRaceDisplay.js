@@ -526,9 +526,6 @@ export default function HostSpaceRaceDisplay() {
                       <span className={`text-lg font-semibold ${style.text}`}>
                         {style.label} Team
                       </span>
-                      {isLeading && (
-                        <span className="text-xs font-medium text-amber-600">Leading</span>
-                      )}
                       {isTiedLead && (
                         <span className="text-xs font-medium text-amber-600">Tied</span>
                       )}

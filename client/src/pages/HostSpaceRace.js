@@ -27,6 +27,7 @@ import {
   isJoinShorterThanQuiz,
   quizDurationMinutes,
 } from '../utils/spaceRaceDuration';
+import spaceRaceTeams from '../constants/spaceRaceTeams';
 
 const RACES_PAGE_SIZE = 5;
 const STATUS_SORT_RANK = { active: 0, draft: 1, completed: 2 };
@@ -479,6 +480,10 @@ export default function HostSpaceRace() {
       hybridAlert.toast.error(DURATION_MISMATCH_MSG);
       return;
     }
+    if (!spaceRaceTeams.isAllowedTeamCount(launchSettings.numberOfTeams)) {
+      hybridAlert.toast.error(spaceRaceTeams.teamCountRangeError);
+      return;
+    }
 
     let raceData = null; // Declare outside try block to make it accessible in catch
     
@@ -608,6 +613,10 @@ export default function HostSpaceRace() {
     if (isJoinShorterThanQuiz(launchSettings.joinDuration, launchSettings.countdown)) {
       setDurationHint(true);
       hybridAlert.toast.error(DURATION_MISMATCH_MSG);
+      return;
+    }
+    if (!spaceRaceTeams.isAllowedTeamCount(launchSettings.numberOfTeams)) {
+      hybridAlert.toast.error(spaceRaceTeams.teamCountRangeError);
       return;
     }
 
@@ -1450,14 +1459,15 @@ return (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-4 items-start">
                   <div className="max-md:order-1">
                     <label className="block text-sm font-medium text-text-light mb-1">Number of Teams</label>
-                    <input
-                      type="number"
-                      min="2"
-                      max="10"
+                    <select
                       value={launchSettings.numberOfTeams}
-                      onChange={(e) => setLaunchSettings({...launchSettings, numberOfTeams: parseInt(e.target.value) || 2})}
-                      className="w-full h-10 px-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary bg-white text-text"
-                    />
+                      onChange={(e) => setLaunchSettings({...launchSettings, numberOfTeams: parseInt(e.target.value, 10)})}
+                      className="w-full h-10 max-md:min-h-11 px-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary bg-white text-text"
+                    >
+                      {spaceRaceTeams.teamCountChoices().map((count) => (
+                        <option key={count} value={count}>{count} Teams</option>
+                      ))}
+                    </select>
                   </div>
 
                   <div className={`${launchSettings.teamAssignment === 'student-choice' ? 'md:row-span-3' : 'md:row-span-2'} max-md:order-5 max-md:row-span-1`}>

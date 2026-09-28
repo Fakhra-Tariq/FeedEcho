@@ -211,8 +211,8 @@ export const spaceRacesAPI = {
   hide: (id) => api.post(`/space-races/${id}/hide`),
   unhide: (id) => api.post(`/space-races/${id}/unhide`),
   toggleVisibility: (id, isVisible) => api.patch(`/space-races/${id}/visibility`, { isVisible }),
-  sendTeamChatMessage: (raceId, messageData) =>
-    anonymousApi.post(`/space-races/${raceId}/team-chat`, messageData),
+  sendTeamChatMessage: (raceId, messageData, config) =>
+    anonymousApi.post(`/space-races/${raceId}/team-chat`, messageData, config),
   getTeamChatMessages: (raceId, teamId) =>
     anonymousApi.get(`/space-races/${raceId}/team-chat`, { params: { teamId } }),
   getTeamSelection: (raceId, teamId, questionId) =>

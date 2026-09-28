@@ -1,8 +1,55 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { Send, Paperclip, Image as ImageIcon, FileText, Link as LinkIcon, X } from 'lucide-react';
 import { useRtdbList } from '../../hooks/useRtdb';
 import { spaceRacesAPI } from '../../services/api';
 import { useHybridAlert } from '../../contexts/HybridAlertContext';
+import { prepareChatImage } from '../../utils/compressChatImage';
+
+const GALLERY_ACCEPT = 'image/jpeg,image/png,image/webp,image/gif';
+const DOCUMENT_ACCEPT = '.pdf,.doc,.docx,.txt,.ppt,.pptx,.xls,.xlsx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain,application/vnd.ms-powerpoint,application/vnd.openxmlformats-officedocument.presentationml.presentation,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+const MAX_ATTACHMENT_BYTES = 100 * 1024 * 1024;
+const IMAGE_EXT = /\.(jpe?g|png|webp|gif)$/i;
+const DOCUMENT_EXT = /\.(pdf|doc|docx|txt|ppt|pptx|xls|xlsx)$/i;
+const DOCUMENT_TYPES = new Set([
+  'application/pdf',
+  'application/msword',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'text/plain',
+  'application/vnd.ms-powerpoint',
+  'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+  'application/vnd.ms-excel',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+]);
+
+const isPhoneImagePicker = () => {
+  if (typeof window === 'undefined') return false;
+  return window.matchMedia('(max-width: 767px), (hover: none) and (pointer: coarse)').matches;
+};
+
+const isAllowedImage = (file) => {
+  const type = String(file?.type || '').toLowerCase();
+  if (type.startsWith('video/') || type === 'image/svg+xml') return false;
+  if (IMAGE_EXT.test(file?.name || '')) return true;
+  return type.startsWith('image/');
+};
+
+const isAllowedDocument = (file) => {
+  const type = String(file?.type || '').toLowerCase();
+  if (type.startsWith('image/') || type.startsWith('video/')) return false;
+  return DOCUMENT_TYPES.has(type) || DOCUMENT_EXT.test(file?.name || '');
+};
+
+const readFileAsDataUrl = (file, onProgress) =>
+  new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onprogress = (event) => {
+      if (event.lengthComputable && onProgress) onProgress(event.loaded / event.total);
+    };
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = () => reject(new Error('Failed to read file'));
+    reader.readAsDataURL(file);
+  });
 
 const URL_REGEX = /(https?:\/\/[^\s]+)/gi;
 
@@ -58,7 +105,7 @@ const LinkPreview = ({ url, title }) => {
       href={url}
       target="_blank"
       rel="noopener noreferrer"
-      className="block mt-2 p-2 rounded-lg border border-primary/20 bg-primary/5 hover:bg-primary/10 transition-colors"
+      className="block p-2 rounded-lg border border-primary/20 bg-primary/5 hover:bg-primary/10 transition-colors"
     >
       <div className="flex items-center gap-2 text-primary text-sm font-medium">
         <LinkIcon className="w-4 h-4 flex-shrink-0" />
@@ -83,16 +130,26 @@ export default function SpaceRaceTeamChat({
   const { alert } = useHybridAlert();
   const [message, setMessage] = useState('');
   const [isSending, setIsSending] = useState(false);
-  const [isUploading, setIsUploading] = useState(false);
+  const [imageSourceOpen, setImageSourceOpen] = useState(false);
   const [apiMessages, setApiMessages] = useState([]);
   const [pendingMessages, setPendingMessages] = useState([]);
   const [selectedImage, setSelectedImage] = useState(null);
   const [pastedImage, setPastedImage] = useState(null);
   const [selectedFileImage, setSelectedFileImage] = useState(null);
   const [selectedFile, setSelectedFile] = useState(null);
-  const messagesEndRef = useRef(null);
+  const listRef = useRef(null);
+  const nearBottomRef = useRef(true);
+  const lastMessageIdRef = useRef(null);
+  const lastMessageCountRef = useRef(0);
+  const didInitialScrollRef = useRef(false);
+  const forceScrollRef = useRef(false);
   const fileInputRef = useRef(null);
-  const imageInputRef = useRef(null);
+  const galleryInputRef = useRef(null);
+  const cameraInputRef = useRef(null);
+  const uploadFilesRef = useRef(new Map());
+  const previewUrlsRef = useRef(new Map());
+  const attachmentArmedRef = useRef(false);
+  const NEAR_BOTTOM_PX = 80;
 
   const normalizedTeamId = teamId != null ? String(teamId) : null;
   const chatPath =
@@ -144,13 +201,93 @@ export default function SpaceRaceTeamChat({
   const lastSeenTimestampRef = useRef(null);
   const unreadHydratedRef = useRef(false);
 
-  const scrollToBottom = useCallback(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  const scrollListToBottom = useCallback((behavior = 'auto') => {
+    const el = listRef.current;
+    if (!el) return;
+    el.scrollTo({ top: el.scrollHeight, behavior });
+  }, []);
+
+  const stickToBottomIfNeeded = useCallback(() => {
+    const el = listRef.current;
+    if (!el || !nearBottomRef.current) return;
+    el.scrollTop = el.scrollHeight;
   }, []);
 
   useEffect(() => {
-    scrollToBottom();
-  }, [messages, scrollToBottom]);
+    didInitialScrollRef.current = false;
+    lastMessageIdRef.current = null;
+    lastMessageCountRef.current = 0;
+    nearBottomRef.current = true;
+    forceScrollRef.current = false;
+  }, [chatPath]);
+
+  useEffect(() => {
+    const el = listRef.current;
+    if (!el) return undefined;
+
+    const onScroll = () => {
+      nearBottomRef.current =
+        el.scrollHeight - (el.scrollTop + el.clientHeight) <= NEAR_BOTTOM_PX;
+    };
+
+    el.addEventListener('scroll', onScroll, { passive: true });
+
+    const observer = new ResizeObserver(() => {
+      if (didInitialScrollRef.current) return;
+      if (el.clientHeight <= 0) return;
+      if (rtdbLoading && messages.length === 0) return;
+      didInitialScrollRef.current = true;
+      nearBottomRef.current = true;
+      el.scrollTop = el.scrollHeight;
+    });
+    observer.observe(el);
+
+    return () => {
+      el.removeEventListener('scroll', onScroll);
+      observer.disconnect();
+    };
+  }, [chatPath, rtdbLoading, messages.length]);
+
+  useEffect(() => {
+    if (!isViewed) return undefined;
+    nearBottomRef.current = true;
+    didInitialScrollRef.current = true;
+    const frame = requestAnimationFrame(() => scrollListToBottom('auto'));
+    return () => cancelAnimationFrame(frame);
+  }, [isViewed, scrollListToBottom]);
+
+  useEffect(() => {
+    const last = messages[messages.length - 1];
+    const lastId = last ? messageKey(last) : null;
+    const previousId = lastMessageIdRef.current;
+    const previousCount = lastMessageCountRef.current;
+    const hasNewTail =
+      messages.length !== previousCount || (Boolean(lastId) && lastId !== previousId);
+    lastMessageIdRef.current = lastId;
+    lastMessageCountRef.current = messages.length;
+
+    const sentByMe = forceScrollRef.current;
+    if (sentByMe) forceScrollRef.current = false;
+
+    if (!didInitialScrollRef.current) {
+      const el = listRef.current;
+      const listHidden = !el || el.clientHeight === 0;
+      if ((rtdbLoading && messages.length === 0) || listHidden) {
+        if (sentByMe) forceScrollRef.current = true;
+        return undefined;
+      }
+      didInitialScrollRef.current = true;
+      nearBottomRef.current = true;
+      const frame = requestAnimationFrame(() => scrollListToBottom('auto'));
+      return () => cancelAnimationFrame(frame);
+    }
+
+    if (!hasNewTail && !sentByMe) return undefined;
+    if (!sentByMe && !nearBottomRef.current) return undefined;
+
+    const frame = requestAnimationFrame(() => scrollListToBottom('auto'));
+    return () => cancelAnimationFrame(frame);
+  }, [messages, rtdbLoading, scrollListToBottom]);
 
   useEffect(() => {
     if (!onUnreadCountChange) return undefined;
@@ -183,22 +320,35 @@ export default function SpaceRaceTeamChat({
     return undefined;
   }, [messages, isViewed, onUnreadCountChange, currentParticipantId, rtdbLoading]);
 
-  const sendMessagePayload = async (payload, optimisticId = null) => {
+  const sendMessagePayload = async (payload, optimisticId = null, options = {}) => {
+    const { keepOnFailure = false, trackComposer = true, onUploadProgress } = options;
     if (!raceId || normalizedTeamId == null || !participant?.id) {
       console.error('Missing required data for sending message:', { raceId: !!raceId, teamId: normalizedTeamId, participantId: participant?.id });
       alert.toast.error('Cannot send message - missing required information');
       return null;
     }
 
+    const dropOptimistic = () => {
+      if (!optimisticId || keepOnFailure) return;
+      setPendingMessages((prev) => prev.filter((m) => m.id !== optimisticId));
+    };
+
     try {
-      setIsSending(true);
+      if (trackComposer) setIsSending(true);
       console.log('Sending message payload:', payload);
       
       const response = await spaceRacesAPI.sendTeamChatMessage(raceId, {
         participantId: participant.id,
         teamId: normalizedTeamId,
         ...payload,
-      });
+      }, onUploadProgress
+        ? {
+            onUploadProgress: (event) => {
+              if (!event.total) return;
+              onUploadProgress(event.loaded / event.total);
+            },
+          }
+        : undefined);
 
       console.log('Message API response:', response.data);
 
@@ -207,8 +357,7 @@ export default function SpaceRaceTeamChat({
         if (optimisticId) {
           setPendingMessages((prev) => prev.filter((m) => m.id !== optimisticId));
         }
-        // Clear sending state immediately after successful response
-        setIsSending(false);
+        if (trackComposer) setIsSending(false);
         if (sent && useApiFallback) {
           setApiMessages((prev) => mergeMessages(prev, [sent]));
         }
@@ -218,15 +367,11 @@ export default function SpaceRaceTeamChat({
         return sent;
       }
 
-      if (optimisticId) {
-        setPendingMessages((prev) => prev.filter((m) => m.id !== optimisticId));
-      }
+      dropOptimistic();
       alert.toast.error(response.data?.error || 'Failed to send message');
       return null;
     } catch (error) {
-      if (optimisticId) {
-        setPendingMessages((prev) => prev.filter((m) => m.id !== optimisticId));
-      }
+      dropOptimistic();
       console.error('Failed to send team chat message:', error);
       console.error('Error details:', {
         message: error.message,
@@ -236,7 +381,7 @@ export default function SpaceRaceTeamChat({
       alert.toast.error(error.response?.data?.error || error.message || 'Failed to send message');
       return null;
     } finally {
-      setIsSending(false);
+      if (trackComposer) setIsSending(false);
     }
   };
 
@@ -253,7 +398,7 @@ export default function SpaceRaceTeamChat({
 
   const handleSendText = async () => {
     const trimmed = message.trim();
-    if (!trimmed || isSending || isUploading) return;
+    if (!trimmed || isSending) return;
 
     const detected = detectMessageType(trimmed);
     const optimisticId = `pending-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
@@ -269,6 +414,7 @@ export default function SpaceRaceTeamChat({
       pending: true,
     };
 
+    forceScrollRef.current = true;
     setPendingMessages((prev) => mergeMessages(prev, [optimisticMessage]));
     setMessage('');
 
@@ -283,23 +429,51 @@ export default function SpaceRaceTeamChat({
     );
   };
 
-  const handleSendComposer = async () => {
-    if (isSending || isUploading) return;
+  const patchPending = (id, patch) => {
+    setPendingMessages((prev) => {
+      let changed = false;
+      const next = prev.map((item) => {
+        if (item.id !== id) return item;
+        if (
+          patch.uploadProgress != null &&
+          patch.uploadProgress === item.uploadProgress &&
+          patch.uploadState === item.uploadState
+        ) {
+          return item;
+        }
+        changed = true;
+        return { ...item, ...patch };
+      });
+      return changed ? next : prev;
+    });
+  };
 
+  const handleSendComposer = async () => {
     if (pendingAttachment?.file) {
+      if (attachmentArmedRef.current) return;
+      attachmentArmedRef.current = true;
       const caption = message.trim();
       const file = pendingAttachment.file;
       const type = pendingAttachmentType;
       setMessage('');
       clearPendingAttachment();
-      await uploadAttachment(file, type, caption);
+      uploadAttachment(file, type, caption);
       return;
     }
 
     await handleSendText();
   };
 
-  const uploadAttachment = async (file, type, caption = '') => {
+  useEffect(() => {
+    if (!pendingAttachment) attachmentArmedRef.current = false;
+  }, [pendingAttachment]);
+
+  useEffect(() => () => {
+    previewUrlsRef.current.forEach((url) => URL.revokeObjectURL(url));
+    previewUrlsRef.current.clear();
+  }, []);
+
+  const uploadAttachment = async (file, type, caption = '', existingId = null) => {
     if (!file || !raceId || normalizedTeamId == null) {
       console.error('Missing required data for upload:', { file: !!file, raceId: !!raceId, teamId: normalizedTeamId });
       alert.toast.error('Missing required information for upload');
@@ -312,55 +486,18 @@ export default function SpaceRaceTeamChat({
       return;
     }
 
-    try {
-      setIsUploading(true);
-      console.log('Starting upload:', { fileName: file.name, fileType: file.type, size: file.size, type });
+    const captionText = String(caption || '').trim();
+    const fallbackText = type === 'image' ? 'Shared an image' : `Shared ${file.name}`;
+    const messageText = captionText || fallbackText;
+    const optimisticId = existingId || `pending-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+    const inFlight = uploadFilesRef.current.get(optimisticId);
+    if (existingId && inFlight?.running) return;
+    uploadFilesRef.current.set(optimisticId, { file, type, caption: captionText, running: true });
 
-      // Use base64 encoding for all types (more reliable without Firebase Storage)
-      let downloadUrl = null;
-      
-      // Base64 encoding with size limits
-      const maxSizeMap = {
-        'image': 100 * 1024 * 1024, // 100MB for images
-        'file': 100 * 1024 * 1024   // 100MB for files
-      };
-      
-      const maxSize = maxSizeMap[type] || 5 * 1024 * 1024;
-      
-      console.log(`Encoding ${type} to base64...`);
-      downloadUrl = await new Promise((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = () => {
-          const result = reader.result;
-          console.log(`${type.charAt(0).toUpperCase() + type.slice(1)} encoded, size:`, result.length);
-          
-          if (result.length > maxSize) {
-            const maxSizeMB = (maxSize / (1024 * 1024)).toFixed(0);
-            reject(new Error(`${type.charAt(0).toUpperCase() + type.slice(1)} too large. Maximum size is ${maxSizeMB}MB for chat. Please use a smaller ${type}.`));
-          } else {
-            resolve(result);
-          }
-        };
-        reader.onerror = (err) => {
-          console.error('FileReader error:', err);
-          reject(new Error(`Failed to read ${type} file`));
-        };
-        reader.readAsDataURL(file);
-      });
-      
-      console.log('Base64 encoding completed, URL length:', downloadUrl?.length);
-      
-      if (!downloadUrl || !downloadUrl.startsWith('data:')) {
-        throw new Error(`Failed to encode ${type} to base64`);
-      }
-
-      const captionText = String(caption || '').trim();
-      const fallbackText = type === 'image' ? 'Shared an image' : `Shared ${file.name}`;
-      const messageText = captionText || fallbackText;
-
-      const optimisticId = `pending-${Date.now()}`;
-      console.log('Adding optimistic message:', { optimisticId, type, fileName: file.name });
-      
+    if (!existingId) {
+      const previewUrl = type === 'image' ? URL.createObjectURL(file) : '';
+      if (previewUrl) previewUrlsRef.current.set(optimisticId, previewUrl);
+      forceScrollRef.current = true;
       setPendingMessages((prev) =>
         mergeMessages(prev, [
           {
@@ -369,105 +506,128 @@ export default function SpaceRaceTeamChat({
             senderName: participant.name || 'You',
             text: messageText,
             type,
-            url: downloadUrl,
+            url: previewUrl,
             fileName: file.name,
             timestamp: new Date().toISOString(),
             pending: true,
+            uploadState: 'uploading',
+            uploadProgress: 0,
           },
         ])
       );
+    } else {
+      patchPending(optimisticId, { uploadState: 'uploading', uploadProgress: 0, pending: true });
+    }
 
-      console.log('Sending message payload to server...');
-      console.log('Payload:', {
-        text: messageText,
-        type,
-        urlLength: downloadUrl?.length,
-        fileName: file.name,
+    const markFailed = (error) => {
+      patchPending(optimisticId, { uploadState: 'error', uploadProgress: null, pending: true });
+      alert.toast.error(error?.message || 'Failed to upload file');
+    };
+
+    try {
+      const prepared = type === 'image' ? await prepareChatImage(file) : file;
+      if (prepared.size > MAX_ATTACHMENT_BYTES) {
+        const maxSizeMB = (MAX_ATTACHMENT_BYTES / (1024 * 1024)).toFixed(0);
+        throw new Error(`${type === 'image' ? 'Image' : 'File'} too large. Maximum size is ${maxSizeMB}MB for chat. Please use a smaller ${type}.`);
+      }
+
+      const downloadUrl = await readFileAsDataUrl(prepared, (ratio) => {
+        patchPending(optimisticId, {
+          uploadState: 'uploading',
+          uploadProgress: Math.round(ratio * 50),
+        });
       });
-      
+
+      if (!downloadUrl || !String(downloadUrl).startsWith('data:')) {
+        throw new Error('Failed to read file');
+      }
+
       const result = await sendMessagePayload(
         {
           text: messageText,
           type,
           url: downloadUrl,
-          fileName: file.name,
+          fileName: prepared.name || file.name,
         },
-        optimisticId
+        optimisticId,
+        {
+          keepOnFailure: true,
+          trackComposer: false,
+          onUploadProgress: (ratio) => {
+            patchPending(optimisticId, {
+              uploadState: 'uploading',
+              uploadProgress: 50 + Math.round(ratio * 50),
+            });
+          },
+        }
       );
-      
-      console.log('Message send result:', result);
-      
-      // Clear uploading state immediately after successful send
-      setIsUploading(false);
-      
+
       if (!result) {
-        console.error('Failed to send message to server');
-        throw new Error('Failed to send message to server. The file might be too large.');
+        patchPending(optimisticId, { uploadState: 'error', uploadProgress: null, pending: true });
+        return;
+      }
+
+      const previewUrl = previewUrlsRef.current.get(optimisticId);
+      previewUrlsRef.current.delete(optimisticId);
+      uploadFilesRef.current.delete(optimisticId);
+      if (previewUrl) {
+        setTimeout(() => URL.revokeObjectURL(previewUrl), 1500);
       }
     } catch (error) {
       console.error('Upload failed:', error);
-      console.error('Error details:', {
-        message: error.message,
-        name: error.name
-      });
-
-      // Provide more specific error messages
-      let errorMessage = 'Failed to upload file';
-      if (error.message) {
-        errorMessage = error.message;
-      }
-
-      alert.toast.error(errorMessage);
+      markFailed(error);
     } finally {
-      setIsUploading(false);
+      const current = uploadFilesRef.current.get(optimisticId);
+      if (current) current.running = false;
     }
   };
 
-  const handleFileSelect = async (e, forcedType) => {
-    const file = e.target.files?.[0];
-    e.target.value = '';
+  const retryUpload = (messageId) => {
+    const saved = uploadFilesRef.current.get(messageId);
+    if (!saved) return;
+    uploadAttachment(saved.file, saved.type, saved.caption, messageId);
+  };
+
+  const rejectOversized = (file, label) => {
+    if (file.size <= MAX_ATTACHMENT_BYTES) return false;
+    const maxSizeMB = (MAX_ATTACHMENT_BYTES / (1024 * 1024)).toFixed(0);
+    alert.toast.error(`${label} too large. Maximum size is ${maxSizeMB}MB for chat. Please use a smaller ${label.toLowerCase()}.`);
+    return true;
+  };
+
+  const handleImageSelect = (event) => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
     if (!file) return;
-
-    console.log('File selected:', { name: file.name, type: file.type, size: file.size });
-
-    // Check file size based on type
-    const type = forcedType || (file.type.startsWith('image/') ? 'image' : 'file');
-    const maxSizeMap = {
-      'image': 100 * 1024 * 1024, // 100MB for images
-      'file': 100 * 1024 * 1024   // 100MB for files
-    };
-    
-    const maxSize = maxSizeMap[type] || 5 * 1024 * 1024;
-    const maxSizeMB = (maxSize / (1024 * 1024)).toFixed(0);
-    
-    if (file.size > maxSize) {
-      alert.toast.error(`${type.charAt(0).toUpperCase() + type.slice(1)} too large. Maximum size is ${maxSizeMB}MB for chat. Please use a smaller ${type}.`);
+    if (!isAllowedImage(file)) {
+      alert.toast.error('Please choose an image.');
       return;
     }
-    
-    // For images, show preview before sending (like WhatsApp)
-    if (type === 'image') {
-      const previewUrl = URL.createObjectURL(file);
-      clearPendingAttachment();
-      setSelectedFileImage({ file, previewUrl });
+    if (rejectOversized(file, 'Image')) return;
+    const previewUrl = URL.createObjectURL(file);
+    clearPendingAttachment();
+    setSelectedFileImage({ file, previewUrl });
+  };
+
+  const handleDocumentSelect = (event) => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file) return;
+    if (!isAllowedDocument(file)) {
+      alert.toast.error('Please choose a document.');
       return;
     }
+    if (rejectOversized(file, 'File')) return;
+    clearPendingAttachment();
+    setSelectedFile({ file });
+  };
 
-    // For files, show preview before sending
-    if (type === 'file') {
-      clearPendingAttachment();
-      setSelectedFile({ file });
+  const openImagePicker = () => {
+    if (isPhoneImagePicker()) {
+      setImageSourceOpen(true);
       return;
     }
-
-    console.log('Starting upload with type:', type);
-
-    try {
-      await uploadAttachment(file, type);
-    } catch (error) {
-      console.error('Upload failed in handleFileSelect:', error);
-      alert.toast.error(error.message || 'Failed to upload file');
-    }
+    galleryInputRef.current?.click();
   };
 
   const handlePaste = async (e) => {
@@ -479,66 +639,109 @@ export default function SpaceRaceTeamChat({
       if (item.type.startsWith('image/')) {
         e.preventDefault();
         const file = item.getAsFile();
-        if (file) {
-          console.log('Pasted image:', { name: file.name, type: file.type, size: file.size });
-          
-          // Check file size for images (max 5MB for base64)
-          if (file.size > 5 * 1024 * 1024) {
-            alert.toast.error('Image too large. Maximum size is 5MB for chat. Please use a smaller image.');
-            return;
-          }
-
-          // Create preview URL
-          const previewUrl = URL.createObjectURL(file);
-          clearPendingAttachment();
-          setPastedImage({ file, previewUrl });
+        if (!file) break;
+        if (!isAllowedImage(file)) {
+          alert.toast.error('Please choose an image.');
+          break;
         }
+        if (rejectOversized(file, 'Image')) break;
+        const previewUrl = URL.createObjectURL(file);
+        clearPendingAttachment();
+        setPastedImage({ file, previewUrl });
         break;
       }
     }
   };
 
+  const renderUploadStatus = (msg) => {
+    if (msg.uploadState === 'uploading') {
+      const percent = Math.max(0, Math.min(100, Math.round(msg.uploadProgress || 0)));
+      return (
+        <p className="text-xs mt-1 flex items-center gap-1">
+          {msg.type !== 'file' ? (
+            <span className="inline-block w-3 h-3 border-2 border-current border-t-transparent rounded-full animate-spin" />
+          ) : null}
+          Uploading... {percent}%
+        </p>
+      );
+    }
+    if (msg.uploadState === 'error') {
+      return (
+        <p className="text-xs mt-1">
+          Upload failed.{' '}
+          <button
+            type="button"
+            className="underline font-medium"
+            onClick={() => retryUpload(msg.id)}
+          >
+            Retry
+          </button>
+        </p>
+      );
+    }
+    return null;
+  };
+
   const renderMessageBody = (msg) => {
-    if (msg.type === 'image' && msg.url) {
+    if (msg.type === 'image' && (msg.url || msg.uploadState)) {
       const caption = String(msg.text || '').trim();
-      const isFallbackCaption = !caption || caption === 'Shared an image';
       return (
         <div>
-          {isFallbackCaption && caption ? <p className="text-sm mb-2">{caption}</p> : null}
-          <img
-            src={msg.url}
-            alt={msg.fileName || 'Shared image'}
-            className="max-w-full rounded-lg border border-white/20 cursor-pointer hover:opacity-90 transition-opacity"
-            onClick={() => setSelectedImage(msg.url)}
-          />
-          {!isFallbackCaption ? <p className="text-sm mt-2">{caption}</p> : null}
+          {msg.url ? (
+            <img
+              src={msg.url}
+              alt={msg.fileName || 'Shared image'}
+              className="block max-w-full h-auto rounded-lg border border-white/20 cursor-pointer hover:opacity-90 transition-opacity"
+              onClick={() => setSelectedImage(msg.url)}
+              onLoad={stickToBottomIfNeeded}
+            />
+          ) : null}
+          {caption ? <p className="text-sm mt-1">{caption}</p> : null}
+          {renderUploadStatus(msg)}
         </div>
       );
     }
 
-    if (msg.type === 'file' && msg.url) {
+    if (msg.type === 'file' && (msg.url || msg.fileName || msg.uploadState)) {
+      const caption = String(msg.text || '').trim();
+      const fileCard = (
+        <span className="flex items-center gap-2 p-2 rounded-lg border border-gray-200 bg-white text-sm text-primary">
+          {msg.uploadState === 'uploading' ? (
+            <span className="inline-block w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin flex-shrink-0" />
+          ) : (
+            <FileText className="w-4 h-4" />
+          )}
+          <span className="truncate">{msg.fileName || 'Download file'}</span>
+        </span>
+      );
       return (
         <div>
-          {msg.text && <p className="text-sm mb-2">{msg.text}</p>}
-          <a
-            href={msg.url}
-            target="_blank"
-            rel="noopener noreferrer"
-            download={msg.fileName}
-            className="flex items-center gap-2 p-2 rounded-lg border border-gray-200 bg-white hover:bg-gray-50 text-sm text-primary"
-          >
-            <FileText className="w-4 h-4" />
-            <span className="truncate">{msg.fileName || 'Download file'}</span>
-          </a>
+          {msg.url && msg.uploadState !== 'uploading' ? (
+            <a
+              href={msg.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              download={msg.fileName}
+              className="flex items-center gap-2 p-2 rounded-lg border border-gray-200 bg-white hover:bg-gray-50 text-sm text-primary"
+            >
+              <FileText className="w-4 h-4" />
+              <span className="truncate">{msg.fileName || 'Download file'}</span>
+            </a>
+          ) : (
+            fileCard
+          )}
+          {caption ? <p className="text-sm mt-1">{caption}</p> : null}
+          {renderUploadStatus(msg)}
         </div>
       );
     }
 
     if (msg.type === 'link' && msg.url) {
+      const caption = String(msg.text || '').trim();
       return (
         <div>
-          {msg.text && <p className="text-sm mb-1">{msg.text}</p>}
           <LinkPreview url={msg.url} title={msg.linkTitle} />
+          {caption ? <p className="text-sm mt-1">{caption}</p> : null}
         </div>
       );
     }
@@ -601,7 +804,11 @@ export default function SpaceRaceTeamChat({
         {headerAction}
       </div>
 
-      <div className="flex-1 min-h-0 overflow-y-auto p-4 space-y-2 bg-[#f0ebe8]">
+      <div
+        ref={listRef}
+        className="flex-1 min-h-0 overflow-y-auto overscroll-contain p-4 space-y-2 bg-[#f0ebe8]"
+        style={{ WebkitOverflowScrolling: 'touch' }}
+      >
         {messages.length === 0 ? (
           <div className="text-center py-8 text-gray-500 text-sm">
             No messages yet. Say hello to your team!
@@ -646,7 +853,6 @@ export default function SpaceRaceTeamChat({
             );
           })
         )}
-        <div ref={messagesEndRef} />
       </div>
 
       {!useApiFallback && rtdbLoading && messages.length === 0 && (
@@ -700,23 +906,31 @@ export default function SpaceRaceTeamChat({
         )}
         <div className="flex items-center gap-2 min-w-0">
           <input
-            ref={imageInputRef}
+            ref={galleryInputRef}
             type="file"
-            accept="image/png,image/jpeg,image/jpg,image/gif,image/webp,image/bmp"
+            accept={GALLERY_ACCEPT}
             className="hidden"
-            onChange={(e) => handleFileSelect(e, 'image')}
+            onChange={handleImageSelect}
+          />
+          <input
+            ref={cameraInputRef}
+            type="file"
+            accept="image/*"
+            capture="environment"
+            className="hidden"
+            onChange={handleImageSelect}
           />
           <input
             ref={fileInputRef}
             type="file"
-            accept=".pdf,.doc,.docx,.txt,.xls,.xlsx,.ppt,.pptx,.zip,.rar"
+            accept={DOCUMENT_ACCEPT}
             className="hidden"
-            onChange={(e) => handleFileSelect(e, 'file')}
+            onChange={handleDocumentSelect}
           />
           <button
             type="button"
-            onClick={() => imageInputRef.current?.click()}
-            disabled={isUploading || isSending}
+            onClick={openImagePicker}
+            disabled={isSending}
             className="p-2 min-h-11 min-w-11 inline-flex items-center justify-center text-gray-500 hover:text-primary rounded-lg hover:bg-gray-100 transition-colors shrink-0"
             title="Share image"
           >
@@ -725,7 +939,7 @@ export default function SpaceRaceTeamChat({
           <button
             type="button"
             onClick={() => fileInputRef.current?.click()}
-            disabled={isUploading || isSending}
+            disabled={isSending}
             className="p-2 min-h-11 min-w-11 inline-flex items-center justify-center text-gray-500 hover:text-primary rounded-lg hover:bg-gray-100 transition-colors shrink-0"
             title="Share file"
           >
@@ -744,23 +958,67 @@ export default function SpaceRaceTeamChat({
             onPaste={handlePaste}
             placeholder={pendingAttachment ? 'Add a caption...' : 'Message your team...'}
             className="flex-1 min-w-0 min-h-11 px-4 py-3 border border-gray-300 rounded-full focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary text-text"
-            disabled={isSending || isUploading}
+            disabled={isSending}
           />
           <button
             type="button"
             onClick={handleSendComposer}
-            disabled={(!message.trim() && !pendingAttachment) || isSending || isUploading}
+            disabled={(!message.trim() && !pendingAttachment) || isSending}
             className="w-11 h-11 shrink-0 bg-primary rounded-full flex items-center justify-center hover:bg-primary/90 disabled:opacity-50 transition-colors"
           >
             <Send className="w-5 h-5 text-white" />
           </button>
         </div>
-        {(isUploading || isSending) && (
+        {isSending && (
           <p className="text-xs text-gray-500 mt-2">
-            {isUploading ? 'Uploading...' : 'Sending...'}
+            Sending...
           </p>
         )}
       </div>
+
+      {imageSourceOpen && typeof document !== 'undefined'
+        ? createPortal(
+            <div className="fixed inset-0 z-[80]">
+              <button
+                type="button"
+                aria-label="Close photo options"
+                className="absolute inset-0 bg-black/40"
+                onClick={() => setImageSourceOpen(false)}
+              />
+              <div
+                role="dialog"
+                aria-modal="true"
+                aria-label="Add photo"
+                className="absolute inset-x-0 bottom-0 bg-white rounded-t-2xl shadow-[0_-8px_24px_-8px_rgba(46,31,42,0.28)] pb-[max(0.75rem,env(safe-area-inset-bottom))]"
+              >
+                <div className="flex justify-center pt-3 pb-1">
+                  <div className="w-10 h-1 rounded-full bg-neutral-300" />
+                </div>
+                <button
+                  type="button"
+                  className="w-full min-h-11 px-4 py-3 text-left text-base text-text hover:bg-gray-50"
+                  onClick={() => {
+                    setImageSourceOpen(false);
+                    cameraInputRef.current?.click();
+                  }}
+                >
+                  Take Photo
+                </button>
+                <button
+                  type="button"
+                  className="w-full min-h-11 px-4 py-3 text-left text-base text-text hover:bg-gray-50"
+                  onClick={() => {
+                    setImageSourceOpen(false);
+                    galleryInputRef.current?.click();
+                  }}
+                >
+                  Choose from Gallery
+                </button>
+              </div>
+            </div>,
+            document.body
+          )
+        : null}
 
       {/* Image Modal */}
       {selectedImage && (

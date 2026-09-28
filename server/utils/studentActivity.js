@@ -235,6 +235,9 @@ async function loadIndexedRaceActivities(studentUid, identifiers) {
     return {
       id: `race-${matched.raceId}-${matched.participantId || 'join'}`,
       type: 'spaceRace',
+      raceId: matched.raceId,
+      sessionDate: matched.sessionDate || null,
+      joinedAt: matched.joinedAt || null,
       title: matched.quizName || matched.raceTitle || 'Space Race',
       subtitle: `Team ${matched.teamId ?? '—'}`,
       rank: matched.teamId ? `Team ${matched.teamId}` : 'Joined',
@@ -307,6 +310,9 @@ async function getStudentActivity(query = {}, limit = 20) {
       activities.push({
         id: `race-${raceId}-${matched.participantId}`,
         type: 'spaceRace',
+        raceId,
+        sessionDate: null,
+        joinedAt: matched.joinedAt || null,
         title: matched.raceTitle || matched.quizName || 'Space Race',
         subtitle: `Team ${matched.teamId ?? '—'}`,
         rank: matched.teamId ? `Team ${matched.teamId}` : 'Joined',
@@ -325,12 +331,15 @@ async function getStudentActivity(query = {}, limit = 20) {
         if (!resp || typeof resp !== 'object') return;
         if (!matchesStudentRecord(resp, query)) return;
 
-        const when = formatActivityDate(resp.submittedAt || resp.createdAt);
+        const submittedAt = resp.submittedAt || resp.createdAt || null;
+        const when = formatActivityDate(submittedAt);
         activities.push({
           id: `exit-${ticketId}-${responseId}`,
           type: 'exitTicket',
+          ticketId,
           title: resp.ticketTitle || 'Exit Ticket',
           subtitle: 'Submitted exit ticket',
+          submittedAt,
           date: when.date,
           time: when.time,
           shortDate: when.shortDate,

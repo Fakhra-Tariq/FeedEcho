@@ -2405,7 +2405,11 @@ const AudienceQuizAttempt = ({
       </AudienceActivityHeader>
       )}
 
-      {!embedded && <GuestProgressLoginBanner />}
+      {!embedded && (
+        <GuestProgressLoginBanner
+          contentClassName={`${AUDIENCE_ACTIVITY_PAGE_WIDTH} py-2 flex items-center justify-between gap-2 min-w-0`}
+        />
+      )}
 
       {/* Quiz Content — single card: progress, question, options, and nav are siblings */}
       <div className={`${quizPageWidthClass} py-4`}>

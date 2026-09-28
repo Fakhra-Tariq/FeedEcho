@@ -20,6 +20,7 @@ export function AudienceActivityHeader({
   showAvatar = false,
   compactMobileZones = false,
   trueCenterTitle = false,
+  leftAlignMobileTitle = false,
 }) {
   const { userProfile } = useAuth();
   const session = getStoredAudienceSession();
@@ -88,31 +89,42 @@ export function AudienceActivityHeader({
     </>
   );
 
+  const clusterTitleLeft = trueCenterTitle && leftAlignMobileTitle;
+  const logoSlot = (
+    <div className={`${trueCenterTitle && !clusterTitleLeft ? 'relative z-10 ' : ''}flex justify-start shrink-0`}>
+      {onLogoClick ? (
+        <button
+          type="button"
+          onClick={onLogoClick}
+          aria-label="Leave"
+          className="relative flex h-16 shrink-0 items-center overflow-hidden cursor-pointer"
+        >
+          {logo}
+        </button>
+      ) : (
+        logoShell
+      )}
+    </div>
+  );
+
   return (
     <div className={`bg-white border-b border-neutral-200 ${className}`.trim()}>
       <div className={`${AUDIENCE_ACTIVITY_PAGE_WIDTH} ${compactMobileZones ? 'max-md:!px-3' : ''}`.trim()}>
         <div
           className={
-            trueCenterTitle
+            clusterTitleLeft
+              ? 'flex items-center gap-x-1 h-16 min-h-16 py-0 md:grid md:grid-cols-3 md:gap-2'
+              : trueCenterTitle
               ? 'relative flex items-center min-h-16 py-0 md:grid md:grid-cols-3 md:h-16 md:gap-2'
               : 'grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-x-2 min-h-16 py-0 md:grid-cols-3 md:h-16 md:gap-2'
           }
         >
-          <div className={`${trueCenterTitle ? 'relative z-10 ' : ''}flex justify-start shrink-0`}>
-            {onLogoClick ? (
-              <button
-                type="button"
-                onClick={onLogoClick}
-                aria-label="Leave"
-                className="relative flex h-16 shrink-0 items-center overflow-hidden cursor-pointer"
-              >
-                {logo}
-              </button>
-            ) : (
-              logoShell
-            )}
-          </div>
-          {trueCenterTitle ? (
+          {logoSlot}
+          {clusterTitleLeft ? (
+            <div className="min-w-0 flex flex-1 items-center gap-x-1 overflow-hidden max-md:[&_h1]:text-left [&_h1]:min-w-0 md:justify-center md:gap-x-2">
+              {titleContent}
+            </div>
+          ) : trueCenterTitle ? (
             <div className="pointer-events-none absolute inset-0 flex items-center justify-center min-w-0 md:pointer-events-auto md:static md:inset-auto md:flex md:items-center md:justify-center md:overflow-hidden">
               <div className="pointer-events-auto min-w-0 max-w-[calc(100%-11rem)] flex items-center justify-center gap-x-1 overflow-hidden md:max-w-none md:gap-x-2">
                 {titleContent}

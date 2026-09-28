@@ -16,6 +16,10 @@ const {
   getSharedResources,
 } = require('../utils/spaceRaceResourceArchive');
 const {
+  isAllowedTeamCount,
+  teamCountRangeError,
+} = require('../../client/src/constants/spaceRaceTeams');
+const {
   normalizeSpaceRaceQuestionKey,
   answersIncludeQuestion,
   calculateTeamScoreFromAnswers,
@@ -34,6 +38,27 @@ const raceResponsesRef = (id) => db.ref(`space_race_responses/${id}`);
 const raceCodeRef = (code) => db.ref(`space_race_codes/${String(code).toUpperCase()}`); // accessCode -> raceId
 
 const quizRef = (id) => db.ref(`quizzes/${id}`);
+
+const resolveTeamCountForSave = (numberOfTeams, settings) => {
+  if (numberOfTeams !== undefined && numberOfTeams !== null && numberOfTeams !== '') {
+    return numberOfTeams;
+  }
+  if (
+    settings &&
+    settings.numberOfTeams !== undefined &&
+    settings.numberOfTeams !== null &&
+    settings.numberOfTeams !== ''
+  ) {
+    return settings.numberOfTeams;
+  }
+  return 2;
+};
+
+const rejectInvalidTeamCount = (res, count) => {
+  if (isAllowedTeamCount(count)) return false;
+  res.status(400).json({ success: false, error: teamCountRangeError });
+  return true;
+};
 
 const resolveQuizQuestion = (questions, questionId, questionIndex) => {
   if (!Array.isArray(questions) || questions.length === 0) return null;
@@ -770,6 +795,10 @@ router.post('/', async (req, res) => {
       });
     }
 
+    if (rejectInvalidTeamCount(res, resolveTeamCountForSave(numberOfTeams, settings))) {
+      return;
+    }
+
     const raceId = racesRef().push().key;
 
     // Create race session as draft
@@ -868,6 +897,10 @@ router.post('/start', async (req, res) => {
 
     if (!quizId) {
       return res.status(400).json({ message: 'Quiz ID is required' });
+    }
+
+    if (rejectInvalidTeamCount(res, resolveTeamCountForSave(numberOfTeams, settings))) {
+      return;
     }
 
     // Single source of truth: sessions/{id}.currentActivity, checked fresh and
@@ -2073,6 +2106,14 @@ router.put('/:id', async (req, res) => {
 
     if (race.createdBy !== uid) {
       return res.status(403).json({ success: false, error: 'Access denied' });
+    }
+
+    if (
+      updates.settings &&
+      Object.prototype.hasOwnProperty.call(updates.settings, 'numberOfTeams') &&
+      rejectInvalidTeamCount(res, updates.settings.numberOfTeams)
+    ) {
+      return;
     }
 
     // If updating settings, merge with existing settings instead of overwriting

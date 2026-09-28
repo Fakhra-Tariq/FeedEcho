@@ -6,6 +6,7 @@ import {
   DURATION_MISMATCH_MSG,
   isJoinShorterThanQuiz,
 } from '../utils/spaceRaceDuration';
+import spaceRaceTeams from '../constants/spaceRaceTeams';
 
 const SpaceRaceSettings = ({ race, onClose, onDelete, onUpdate }) => {
   const [settings, setSettings] = useState({
@@ -24,9 +25,11 @@ const SpaceRaceSettings = ({ race, onClose, onDelete, onUpdate }) => {
   const [showCopyNotification, setShowCopyNotification] = useState(false);
 
   const durationInvalid = isJoinShorterThanQuiz(settings.joinDuration, settings.countdown);
+  const teamCountInvalid = !spaceRaceTeams.isAllowedTeamCount(settings.numberOfTeams);
+  const currentTeamCount = Number(settings.numberOfTeams);
 
   const handleSave = async () => {
-    if (isJoinShorterThanQuiz(settings.joinDuration, settings.countdown)) {
+    if (isJoinShorterThanQuiz(settings.joinDuration, settings.countdown) || teamCountInvalid) {
       return;
     }
     const raceId = race?.id || race?.raceId;
@@ -122,19 +125,19 @@ const SpaceRaceSettings = ({ race, onClose, onDelete, onUpdate }) => {
                 </label>
                 <select
                   value={settings.numberOfTeams}
-                  onChange={(e) => setSettings({ ...settings, numberOfTeams: parseInt(e.target.value) })}
+                  onChange={(e) => setSettings({ ...settings, numberOfTeams: parseInt(e.target.value, 10) })}
                   className="w-full h-10 px-3 border border-gray-300 rounded-lg"
                 >
-                  <option value={2}>2 Teams</option>
-                  <option value={3}>3 Teams</option>
-                  <option value={4}>4 Teams</option>
-                  <option value={5}>5 Teams</option>
-                  <option value={6}>6 Teams</option>
-                  <option value={7}>7 Teams</option>
-                  <option value={8}>8 Teams</option>
-                  <option value={9}>9 Teams</option>
-                  <option value={10}>10 Teams</option>
+                  {teamCountInvalid && Number.isFinite(currentTeamCount) && (
+                    <option value={currentTeamCount}>{currentTeamCount} Teams</option>
+                  )}
+                  {spaceRaceTeams.teamCountChoices().map((count) => (
+                    <option key={count} value={count}>{count} Teams</option>
+                  ))}
                 </select>
+                {teamCountInvalid && (
+                  <p className="text-xs text-red-600 mt-1">Choose between 2 and 10 teams before saving.</p>
+                )}
               </div>
 
               <div className={`${settings.teamAssignment === 'student-choice' ? 'md:row-span-3' : 'md:row-span-2'} max-md:order-5 max-md:row-span-1`}>
@@ -333,7 +336,7 @@ const SpaceRaceSettings = ({ race, onClose, onDelete, onUpdate }) => {
               </button>
               <button
                 onClick={handleSave}
-                disabled={durationInvalid}
+                disabled={durationInvalid || teamCountInvalid}
                 className="px-4 py-2 min-h-11 max-md:w-full bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 Save Changes

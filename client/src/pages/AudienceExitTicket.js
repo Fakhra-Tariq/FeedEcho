@@ -9,6 +9,7 @@ import {
   AudienceActivityHeader,
   AudienceActivityContent,
   AudienceActivityCard,
+  AUDIENCE_ACTIVITY_PAGE_WIDTH,
 } from '../components/Audience/AudienceActivityLayout';
 
 const AudienceExitTicket = () => {
@@ -93,10 +94,13 @@ const AudienceExitTicket = () => {
         answer: answers[index].trim()
       }));
 
+      const loggedInAudience = getStoredAudienceSession();
       const responseData = {
         ticketId: exitTicket.id,
         studentName: joinedName,
         answers: formattedAnswers,
+        ...(loggedInAudience?.uid ? { studentUid: loggedInAudience.uid } : {}),
+        ...(loggedInAudience?.email ? { studentEmail: loggedInAudience.email } : {}),
       };
 
       console.log('Submitting response:', responseData);
@@ -104,6 +108,23 @@ const AudienceExitTicket = () => {
       const result = await exitTicketsAPI.submitResponse(exitTicket.id, responseData);
       
       if (result.data.success) {
+        const submittedAt = new Date().toISOString();
+        try {
+          const raw = JSON.parse(localStorage.getItem('exitTicketSubmissions') || '[]');
+          const list = Array.isArray(raw) ? raw : [];
+          list.push({
+            ticketId: exitTicket.id,
+            ticketTitle: exitTicket.title || 'Exit Ticket',
+            studentName: joinedName,
+            studentUid: loggedInAudience?.uid || '',
+            studentEmail: loggedInAudience?.email || '',
+            submittedAt,
+          });
+          localStorage.setItem('exitTicketSubmissions', JSON.stringify(list));
+          window.dispatchEvent(new Event('quizSubmissionSaved'));
+        } catch {
+          // Progress still refreshes from the server activity feed.
+        }
         setIsSubmitted(true);
         alert.toast.success('Response submitted successfully!');
         console.log('Response submitted successfully');
@@ -269,7 +290,9 @@ const AudienceExitTicket = () => {
         trueCenterTitle
       />
 
-      <GuestProgressLoginBanner />
+      <GuestProgressLoginBanner
+        contentClassName={`${AUDIENCE_ACTIVITY_PAGE_WIDTH} py-2 flex items-center justify-between gap-2 min-w-0`}
+      />
 
       <AudienceActivityContent>
         <AudienceActivityCard>
