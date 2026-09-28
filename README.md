@@ -61,7 +61,7 @@ The platform features a professional pastel color palette:
 ## 📁 Project Structure
 
 ```
-learnexa/
+FeedEcho/
 ├── server/                 # Backend application
 │   ├── config/            # Firebase configuration
 │   ├── middleware/        # Authentication middleware
@@ -91,7 +91,7 @@ learnexa/
 ### 1. Clone the repository
 ```bash
 git clone <repository-url>
-cd learnexa
+cd FeedEcho
 ```
 
 ### 2. Set up Firebase
