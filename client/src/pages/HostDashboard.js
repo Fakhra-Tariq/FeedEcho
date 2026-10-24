@@ -21,6 +21,7 @@ import {
 import clsx from 'clsx';
 import { useHostData } from '../contexts/HostDataContext';
 import { getSessionActivityLabel, normalizeSessionCurrentActivity } from '../utils/sessionActivityLabel';
+import { isQuizCurrentlyActive } from '../utils/quizExpiry';
 import { useHybridAlert } from '../contexts/HybridAlertContext';
 import { copyToClipboard } from '../utils/copyToClipboard';
 import PageHeaderCard from '../components/Host/PageHeaderCard';
@@ -37,8 +38,8 @@ const HostDashboard = () => {
   const resolvedCurrentActivity = normalizeSessionCurrentActivity(activeSession?.currentActivity);
 
   // Derive activity label from session type if currentActivity is not set
-  const activeActivityLabel = getSessionActivityLabel(resolvedCurrentActivity) || 
-    (activeSession?.type === 'quiz' ? 'Quiz Active' :
+  const activeActivityLabel = getSessionActivityLabel(resolvedCurrentActivity, data.quizzes) || 
+    (activeSession?.type === 'quiz' && (data.quizzes || []).some(isQuizCurrentlyActive) ? 'Quiz Active' :
      activeSession?.type === 'exitTicket' ? 'Exit Ticket Active' :
      activeSession?.type === 'spaceRace' ? 'Space Race Active' :
      activeSession?.type === 'anonymousChat' ? 'Live Chat Active' :

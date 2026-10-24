@@ -5,6 +5,9 @@
  * Scoped to the current user (createdBy) so we only block when THIS teacher has another activity active.
  */
 
+const { isQuizExpired } = require('./quizExpiry');
+const { finishLaunchedQuiz } = require('./finishLaunchedQuiz');
+
 const BLOCK_MESSAGE = 'Another activity is already active. Please finish it before launching a new activity.';
 
 /**
@@ -24,21 +27,14 @@ async function hasAnyActiveActivity(db, userId) {
     const quizSnap = await db.ref('quizzes').orderByChild('createdBy').equalTo(userId).get();
     if (quizSnap.exists()) {
       let blocked = false;
-      const updates = {};
       const now = Date.now();
+      const jobs = [];
       quizSnap.forEach((child) => {
         if (blocked) return;
         const q = child.val() || {};
         const status = typeof q.status === 'string' ? q.status.toLowerCase() : q.status;
-        const endTimeMs = q.launchSettings?.endTime ? new Date(q.launchSettings.endTime).getTime() : null;
-        const expired = endTimeMs && !Number.isNaN(endTimeMs) && endTimeMs <= now;
-
-        // Auto-heal stale launched quizzes that already expired so they don't block new activities.
-        if (q.launched === true && expired) {
-          updates[`quizzes/${child.key}/status`] = 'completed';
-          updates[`quizzes/${child.key}/launched`] = false;
-          updates[`quizzes/${child.key}/finishedAt`] = new Date().toISOString();
-          updates[`quizzes/${child.key}/launchSettings`] = null;
+        if (isQuizExpired(q, now)) {
+          jobs.push(finishLaunchedQuiz(child.key, q));
           return;
         }
 
@@ -46,8 +42,8 @@ async function hasAnyActiveActivity(db, userId) {
           blocked = true;
         }
       });
-      if (Object.keys(updates).length > 0) {
-        await db.ref().update(updates);
+      if (jobs.length) {
+        await Promise.allSettled(jobs);
       }
       if (blocked) {
       return { blocked: true, message: BLOCK_MESSAGE };

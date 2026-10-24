@@ -6,14 +6,13 @@ const ActiveSessionManager = require('../utils/ActiveSessionManager');
 const {
   prepareActivityLaunch,
   setSessionCurrentActivity,
-  clearActivityFromActiveSession,
-  releaseSessionActivityClaim,
   appendSessionActivityHistory,
 } = require('../utils/teacherSessionGuard');
 const { normalizeQuestionsForScoring } = require('../utils/scoringUtils');
 const { validateGenerateAiQuizBody, generateQuizWithAi } = require('../utils/generateAiQuiz');
 const { normalizeQuizRecord, normalizeQuizListRecord } = require('../utils/quizNormalization');
 const { createQuizLaunch, closeActiveQuizLaunch } = require('../utils/quizLaunches');
+const { finishLaunchedQuiz } = require('../utils/finishLaunchedQuiz');
 const router = express.Router();
 
 const generateId = (prefix = 'quiz') =>
@@ -479,32 +478,8 @@ router.post('/:id/finish', async (req, res) => {
     const existing = snap.val();
     if (existing.createdBy !== uid && req.userRole !== 'admin')
       return res.status(403).json({ success: false, error: 'Access denied' });
-    const now = new Date().toISOString();
 
-    const sessionCode = String(
-      existing?.launchSettings?.accessCode || existing?.sessionCode || ''
-    ).trim().toUpperCase();
-    if (sessionCode.length === 6) {
-      const sessionIdSnap = await db.ref(`session_codes/${sessionCode}`).get();
-      if (sessionIdSnap.exists()) {
-        await releaseSessionActivityClaim(sessionIdSnap.val(), 'quiz', id);
-      }
-    }
-    await clearActivityFromActiveSession('quiz', id, uid);
-    await closeActiveQuizLaunch(id, existing, now);
-
-    await quizRef(id).update({
-      status: 'ready',
-      launched: false,
-      launchSettings: null,
-      sessionCode: null,
-      currentLaunchId: null,
-      finishedAt: now,
-      updatedAt: now,
-    });
-    // remove code index if any
-    const code = existing?.launchSettings?.accessCode;
-    if (code) await quizCodeRef(code).remove();
+    await finishLaunchedQuiz(id, existing);
     const updated = await quizRef(id).get();
     return res.json({ success: true, data: { id, ...(updated.val() || {}) } });
   } catch (error) {

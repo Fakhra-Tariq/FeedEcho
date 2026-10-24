@@ -4,6 +4,10 @@ import { copyToClipboard } from '../utils/copyToClipboard';
 import { toParticipantCount } from '../utils/toParticipantCount';
 import {
   DURATION_MISMATCH_MSG,
+  SPACE_RACE_JOIN_MINUTES,
+  SPACE_RACE_QUIZ_COUNTDOWNS,
+  formatJoinDurationLabel,
+  formatQuizDurationLabel,
   isJoinShorterThanQuiz,
 } from '../utils/spaceRaceDuration';
 import spaceRaceTeams from '../constants/spaceRaceTeams';
@@ -24,9 +28,17 @@ const SpaceRaceSettings = ({ race, onClose, onDelete, onUpdate }) => {
   const [copied, setCopied] = useState(false);
   const [showCopyNotification, setShowCopyNotification] = useState(false);
 
+  const raceCode = race.joinCode || race.accessCode || '';
+  const hasRaceCode = Boolean(String(raceCode).trim());
   const durationInvalid = isJoinShorterThanQuiz(settings.joinDuration, settings.countdown);
   const teamCountInvalid = !spaceRaceTeams.isAllowedTeamCount(settings.numberOfTeams);
   const currentTeamCount = Number(settings.numberOfTeams);
+  const currentCountdown = Number(settings.countdown);
+  const currentJoinDuration = Number(settings.joinDuration);
+  const quizDurationOffList =
+    Number.isFinite(currentCountdown) && !SPACE_RACE_QUIZ_COUNTDOWNS.includes(currentCountdown);
+  const joinDurationOffList =
+    Number.isFinite(currentJoinDuration) && !SPACE_RACE_JOIN_MINUTES.includes(currentJoinDuration);
 
   const handleSave = async () => {
     if (isJoinShorterThanQuiz(settings.joinDuration, settings.countdown) || teamCountInvalid) {
@@ -65,29 +77,36 @@ const SpaceRaceSettings = ({ race, onClose, onDelete, onUpdate }) => {
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {/* Race Code Section */}
-            <div className="bg-primary/10 border border-primary/30 rounded-lg p-3">
+            <div className="bg-primary/10 border border-primary/30 rounded-lg p-3 overflow-hidden">
               <h3 className="font-medium text-primary mb-2">Race Code</h3>
-              <div className="flex items-center space-x-3 min-w-0">
+              <div className="flex items-stretch gap-3 min-w-0">
                 <div className="flex-1 min-w-0">
-                  <div className="bg-white border border-primary/40 rounded px-4 py-2 font-mono text-lg text-primary font-bold break-all">
-                    {race.joinCode || race.accessCode || 'No code available'}
+                  <div
+                    className={`flex items-center h-11 min-h-11 bg-white border border-primary/40 rounded px-3 overflow-hidden text-primary ${
+                      hasRaceCode
+                        ? 'font-mono text-base sm:text-lg font-bold tracking-wide'
+                        : 'text-[14px] sm:text-[15px] font-semibold tracking-normal'
+                    }`}
+                  >
+                    <span className="block w-full whitespace-nowrap overflow-hidden text-ellipsis">
+                      {hasRaceCode ? raceCode : 'No code available'}
+                    </span>
                   </div>
                 </div>
                 <button
+                  type="button"
                   onClick={async () => {
-                    const code = race.joinCode || race.accessCode;
-                    if (code) {
-                      const ok = await copyToClipboard(code);
-                      if (ok) {
-                        setCopied(true);
-                        setShowCopyNotification(true);
-                        setTimeout(() => setCopied(false), 2000);
-                        setTimeout(() => setShowCopyNotification(false), 3000);
-                      }
+                    if (!hasRaceCode) return;
+                    const ok = await copyToClipboard(raceCode);
+                    if (ok) {
+                      setCopied(true);
+                      setShowCopyNotification(true);
+                      setTimeout(() => setCopied(false), 2000);
+                      setTimeout(() => setShowCopyNotification(false), 3000);
                     }
                   }}
-                  className="px-3 py-2 min-h-11 shrink-0 bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors text-sm font-medium"
-                  disabled={!(race.joinCode || race.accessCode)}
+                  className="px-3 h-11 min-h-11 shrink-0 bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors text-sm font-medium disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-primary"
+                  disabled={!hasRaceCode}
                 >
                   {copied ? 'Copied!' : 'Copy Code'}
                 </button>
@@ -259,38 +278,56 @@ const SpaceRaceSettings = ({ race, onClose, onDelete, onUpdate }) => {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Quiz Duration (minutes)
+                      Quiz Duration
                     </label>
-                    <input
-                      type="number"
-                      min="1"
-                      max="120"
-                      value={settings.countdown / 60}
-                      onChange={(e) => setSettings({ ...settings, countdown: (parseInt(e.target.value) || 5) * 60 })}
-                      className={`w-full h-10 px-3 border rounded-lg ${
+                    <select
+                      value={settings.countdown}
+                      onChange={(e) =>
+                        setSettings({ ...settings, countdown: parseInt(e.target.value, 10) })
+                      }
+                      className={`w-full h-10 min-h-11 px-3 border rounded-lg ${
                         durationInvalid ? 'border-red-400 focus:ring-red-200 focus:border-red-500' : 'border-gray-300'
                       }`}
-                      placeholder="Enter quiz duration in minutes"
-                    />
+                    >
+                      {quizDurationOffList ? (
+                        <option value={currentCountdown}>
+                          {formatQuizDurationLabel(currentCountdown)}
+                        </option>
+                      ) : null}
+                      {SPACE_RACE_QUIZ_COUNTDOWNS.map((seconds) => (
+                        <option key={seconds} value={seconds}>
+                          {formatQuizDurationLabel(seconds)}
+                        </option>
+                      ))}
+                    </select>
                     <p className="text-xs text-gray-500 mt-1">
                       Time for quiz attempt
                     </p>
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Join Duration (minutes)
+                      Join Duration
                     </label>
-                    <input
-                      type="number"
-                      min="1"
-                      max="120"
+                    <select
                       value={settings.joinDuration}
-                      onChange={(e) => setSettings({ ...settings, joinDuration: parseInt(e.target.value) || 30 })}
-                      className={`w-full h-10 px-3 border rounded-lg ${
+                      onChange={(e) =>
+                        setSettings({ ...settings, joinDuration: parseInt(e.target.value, 10) })
+                      }
+                      className={`w-full h-10 min-h-11 px-3 border rounded-lg ${
                         durationInvalid ? 'border-red-400 focus:ring-red-200 focus:border-red-500' : 'border-gray-300'
                       }`}
-                      placeholder="Enter join duration in minutes"
-                    />
+                    >
+                      {joinDurationOffList ? (
+                        <option value={currentJoinDuration}>
+                          {formatJoinDurationLabel(currentJoinDuration)}
+                        </option>
+                      ) : null}
+                      {SPACE_RACE_JOIN_MINUTES.map((minutes) => (
+                        <option key={minutes} value={minutes}>
+                          {formatJoinDurationLabel(minutes)}
+                        </option>
+                      ))}
+                    </select>
                     <p className="text-xs text-gray-500 mt-1">
                       Time the audience can join
                     </p>

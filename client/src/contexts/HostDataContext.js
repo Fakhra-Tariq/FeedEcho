@@ -6,6 +6,8 @@ import { generateSessionCode } from '../utils/sessionCodeGenerator';
 import { useAuth } from './AuthContext';
 import { useHostRealtimeRevision } from './HostRealtimeSyncContext';
 import { normalizeSessionCurrentActivity } from '../utils/sessionActivityLabel';
+import { isQuizExpired } from '../utils/quizExpiry';
+import { autoFinishExpiredQuiz } from '../utils/quizAutoFinish';
 import { canAccessTeacherPortal, getActivePortal } from '../utils/userRoles';
 
 /** Map Firebase activeSession/singleton to HostDataContext.activeSession shape */
@@ -1053,6 +1055,21 @@ export const HostDataProvider = ({ children }) => {
       }
     };
   }, [isTeacherPortal, dataRevision, syncQuizzes, syncExitTickets, syncAnonymousChats, syncSpaceRaces]);
+
+  useEffect(() => {
+    if (!isTeacherPortal) return undefined;
+    const expired = (data.quizzes || []).filter((quiz) => isQuizExpired(quiz));
+    if (!expired.length) return undefined;
+    let cancelled = false;
+    expired.forEach((quiz) => {
+      void autoFinishExpiredQuiz(quiz).then((didFinish) => {
+        if (didFinish && !cancelled) void syncQuizzes();
+      });
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [isTeacherPortal, data.quizzes, syncQuizzes]);
 
   const value = useMemo(
     () => ({

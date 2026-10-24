@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Rocket, Edit, Trash2, Calendar, AlertTriangle, Copy, Flag, Clock, Lock, Plus } from 'lucide-react';
 import { useHybridAlert } from '../contexts/HybridAlertContext';
@@ -20,25 +20,11 @@ import {
   normalizeQuestionsForEditor,
   normalizeQuizTypeLabel,
 } from '../utils/quizQuestionNormalization';
+import { getQuizTimeRemaining, isQuizCurrentlyActive, isQuizExpired } from '../utils/quizExpiry';
+import { autoFinishExpiredQuiz } from '../utils/quizAutoFinish';
 
 function isHydratedQuizList(list) {
   return (list || []).some((quiz) => quiz.type || quiz.createdBy || quiz.launchSettings);
-}
-
-function getQuizTimeRemaining(quiz) {
-  if (!quiz.launched || !quiz.launchSettings?.endTime) {
-    return null;
-  }
-
-  const now = new Date();
-  const endTime = new Date(quiz.launchSettings.endTime);
-  const remaining = endTime.getTime() - now.getTime();
-
-  if (remaining <= 0) {
-    return 0;
-  }
-
-  return Math.floor(remaining / 1000);
 }
 
 function formatQuizTime(seconds) {
@@ -53,21 +39,22 @@ function formatQuizTime(seconds) {
 
 function QuizTimer({ quiz, onExpire }) {
   const [timeLeft, setTimeLeft] = useState(() => getQuizTimeRemaining(quiz));
-  const [isExpired, setIsExpired] = useState(() => getQuizTimeRemaining(quiz) === 0);
+  const expiredNotifiedRef = useRef(false);
 
   useEffect(() => {
-    const interval = setInterval(() => {
+    expiredNotifiedRef.current = false;
+    const tick = () => {
       const remaining = getQuizTimeRemaining(quiz);
       setTimeLeft(remaining);
-
-      if (remaining === 0 && !isExpired) {
-        setIsExpired(true);
+      if (remaining === 0 && !expiredNotifiedRef.current) {
+        expiredNotifiedRef.current = true;
         onExpire(quiz.id);
       }
-    }, 1000);
-
+    };
+    tick();
+    const interval = setInterval(tick, 1000);
     return () => clearInterval(interval);
-  }, [quiz, isExpired, onExpire]);
+  }, [quiz, onExpire]);
 
   if (timeLeft === null) {
     return null;
@@ -146,7 +133,16 @@ const QuizLibrary = () => {
     };
   }, [teacherUid, syncQuizzes]);
 
-  const finishQuiz = useCallback(async (quizId) => {
+  const finishQuiz = useCallback(async (quizId, { silent = false } = {}) => {
+    const quiz = savedQuizzes.find((q) => q.id === quizId);
+    if (silent) {
+      const didFinish = await autoFinishExpiredQuiz(quiz);
+      if (didFinish) {
+        await refreshQuizzes();
+        alert.toast.success('Quiz finished');
+      }
+      return;
+    }
     try {
       const res = await quizzesAPI.finish(quizId);
       if (res.data.success) {
@@ -157,26 +153,35 @@ const QuizLibrary = () => {
       const apiErr = handleAPIError(err);
       alert.toast.error(apiErr.message || 'Failed to finish quiz');
     }
-  }, [refreshQuizzes, alert]);
+  }, [savedQuizzes, refreshQuizzes, alert]);
 
-  const hasActiveQuiz = savedQuizzes.some((q) => {
-    const s = String(q.status || '').toLowerCase();
-    return q.launched && (s === 'launched' || s === 'active');
-  });
+  const onQuizExpire = useCallback(
+    (quizId) => {
+      finishQuiz(quizId, { silent: true });
+    },
+    [finishQuiz]
+  );
+
+  useEffect(() => {
+    savedQuizzes.forEach((quiz) => {
+      if (isQuizExpired(quiz)) {
+        finishQuiz(quiz.id, { silent: true });
+      }
+    });
+  }, [savedQuizzes, finishQuiz]);
+
+  const hasActiveQuiz = savedQuizzes.some((q) => isQuizCurrentlyActive(q));
 
   const quizStats = useMemo(() => {
     const total = savedQuizzes.length;
-    const active = savedQuizzes.filter((q) => {
-      const s = String(q.status || '').toLowerCase();
-      return q.launched && (s === 'launched' || s === 'active');
-    }).length;
+    const active = savedQuizzes.filter((q) => isQuizCurrentlyActive(q)).length;
     const ready = savedQuizzes.filter((q) => {
       const s = String(q.status || '').toLowerCase();
-      return !q.launched && (s === 'ready' || s === 'draft');
+      return !isQuizCurrentlyActive(q) && !isQuizExpired(q) && (s === 'ready' || s === 'draft' || !q.launched);
     }).length;
     const finished = savedQuizzes.filter((q) => {
       const s = String(q.status || '').toLowerCase();
-      return s === 'finished' || s === 'completed';
+      return isQuizExpired(q) || s === 'finished' || s === 'completed';
     }).length;
     return { total, active, ready, finished };
   }, [savedQuizzes]);
@@ -194,17 +199,14 @@ const QuizLibrary = () => {
       case 'ready':
         return filtered.filter((q) => {
           const s = String(q.status || '').toLowerCase();
-          return !q.launched && (s === 'ready' || s === 'draft');
+          return !isQuizCurrentlyActive(q) && !isQuizExpired(q) && (s === 'ready' || s === 'draft' || !q.launched);
         });
       case 'launched':
-        return filtered.filter((q) => {
-          const s = String(q.status || '').toLowerCase();
-          return q.launched && (s === 'launched' || s === 'active');
-        });
+        return filtered.filter((q) => isQuizCurrentlyActive(q));
       case 'finished':
         return filtered.filter((q) => {
           const s = String(q.status || '').toLowerCase();
-          return s === 'finished' || s === 'completed';
+          return isQuizExpired(q) || s === 'finished' || s === 'completed';
         });
       default:
         return filtered;
@@ -413,7 +415,14 @@ const QuizLibrary = () => {
             )}
             
             <div className="grid grid-cols-1 min-[481px]:grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-8">
-            {filteredQuizzes.map((quiz) => (
+            {filteredQuizzes.map((quiz) => {
+              const quizIsActive = isQuizCurrentlyActive(quiz);
+              const quizExpired = isQuizExpired(quiz);
+              const finishedLabel =
+                quizExpired ||
+                String(quiz.status || '').toLowerCase() === 'finished' ||
+                String(quiz.status || '').toLowerCase() === 'completed';
+              return (
               <div key={quiz.id} className="group bg-white/90 backdrop-blur-sm rounded-2xl shadow-lg hover:shadow-2xl border border-[#8E7CC3]/20 p-4 sm:p-8 transition-all duration-300 hover:scale-[1.02] max-w-full min-w-0">
                 {/* Quiz Header */}
                 <div className="flex items-start justify-between mb-4 gap-2">
@@ -423,13 +432,13 @@ const QuizLibrary = () => {
                     </h3>
                     <div className="flex flex-wrap items-center gap-2 text-sm">
                       <span className={`px-3 py-1 rounded-full text-xs font-semibold border ${
-                        quiz.status === 'Finished'
+                        finishedLabel
                           ? 'bg-gradient-to-r from-gray-100 to-gray-50 text-gray-700 border border-gray-300'
-                          : quiz.launched 
+                          : quizIsActive
                             ? 'bg-gradient-to-r from-blue-100 to-blue-50 text-blue-700 border border-blue-200'
                             : 'bg-gradient-to-r from-green-100 to-green-50 text-green-700 border border-green-200'
                       }`}>
-                        {quiz.status === 'Finished' ? 'Finished' : quiz.launched ? 'Launched' : (quiz.status === 'ready' || quiz.status === 'Ready') ? 'Ready' : quiz.status}
+                        {finishedLabel ? 'Finished' : quizIsActive ? 'Launched' : (quiz.status === 'ready' || quiz.status === 'Ready') ? 'Ready' : quiz.status}
                       </span>
                       <span className="bg-gradient-to-r from-[#8E7CC3]/20 to-[#6D415F]/10 text-[#6D415F] px-3 py-1 rounded-full text-xs font-semibold border border-[#8E7CC3]/30">
                         {quiz.type}
@@ -440,9 +449,9 @@ const QuizLibrary = () => {
                     </div>
                     
                     {/* Live Timer for Launched Quizzes */}
-                    {quiz.launched && quiz.launchSettings?.endTime && (
+                    {quizIsActive && quiz.launchSettings?.endTime && (
                       <div className="mt-3">
-                        <QuizTimer quiz={quiz} onExpire={finishQuiz} />
+                        <QuizTimer quiz={quiz} onExpire={onQuizExpire} />
                       </div>
                     )}
                   </div>
@@ -455,7 +464,7 @@ const QuizLibrary = () => {
                 </div>
 
                 {/* Access Code for Launched Quizzes */}
-                {quiz.launched && quiz.launchSettings && quiz.launchSettings.accessCode && (
+                {quizIsActive && quiz.launchSettings && quiz.launchSettings.accessCode && (
                   <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 mb-4">
                     <div className="flex items-center justify-between gap-2 min-w-0">
                       <div className="min-w-0">
@@ -466,13 +475,8 @@ const QuizLibrary = () => {
                       </div>
                       <button
                         onClick={() => copyAccessCode(quiz.launchSettings?.accessCode || '')}
-                        disabled={getQuizTimeRemaining(quiz) === 0}
-                        className={`min-h-11 min-w-11 inline-flex items-center justify-center p-2 rounded-lg transition-all duration-200 shrink-0 ${
-                          getQuizTimeRemaining(quiz) === 0
-                            ? 'bg-gray-200 text-gray-400 cursor-not-allowed'
-                            : 'bg-[#6D415F] text-white hover:bg-[#5A344D]'
-                        }`}
-                        title={getQuizTimeRemaining(quiz) === 0 ? 'Quiz expired - cannot copy code' : 'Copy access code'}
+                        className="min-h-11 min-w-11 inline-flex items-center justify-center p-2 rounded-lg transition-all duration-200 shrink-0 bg-[#6D415F] text-white hover:bg-[#5A344D]"
+                        title="Copy access code"
                       >
                         <Copy className="w-4 h-4" />
                       </button>
@@ -483,19 +487,14 @@ const QuizLibrary = () => {
                 {/* Quiz Actions */}
                 <div className="flex flex-col space-y-3">
                   {/* Primary Action Button */}
-                  {quiz.launched ? (
+                  {quizIsActive ? (
                     <button
                       onClick={() => finishQuiz(quiz.id)}
-                      disabled={getQuizTimeRemaining(quiz) === 0}
-                      className={`flex items-center justify-center space-x-2 min-h-11 px-4 py-3 rounded-xl transition-all duration-300 font-medium shadow-md hover:shadow-lg w-full ${
-                        getQuizTimeRemaining(quiz) === 0
-                          ? 'bg-gray-400 text-white cursor-not-allowed opacity-60'
-                          : 'bg-[#6D415F] text-white hover:bg-[#5A344D]'
-                      }`}
-                      title={getQuizTimeRemaining(quiz) === 0 ? 'Quiz already expired' : 'Finish quiz manually'}
+                      className="flex items-center justify-center space-x-2 min-h-11 px-4 py-3 rounded-xl transition-all duration-300 font-medium shadow-md hover:shadow-lg w-full bg-[#6D415F] text-white hover:bg-[#5A344D]"
+                      title="Finish quiz manually"
                     >
                       <Flag className="w-4 h-4 sm:w-5 sm:h-5" />
-                      <span>{getQuizTimeRemaining(quiz) === 0 ? 'Quiz Expired' : 'Finish Quiz'}</span>
+                      <span>Finish Quiz</span>
                     </button>
                   ) : hasActiveQuiz ? (
                     <button
@@ -539,7 +538,7 @@ const QuizLibrary = () => {
                 </div>
 
                 {/* Visual Placeholder for Blocked Quizzes */}
-                {hasActiveQuiz && !quiz.launched && (
+                {hasActiveQuiz && !quizIsActive && (
                   <div className="mt-6 pt-4 border-t border-gray-200">
                     <div className="text-center text-gray-400">
                       <div className="flex items-center justify-center space-x-2 mb-2">
@@ -551,7 +550,8 @@ const QuizLibrary = () => {
                   </div>
                 )}
               </div>
-            ))}
+              );
+            })}
             </div>
           </>
         )}

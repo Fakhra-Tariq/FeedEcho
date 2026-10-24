@@ -20,7 +20,10 @@ export default function SessionLaunchBanner({ className = '' }) {
   const sessionCode = String(activeSession?.joinCode || activeSession?.sessionCode || '')
     .trim()
     .toUpperCase();
-  const activeActivityLabel = getSessionActivityLabel(activeSession?.currentActivity);
+  const activeActivityLabel = getSessionActivityLabel(
+    activeSession?.currentActivity,
+    data?.quizzes
+  );
 
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showCreatedPopup, setShowCreatedPopup] = useState(false);

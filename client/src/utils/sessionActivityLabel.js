@@ -1,3 +1,5 @@
+import { isQuizCurrentlyActive } from './quizExpiry';
+
 /**
  * Normalize sessions/{id}.currentActivity (string or legacy object) for UI.
  * @returns {string|null} quiz | spacerace | exitticket | livechat
@@ -25,9 +27,18 @@ export function normalizeSessionCurrentActivity(value) {
  * Human-readable label for the Explore session bar.
  * @returns {string|null} e.g. "Active Quiz", or null when idle
  */
-export function getSessionActivityLabel(currentActivity) {
+export function getSessionActivityLabel(currentActivity, quizzes) {
   const kind = normalizeSessionCurrentActivity(currentActivity);
   if (!kind) return null;
+  if (kind === 'quiz' && Array.isArray(quizzes) && quizzes.length > 0) {
+    const launched = quizzes.filter((q) => {
+      const s = String(q?.status || '').toLowerCase();
+      return q?.launched === true || s === 'launched' || s === 'active';
+    });
+    if (launched.length > 0 && !launched.some((q) => isQuizCurrentlyActive(q))) {
+      return null;
+    }
+  }
 
   switch (kind) {
     case 'quiz':

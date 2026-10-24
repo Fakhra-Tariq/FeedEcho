@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { Send, MessageSquare, Users, AlertCircle } from 'lucide-react';
 import { useHybridAlert } from '../contexts/HybridAlertContext';
@@ -17,8 +17,43 @@ import {
   AUDIENCE_ACTIVITY_PAGE_WIDTH,
 } from '../components/Audience/AudienceActivityLayout';
 
+const normalizeChatDisplayName = (name) =>
+  String(name || '')
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, ' ');
+
+const currentChatJoinIdentity = () => {
+  const session = getStoredAudienceSession();
+  const uid = String(session?.uid || sessionStorage.getItem('studentUid') || '').trim();
+  const name =
+    (sessionStorage.getItem('studentName') || '').trim() ||
+    String(session?.name || '').trim();
+  return { uid: uid || null, name };
+};
+
+/**
+ * Guest identity is per (session code + display name) in this tab.
+ * Logged-in students are keyed by uid so we never inherit another guest's messages by name.
+ * Do not reuse the legacy `chatParticipant_${code}` key (shared across names).
+ */
+const chatParticipantStorageKey = (sessionCode, identity) => {
+  const code = String(sessionCode || '')
+    .trim()
+    .toUpperCase();
+  if (!code) return null;
+  if (identity?.uid) return `chatParticipant_${code}_uid_${identity.uid}`;
+  const nameKey = normalizeChatDisplayName(identity?.name);
+  if (!nameKey) return null;
+  return `chatParticipant_${code}_name_${nameKey}`;
+};
+
 const getOrCreateChatParticipantId = (sessionCode) => {
-  const storageKey = `chatParticipant_${sessionCode}`;
+  const identity = currentChatJoinIdentity();
+  const storageKey = chatParticipantStorageKey(sessionCode, identity);
+  if (!storageKey) {
+    return `student-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+  }
   let participantId = sessionStorage.getItem(storageKey);
   if (!participantId) {
     participantId = `student-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
@@ -42,8 +77,6 @@ const AudienceAnonymousChat = () => {
   const lastAutoJoinCodeRef = React.useRef(null);
   const [isSending, setIsSending] = useState(false);
   const [participantId, setParticipantId] = useState('');
-  const sentMessageIdsRef = useRef(new Set());
-  const [sentMessageVersion, setSentMessageVersion] = useState(0);
 
   useEffect(() => {
     const codeFromUrl = searchParams.get('code');
@@ -89,24 +122,26 @@ const AudienceAnonymousChat = () => {
   const visibleMessages = messages.filter((msg) => !msg.isHidden);
   const showActiveChat = Boolean(chatSession && !isChatEnded);
 
-  const ownSentIds = useMemo(
-    () => new Set(sentMessageIdsRef.current),
-    [sentMessageVersion]
-  );
-
   const isOwnStudentMessage = (msg) => {
     if (!msg || msg.isTeacher) return false;
-    if (ownSentIds.has(msg.id)) return true;
-    if (participantId && msg.participantId && String(msg.participantId) === String(participantId)) {
-      return true;
+    if (!participantId) return false;
+    if (msg.participantId) {
+      return String(msg.participantId) === String(participantId);
     }
+    // No stored sender identity — never guess (name-only would be unsafe).
     return false;
   };
+
+  const participantDisplayName =
+    (typeof window !== 'undefined' ? (sessionStorage.getItem('studentName') || '').trim() : '') ||
+    getStoredAudienceSession()?.name ||
+    'Audience';
+  const loggedInUid = getStoredAudienceSession()?.uid || '';
 
   useEffect(() => {
     if (!normalizedCode) return;
     setParticipantId(getOrCreateChatParticipantId(normalizedCode));
-  }, [normalizedCode]);
+  }, [normalizedCode, participantDisplayName, loggedInUid]);
 
   useEffect(() => {
     if (isChatEnded && chatSession) {
@@ -212,9 +247,6 @@ const AudienceAnonymousChat = () => {
       if (!response.data.success) {
         const errorText = response.data.error || 'Failed to send message';
         alert.toast.error(errorText);
-      } else if (response.data.data?.id) {
-        sentMessageIdsRef.current.add(response.data.data.id);
-        setSentMessageVersion((n) => n + 1);
       }
     } catch (error) {
       const errorText =
@@ -228,10 +260,6 @@ const AudienceAnonymousChat = () => {
   };
 
   const showJoinForm = !showActiveChat;
-  const participantDisplayName =
-    (typeof window !== 'undefined' ? (sessionStorage.getItem('studentName') || '').trim() : '') ||
-    getStoredAudienceSession()?.name ||
-    'Audience';
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-orange-50 via-white to-purple-50 overflow-x-hidden max-w-full">

@@ -1,5 +1,6 @@
 const { db } = require('../config/firebase');
 const sessionManager = require('./sessionManager');
+const { isQuizExpired } = require('./quizExpiry');
 const {
   findActiveStandaloneSessionForTeacher,
   repairActiveSessionSingleton,
@@ -227,6 +228,7 @@ async function isSessionActivityStillLive(session) {
     if (status === 'ready' || status === 'ended' || status === 'finished' || status === 'archived') {
       return false;
     }
+    if (isQuizExpired(quiz)) return false;
     return quiz.launched === true || status === 'launched' || status === 'active';
   }
 
@@ -388,6 +390,9 @@ async function prepareActivityLaunch(activityType, activityId = null, teacherId 
 
   // Keep this teacher's pointer in sync (never touches other teachers).
   await repairActiveSessionSingleton(teacherId, teacherSession.sessionId);
+
+  const { finishExpiredQuizzesForTeacher } = require('./finishLaunchedQuiz');
+  await finishExpiredQuizzesForTeacher(teacherId);
 
   const canLaunch = await assertSessionCanLaunchActivity(
     teacherSession.sessionId,
