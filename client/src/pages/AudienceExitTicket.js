@@ -6,6 +6,13 @@ import { useAuth } from '../contexts/AuthContext';
 import { auth } from '../firebase';
 import { exitTicketsAPI, studentsAPI } from '../services/api';
 import { getStoredAudienceSession, getStudentQueryParams } from '../utils/audienceSession';
+import GuestProgressLoginBanner from '../components/Audience/GuestProgressLoginBanner';
+import {
+  AudienceActivityHeader,
+  AudienceActivityContent,
+  AudienceActivityCard,
+  AUDIENCE_ACTIVITY_PAGE_WIDTH,
+} from '../components/Audience/AudienceActivityLayout';
 
 const resolveLoggedInUid = (user, userProfile) =>
   String(
@@ -23,13 +30,6 @@ const activityHasExitTicket = (items, ticketId) =>
       String(item.type || '') === 'exitTicket' &&
       String(item.ticketId || '') === String(ticketId)
   );
-import GuestProgressLoginBanner from '../components/Audience/GuestProgressLoginBanner';
-import {
-  AudienceActivityHeader,
-  AudienceActivityContent,
-  AudienceActivityCard,
-  AUDIENCE_ACTIVITY_PAGE_WIDTH,
-} from '../components/Audience/AudienceActivityLayout';
 
 const AudienceExitTicket = () => {
   const navigate = useNavigate();
