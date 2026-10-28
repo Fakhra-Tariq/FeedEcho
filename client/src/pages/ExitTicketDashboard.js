@@ -4,6 +4,8 @@ import { Plus, Play, Square, Eye, Users, FileText, X, BarChart3, CheckCircle, Co
 import { useHybridAlert } from '../contexts/HybridAlertContext';
 import { exitTicketsAPI } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
+import { onValue, ref as dbRef } from 'firebase/database';
+import { db } from '../firebase';
 import { useRtdbList, useRtdbValue } from '../hooks/useRtdb';
 import { useHostData } from '../contexts/HostDataContext';
 import InfoRecap from '../components/Host/InfoRecap';
@@ -50,6 +52,41 @@ const TICKETS_PAGE_SIZE = 5;
 
 function displayTicketStatus(status) {
   return status === 'archived' ? 'ended' : status;
+}
+
+function useExitTicketResponseCounts(ticketIds, enabled) {
+  const [counts, setCounts] = useState({});
+  const idsKey = (ticketIds || []).slice().sort().join('|');
+
+  useEffect(() => {
+    if (!enabled || !ticketIds?.length) {
+      setCounts({});
+      return undefined;
+    }
+
+    const unsubscribers = ticketIds.map((id) => {
+      const r = dbRef(db, `exit_responses/${id}`);
+      const unsub = onValue(r, (snap) => {
+        const val = snap.exists() ? snap.val() : null;
+        const n =
+          val && typeof val === 'object' ? Object.keys(val).length : 0;
+        setCounts((prev) => (prev[id] === n ? prev : { ...prev, [id]: n }));
+      });
+      return unsub;
+    });
+
+    return () => {
+      unsubscribers.forEach((unsub) => {
+        try {
+          unsub();
+        } catch {
+          // ignore
+        }
+      });
+    };
+  }, [enabled, idsKey]);
+
+  return counts;
 }
 
 function ticketListSignature(list) {
@@ -232,6 +269,9 @@ export default function ExitTicketDashboard() {
 
   const isLoadingView =
     isLoading && tickets.length === 0;
+
+  const ticketIds = useMemo(() => tickets.map((t) => t.id).filter(Boolean), [tickets]);
+  const liveResponseCounts = useExitTicketResponseCounts(ticketIds, Boolean(uid));
 
   const { list: liveResponses, loading: liveResponsesLoading, error: liveResponsesError } = useRtdbList(
     viewingResponses ? `exit_responses/${viewingResponses}` : null,
@@ -668,7 +708,12 @@ export default function ExitTicketDashboard() {
                 </div>
                 <div className="flex items-center space-x-1">
                   <Users className="w-4 h-4" />
-                  <span>{ticket.responsesCount || 0} responses</span>
+                  <span>
+                    {(liveResponseCounts[ticket.id] != null
+                      ? liveResponseCounts[ticket.id]
+                      : ticket.responsesCount || 0)}{' '}
+                    responses
+                  </span>
                 </div>
               </div>
 

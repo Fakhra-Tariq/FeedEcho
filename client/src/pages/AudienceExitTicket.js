@@ -2,8 +2,27 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { ArrowLeft, Send, CheckCircle } from 'lucide-react';
 import { useHybridAlert } from '../contexts/HybridAlertContext';
+import { useAuth } from '../contexts/AuthContext';
+import { auth } from '../firebase';
 import { exitTicketsAPI, studentsAPI } from '../services/api';
 import { getStoredAudienceSession, getStudentQueryParams } from '../utils/audienceSession';
+
+const resolveLoggedInUid = (user, userProfile) =>
+  String(
+    user?.uid ||
+      userProfile?.uid ||
+      auth.currentUser?.uid ||
+      getStoredAudienceSession()?.uid ||
+      sessionStorage.getItem('studentUid') ||
+      ''
+  ).trim();
+
+const activityHasExitTicket = (items, ticketId) =>
+  (Array.isArray(items) ? items : []).some(
+    (item) =>
+      String(item.type || '') === 'exitTicket' &&
+      String(item.ticketId || '') === String(ticketId)
+  );
 import GuestProgressLoginBanner from '../components/Audience/GuestProgressLoginBanner';
 import {
   AudienceActivityHeader,
@@ -16,6 +35,8 @@ const AudienceExitTicket = () => {
   const navigate = useNavigate();
   const { joinCode } = useParams();
   const { alert } = useHybridAlert();
+  const { user, userProfile, loading: authLoading } = useAuth();
+  const accountUid = resolveLoggedInUid(user, userProfile);
 
   const [exitTicket, setExitTicket] = useState(null);
   const [answers, setAnswers] = useState({});
@@ -24,42 +45,54 @@ const AudienceExitTicket = () => {
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
+    setIsSubmitted(false);
+    setIsLoading(true);
+  }, [joinCode]);
+
+  useEffect(() => {
+    if (!joinCode) return undefined;
+    if (authLoading) {
+      setIsLoading(true);
+      return undefined;
+    }
+
+    let cancelled = false;
+
     const fetchExitTicket = async () => {
       try {
         setIsLoading(true);
         console.log('Student join code:', joinCode);
-        
+
         const response = await exitTicketsAPI.getByCode(joinCode);
-        
+
+        if (cancelled) return;
+
         if (response.data.success) {
           setExitTicket(response.data.data);
           console.log('Fetched exit ticket:', response.data.data);
-          
-          // Initialize answers object
+
           const initialAnswers = {};
           response.data.data.questions?.forEach((question, index) => {
             initialAnswers[index] = '';
           });
           setAnswers(initialAnswers);
 
-          // Same check as Mobile getMyParticipation: GET /students/activity
-          // matches exit_responses by studentUid (not response content).
-          const loggedInAudience = getStoredAudienceSession();
-          const uid = loggedInAudience?.uid ? String(loggedInAudience.uid).trim() : '';
+          // Same as Mobile getMyParticipation: GET /students/activity by auth uid.
+          const uid = resolveLoggedInUid(user, userProfile);
           const ticketId = String(response.data.data.id || '').trim();
           if (uid && ticketId) {
             try {
+              const session = getStoredAudienceSession() || {};
               const activityRes = await studentsAPI.getActivity({
-                ...getStudentQueryParams(loggedInAudience),
+                ...getStudentQueryParams({
+                  uid,
+                  email: user?.email || userProfile?.email || session.email || '',
+                  name: session.name || userProfile?.displayName || '',
+                }),
                 limit: 200,
               });
-              const items = Array.isArray(activityRes.data?.data) ? activityRes.data.data : [];
-              const alreadySubmitted = items.some(
-                (item) =>
-                  String(item.type || '') === 'exitTicket' &&
-                  String(item.ticketId || '') === ticketId
-              );
-              if (alreadySubmitted) {
+              if (cancelled) return;
+              if (activityHasExitTicket(activityRes.data?.data, ticketId)) {
                 setIsSubmitted(true);
               }
             } catch {
@@ -71,18 +104,20 @@ const AudienceExitTicket = () => {
           navigate('/audience/join');
         }
       } catch (error) {
+        if (cancelled) return;
         console.error('Error fetching exit ticket:', error);
         alert.toast.error('Failed to load exit ticket');
         navigate('/audience/join');
       } finally {
-        setIsLoading(false);
+        if (!cancelled) setIsLoading(false);
       }
     };
 
-    if (joinCode) {
-      fetchExitTicket();
-    }
-  }, [joinCode, navigate, alert]);
+    fetchExitTicket();
+    return () => {
+      cancelled = true;
+    };
+  }, [joinCode, authLoading, accountUid, user, userProfile, navigate, alert]);
 
   const handleAnswerChange = (questionIndex, value) => {
     setAnswers(prev => ({
@@ -110,21 +145,19 @@ const AudienceExitTicket = () => {
       return;
     }
 
-    const loggedInBeforeSubmit = getStoredAudienceSession();
-    const submitUid = loggedInBeforeSubmit?.uid ? String(loggedInBeforeSubmit.uid).trim() : '';
+    const submitUid = resolveLoggedInUid(user, userProfile);
     if (submitUid && exitTicket?.id) {
       try {
+        const session = getStoredAudienceSession() || {};
         const activityRes = await studentsAPI.getActivity({
-          ...getStudentQueryParams(loggedInBeforeSubmit),
+          ...getStudentQueryParams({
+            uid: submitUid,
+            email: user?.email || userProfile?.email || session.email || '',
+            name: session.name || '',
+          }),
           limit: 200,
         });
-        const items = Array.isArray(activityRes.data?.data) ? activityRes.data.data : [];
-        const alreadySubmitted = items.some(
-          (item) =>
-            String(item.type || '') === 'exitTicket' &&
-            String(item.ticketId || '') === String(exitTicket.id)
-        );
-        if (alreadySubmitted) {
+        if (activityHasExitTicket(activityRes.data?.data, exitTicket.id)) {
           setIsSubmitted(true);
           return;
         }
@@ -143,12 +176,15 @@ const AudienceExitTicket = () => {
       }));
 
       const loggedInAudience = getStoredAudienceSession();
+      const submitAccountUid = resolveLoggedInUid(user, userProfile);
       const responseData = {
         ticketId: exitTicket.id,
         studentName: joinedName,
         answers: formattedAnswers,
-        ...(loggedInAudience?.uid ? { studentUid: loggedInAudience.uid } : {}),
-        ...(loggedInAudience?.email ? { studentEmail: loggedInAudience.email } : {}),
+        ...(submitAccountUid ? { studentUid: submitAccountUid } : {}),
+        ...(loggedInAudience?.email || user?.email
+          ? { studentEmail: loggedInAudience?.email || user?.email }
+          : {}),
       };
 
       console.log('Submitting response:', responseData);
@@ -336,6 +372,7 @@ const AudienceExitTicket = () => {
         title={exitTicket?.title}
         participantName={participantDisplayName}
         trueCenterTitle
+        showLoggedInLogoutMenu
       />
 
       <GuestProgressLoginBanner

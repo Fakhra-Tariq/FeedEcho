@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { ArrowLeft, Clock, Send, CheckCircle, AlertCircle, ChevronRight } from 'lucide-react';
 import { useHybridAlert } from '../contexts/HybridAlertContext';
 import { spaceRacesAPI } from '../services/api';
@@ -56,6 +56,7 @@ const AudienceQuizAttempt = ({
   const { quizId: paramQuizId } = useParams();
   const effectiveQuizId = spaceRaceQuizId || paramQuizId;
   const navigate = useNavigate();
+  const location = useLocation();
   const [quiz, setQuiz] = useState(null);
   const [currentQuestion, setCurrentQuestion] = useState(0);
   const [answers, setAnswers] = useState({});
@@ -716,15 +717,19 @@ const AudienceQuizAttempt = ({
           }
 
           if (
-            foundQuiz.launchSettings?.oneAttempt &&
+            location.state?.showCompletedResult ||
+            (foundQuiz.launchSettings?.oneAttempt &&
             hasLocalQuizSubmission(paramQuizId, {
               participantId: session.participantId,
               studentUid: session.studentUid,
               studentEmail: session.studentEmail,
               studentName: session.studentName,
-            })
+            }))
           ) {
-            setError('You have already completed this quiz.');
+            let quizToUse = normalizeQuizForClient({ ...foundQuiz, launched: true });
+            quizToUse = applyQuizShuffleSettings(quizToUse, session.participantId);
+            setQuiz(quizToUse);
+            setIsSubmitted(true);
             return;
           }
 
@@ -792,6 +797,7 @@ const AudienceQuizAttempt = ({
     spaceRaceParticipant?.teamId,
     navigate,
     isSpaceRaceRoute,
+    location.state?.showCompletedResult,
   ]);
 
   useEffect(() => {
@@ -862,6 +868,18 @@ const AudienceQuizAttempt = ({
     quizStartedAtRef.current = startedAt;
   }, [quiz?.id, isSubmitted]);
 
+  // Seed endTime from Start Quiz immediately (do not wait for RTDB — phone header
+  // otherwise stays hidden until refresh).
+  useEffect(() => {
+    if (!isSpaceRace) return;
+    try {
+      const stored = localStorage.getItem('spaceRaceEndTime');
+      if (stored) setTeamQuizEndTime((prev) => prev || stored);
+    } catch {
+      // ignore
+    }
+  }, [isSpaceRace, raceId, teamId]);
+
   // Listen to team-specific quiz timer for real-time updates
   useEffect(() => {
     if (!isSpaceRace || !raceId || !teamId) return;
@@ -876,10 +894,18 @@ const AudienceQuizAttempt = ({
           setTeamQuizEndTime(data.endTime);
           localStorage.setItem('spaceRaceEndTime', data.endTime);
         } else {
-          setTeamQuizEndTime(null);
+          try {
+            if (!localStorage.getItem('spaceRaceEndTime')) setTeamQuizEndTime(null);
+          } catch {
+            setTeamQuizEndTime(null);
+          }
         }
       } else {
-        setTeamQuizEndTime(null);
+        try {
+          if (!localStorage.getItem('spaceRaceEndTime')) setTeamQuizEndTime(null);
+        } catch {
+          setTeamQuizEndTime(null);
+        }
       }
     };
 
@@ -910,12 +936,20 @@ const AudienceQuizAttempt = ({
 
   useEffect(() => {
     if (!isSpaceRace || isSubmitted) return undefined;
-    if (!spaceRaceQuizDurationLimited || !teamQuizEndTime) {
+    let endIso = teamQuizEndTime;
+    if (!endIso) {
+      try {
+        endIso = localStorage.getItem('spaceRaceEndTime');
+      } catch {
+        endIso = null;
+      }
+    }
+    if (!spaceRaceQuizDurationLimited || !endIso) {
       setTimeLeft(null);
       return undefined;
     }
     const tick = () => {
-      const remaining = remainingSecondsUntil(teamQuizEndTime, Date.now() + serverTimeOffset);
+      const remaining = remainingSecondsUntil(endIso, Date.now() + serverTimeOffset);
       if (remaining == null) {
         setTimeLeft(null);
         return;
@@ -925,7 +959,17 @@ const AudienceQuizAttempt = ({
     };
     tick();
     const timer = setInterval(tick, 1000);
-    return () => clearInterval(timer);
+    const onWake = () => {
+      if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return;
+      tick();
+    };
+    document.addEventListener('visibilitychange', onWake);
+    window.addEventListener('focus', onWake);
+    return () => {
+      clearInterval(timer);
+      document.removeEventListener('visibilitychange', onWake);
+      window.removeEventListener('focus', onWake);
+    };
   }, [
     isSpaceRace,
     isSubmitted,
@@ -2357,6 +2401,7 @@ const AudienceQuizAttempt = ({
         title={quiz.title}
         badge={quiz.type}
         participantName={studentSession?.studentName || 'Audience'}
+        showLoggedInLogoutMenu
       >
           {/* Duration notice + single live countdown (header shows Duration label only) */}
           {(!isSpaceRace && (quiz.launchSettings && (quiz.launchSettings.timePerStudentMinutes || quiz.launchSettings.quizAvailabilityMinutes || quiz.launchSettings.timeLimit || quiz.launchSettings.countdown))) && (

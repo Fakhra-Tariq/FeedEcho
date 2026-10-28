@@ -1,6 +1,7 @@
 import React from 'react';
 import { Users } from 'lucide-react';
 import AudienceAvatar from '../AudienceAvatar';
+import AudienceHeaderLogoutMenu from './AudienceHeaderLogoutMenu';
 import { useAuth } from '../../contexts/AuthContext';
 import { getStoredAudienceSession } from '../../utils/audienceSession';
 
@@ -18,6 +19,7 @@ export function AudienceActivityHeader({
   children,
   className = '',
   showAvatar = false,
+  showLoggedInLogoutMenu = false,
   compactMobileZones = false,
   trueCenterTitle = false,
   leftAlignMobileTitle = false,
@@ -67,12 +69,15 @@ export function AudienceActivityHeader({
     </div>
   );
 
-  const identity = (
-    <>
-      {mobileIdentity}
-      {desktopIdentity}
-    </>
-  );
+  const identity =
+    showLoggedInLogoutMenu && isLoggedInAudience ? (
+      <AudienceHeaderLogoutMenu displayName={participantName} />
+    ) : (
+      <>
+        {mobileIdentity}
+        {desktopIdentity}
+      </>
+    );
 
   const titleContent = (
     <>

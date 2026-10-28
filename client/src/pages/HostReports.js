@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { equalTo, off, onValue, orderByChild, query, ref as dbRef } from 'firebase/database';
 import clsx from 'clsx';
 import {
@@ -38,6 +38,8 @@ import {
 } from '../utils/hostQuizReports';
 
 const PASS_THRESHOLD = 60;
+/** Modal history key. Desktop vs phone Back-link visibility uses Tailwind `md` (768px), same as this page's list. */
+const REPORT_MODAL_HISTORY_KEY = 'feQuizReportModal';
 
 const normalizeListStatus = (status) => {
   let normalizedStatus = status;
@@ -364,6 +366,13 @@ export default function HostReports() {
   const [deleteConfirmQuizId, setDeleteConfirmQuizId] = useState(null);
   const [deleting, setDeleting] = useState(false);
 
+  const modalDepthRef = useRef(0);
+  const ignorePopRef = useRef(false);
+  const quizReportsRef = useRef([]);
+  const launchHistoryRef = useRef([]);
+  const selectedReportRef = useRef(null);
+  const selectedLaunchRef = useRef(null);
+
   const quizIds = useMemo(() => quizzes.map((q) => q.id).filter(Boolean), [quizzes]);
 
   const { submissionsByQuizId, participantsByQuizId, ready: listenersReady } =
@@ -446,6 +455,67 @@ export default function HostReports() {
     return quizReports.filter((r) => (r.quiz.title || '').toLowerCase().includes(term));
   }, [quizReports, searchTerm]);
 
+  quizReportsRef.current = quizReports;
+  launchHistoryRef.current = launchHistory;
+  selectedReportRef.current = selectedReport;
+  selectedLaunchRef.current = selectedLaunch;
+
+  const resetReportModalState = useCallback(() => {
+    setSelectedReport(null);
+    setSelectedLaunch(null);
+    setLaunchHistory([]);
+    setSelectedSubmission(null);
+    setReportModalView(null);
+  }, []);
+
+  const pushReportModalHistory = useCallback((level, extra = {}) => {
+    const depth = modalDepthRef.current + 1;
+    modalDepthRef.current = depth;
+    const payload = {
+      depth,
+      level,
+      quizId: extra.quizId || selectedReportRef.current?.quiz?.id || null,
+      launchId: extra.launchId || null,
+      participantId: extra.participantId || null,
+    };
+    window.history.pushState(
+      { ...(window.history.state || {}), [REPORT_MODAL_HISTORY_KEY]: payload },
+      ''
+    );
+  }, []);
+
+  const applyReportModalHistory = useCallback((payload) => {
+    if (!payload?.level) {
+      modalDepthRef.current = 0;
+      resetReportModalState();
+      return;
+    }
+    modalDepthRef.current = Number(payload.depth) || 1;
+    const report =
+      quizReportsRef.current.find((r) => String(r.quiz.id) === String(payload.quizId)) ||
+      selectedReportRef.current;
+    if (report) setSelectedReport(report);
+    setReportModalView(payload.level);
+    if (payload.level === 'launches') {
+      setSelectedLaunch(null);
+      setSelectedSubmission(null);
+      return;
+    }
+    const launches = launchHistoryRef.current;
+    const launch =
+      launches.find((l) => String(l.id) === String(payload.launchId)) ||
+      selectedLaunchRef.current;
+    setSelectedLaunch(launch || null);
+    if (payload.level === 'participants') {
+      setSelectedSubmission(null);
+      return;
+    }
+    const submission = (launch?.submissions || []).find(
+      (s) => String(s.participantId) === String(payload.participantId)
+    );
+    setSelectedSubmission(submission || null);
+  }, [resetReportModalState]);
+
   const openQuizReport = useCallback(
     async (report) => {
       setSelectedReport(report);
@@ -454,6 +524,7 @@ export default function HostReports() {
       setLaunchHistory([]);
       setReportModalView('launches');
       setLoadingReportDetail(true);
+      pushReportModalHistory('launches', { quizId: report.quiz.id });
 
       try {
         const response = await quizSubmissionsAPI.getResults(report.quiz.id);
@@ -487,33 +558,86 @@ export default function HostReports() {
         setLoadingReportDetail(false);
       }
     },
-    [participantsByQuizId, submissionsByQuizId]
+    [participantsByQuizId, pushReportModalHistory, submissionsByQuizId]
   );
 
   const openLaunchReport = useCallback((launch) => {
     setSelectedLaunch(launch);
     setSelectedSubmission(null);
     setReportModalView('participants');
-  }, []);
+    pushReportModalHistory('participants', {
+      quizId: selectedReportRef.current?.quiz?.id,
+      launchId: launch.id,
+    });
+  }, [pushReportModalHistory]);
+
+  const openSubmissionDetail = useCallback((submission) => {
+    setSelectedSubmission(submission);
+    setReportModalView('detail');
+    pushReportModalHistory('detail', {
+      quizId: selectedReportRef.current?.quiz?.id,
+      launchId: selectedLaunchRef.current?.id,
+      participantId: submission.participantId,
+    });
+  }, [pushReportModalHistory]);
 
   const closeReportModal = useCallback(() => {
-    setSelectedReport(null);
-    setSelectedLaunch(null);
-    setLaunchHistory([]);
-    setSelectedSubmission(null);
-    setReportModalView(null);
-  }, []);
+    const depth = modalDepthRef.current;
+    resetReportModalState();
+    if (depth > 0) {
+      ignorePopRef.current = true;
+      modalDepthRef.current = 0;
+      window.history.go(-depth);
+    }
+  }, [resetReportModalState]);
 
   const backToLaunches = useCallback(() => {
+    if (modalDepthRef.current > 0) {
+      window.history.back();
+      return;
+    }
     setSelectedLaunch(null);
     setSelectedSubmission(null);
     setReportModalView('launches');
   }, []);
 
   const backToParticipants = useCallback(() => {
+    if (modalDepthRef.current > 0) {
+      window.history.back();
+      return;
+    }
     setSelectedSubmission(null);
     setReportModalView('participants');
   }, []);
+
+  useEffect(() => {
+    const state = window.history.state;
+    if (state && state[REPORT_MODAL_HISTORY_KEY]) {
+      const rest = { ...state };
+      delete rest[REPORT_MODAL_HISTORY_KEY];
+      window.history.replaceState(rest, '');
+    }
+  }, []);
+
+  useEffect(() => {
+    const onPopState = (event) => {
+      if (ignorePopRef.current) {
+        ignorePopRef.current = false;
+        return;
+      }
+      const payload = event.state?.[REPORT_MODAL_HISTORY_KEY];
+      if (payload?.level) {
+        applyReportModalHistory(payload);
+        return;
+      }
+      if (modalDepthRef.current > 0) {
+        modalDepthRef.current = 0;
+        resetReportModalState();
+      }
+    };
+    window.addEventListener('popstate', onPopState);
+    return () => window.removeEventListener('popstate', onPopState);
+  }, [applyReportModalHistory, resetReportModalState]);
 
   useEffect(() => {
     if (!selectedReport?.quiz?.id || !reportModalView) return;
@@ -824,7 +948,7 @@ export default function HostReports() {
                     <button
                       type="button"
                       onClick={backToParticipants}
-                      className="inline-flex items-center gap-1 text-sm text-primary hover:underline mb-2"
+                      className="md:hidden inline-flex items-center gap-1 text-sm text-primary hover:underline mb-2"
                     >
                       <ArrowLeft className="w-4 h-4" />
                       Back to participants
@@ -874,7 +998,7 @@ export default function HostReports() {
                     <button
                       type="button"
                       onClick={backToLaunches}
-                      className="inline-flex items-center gap-1 text-sm text-primary hover:underline mb-2"
+                      className="md:hidden inline-flex items-center gap-1 text-sm text-primary hover:underline mb-2"
                     >
                       <ArrowLeft className="w-4 h-4" />
                       Back to launch history
@@ -966,10 +1090,7 @@ export default function HostReports() {
                                 {submitted && (
                                   <button
                                     type="button"
-                                    onClick={() => {
-                                      setSelectedSubmission(submission);
-                                      setReportModalView('detail');
-                                    }}
+                                    onClick={() => openSubmissionDetail(submission)}
                                     className="inline-flex items-center justify-center gap-1.5 min-h-11 px-3 py-2 text-sm font-medium bg-primary text-white rounded-lg hover:bg-[#5A344D] transition-colors"
                                   >
                                     <Eye className="w-4 h-4" />

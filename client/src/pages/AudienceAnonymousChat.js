@@ -5,6 +5,8 @@ import { useHybridAlert } from '../contexts/HybridAlertContext';
 import { anonymousChatAPI } from '../services/api';
 import { useRtdbList, useRtdbValue, RTDB_EMPTY_LIST } from '../hooks/useRtdb';
 import { toParticipantCount } from '../utils/toParticipantCount';
+import { useAuth } from '../contexts/AuthContext';
+import { auth } from '../firebase';
 import { getStoredAudienceSession } from '../utils/audienceSession';
 import ChatMessageBubble from '../components/Chat/ChatMessageBubble';
 import GuestProgressLoginBanner, {
@@ -23,9 +25,18 @@ const normalizeChatDisplayName = (name) =>
     .toLowerCase()
     .replace(/\s+/g, ' ');
 
-const currentChatJoinIdentity = () => {
+const readAccountUid = (authUidFromContext) => {
+  const fromAuth = String(authUidFromContext || auth.currentUser?.uid || '').trim();
+  if (fromAuth) return fromAuth;
   const session = getStoredAudienceSession();
-  const uid = String(session?.uid || sessionStorage.getItem('studentUid') || '').trim();
+  const fromSession = String(session?.uid || '').trim();
+  if (fromSession) return fromSession;
+  return String(sessionStorage.getItem('studentUid') || '').trim();
+};
+
+const currentChatJoinIdentity = (accountUid) => {
+  const session = getStoredAudienceSession();
+  const uid = String(accountUid || readAccountUid() || '').trim();
   const name =
     (sessionStorage.getItem('studentName') || '').trim() ||
     String(session?.name || '').trim();
@@ -48,11 +59,11 @@ const chatParticipantStorageKey = (sessionCode, identity) => {
   return `chatParticipant_${code}_name_${nameKey}`;
 };
 
-const getOrCreateChatParticipantId = (sessionCode) => {
-  const identity = currentChatJoinIdentity();
-  // Logged-in: stable account uid so the same student matches across devices.
+const getOrCreateChatParticipantId = (sessionCode, accountUid) => {
+  const identity = currentChatJoinIdentity(accountUid);
+  // Logged-in: Firebase auth uid on every device. Never mint a per-browser guest id.
   if (identity?.uid) return identity.uid;
-  const storageKey = chatParticipantStorageKey(sessionCode, identity);
+  const storageKey = chatParticipantStorageKey(sessionCode, { name: identity.name });
   if (!storageKey) {
     return `student-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
   }
@@ -64,10 +75,10 @@ const getOrCreateChatParticipantId = (sessionCode) => {
   return participantId;
 };
 
-/** Per-browser random id from the guest-identity fix; used only to keep this device's old bubbles. */
+/** This-tab guest id (name-keyed). Used only for old bubbles sent before uid-as-participantId. */
 const getLegacyStoredParticipantId = (sessionCode) => {
   const identity = currentChatJoinIdentity();
-  const storageKey = chatParticipantStorageKey(sessionCode, identity);
+  const storageKey = chatParticipantStorageKey(sessionCode, { name: identity.name });
   if (!storageKey) return '';
   return sessionStorage.getItem(storageKey) || '';
 };
@@ -79,6 +90,8 @@ const AudienceAnonymousChat = () => {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const { alert } = useHybridAlert();
+  const { user, userProfile } = useAuth();
+  const accountUid = readAccountUid(user?.uid || userProfile?.uid);
   const [sessionCode, setSessionCode] = useState('');
   const [message, setMessage] = useState('');
   const [isJoining, setIsJoining] = useState(false);
@@ -138,20 +151,21 @@ const AudienceAnonymousChat = () => {
     getStoredAudienceSession()?.name ||
     'Audience';
   const loggedInAudience = getStoredAudienceSession();
-  const loggedInUid = loggedInAudience?.uid || '';
-  const isLoggedInStudent = Boolean(loggedInUid && loggedInAudience?.email);
+  const isLoggedInStudent = Boolean(accountUid && (loggedInAudience?.email || user?.email || userProfile?.email));
 
   const isOwnStudentMessage = (msg) => {
     if (!msg || msg.isTeacher) return false;
     const stored = String(msg.participantId || '');
     if (!stored) return false;
-    // Logged-in account (same uid on every device). Never match by display name.
-    if (loggedInUid && stored === String(loggedInUid)) return true;
+    // Logged-in: only the account uid (same on every device). Never match by display name.
+    if (accountUid && stored === String(accountUid)) return true;
+    if (accountUid) {
+      const legacy = getLegacyStoredParticipantId(normalizedCode);
+      return Boolean(legacy && stored === String(legacy));
+    }
     if (participantId && stored === String(participantId)) return true;
-    // Same-device messages sent before uid-as-participantId.
     const legacy = getLegacyStoredParticipantId(normalizedCode);
-    if (legacy && stored === String(legacy)) return true;
-    return false;
+    return Boolean(legacy && stored === String(legacy));
   };
 
   const handleLeave = () => {
@@ -160,8 +174,8 @@ const AudienceAnonymousChat = () => {
 
   useEffect(() => {
     if (!normalizedCode) return;
-    setParticipantId(getOrCreateChatParticipantId(normalizedCode));
-  }, [normalizedCode, participantDisplayName, loggedInUid]);
+    setParticipantId(getOrCreateChatParticipantId(normalizedCode, accountUid));
+  }, [normalizedCode, participantDisplayName, accountUid]);
 
   useEffect(() => {
     if (isChatEnded && chatSession) {
@@ -215,7 +229,7 @@ const AudienceAnonymousChat = () => {
     setJoinError('');
 
     try {
-      const nextParticipantId = getOrCreateChatParticipantId(codeToUse);
+      const nextParticipantId = getOrCreateChatParticipantId(codeToUse, accountUid);
       setParticipantId(nextParticipantId);
 
       const response = await anonymousChatAPI.getByCode(codeToUse, {
@@ -246,7 +260,7 @@ const AudienceAnonymousChat = () => {
     } finally {
       setIsJoining(false);
     }
-  }, [alert.toast, normalizedCode, isJoining]);
+  }, [alert.toast, normalizedCode, isJoining, accountUid]);
 
   const handleSendMessage = async () => {
     const trimmed = message.trim();
@@ -261,7 +275,7 @@ const AudienceAnonymousChat = () => {
       const response = await anonymousChatAPI.addMessage(chatSession.id, {
         message: trimmed,
         sender: 'Anonymous Audience',
-        participantId: participantId || getOrCreateChatParticipantId(normalizedCode),
+        participantId: getOrCreateChatParticipantId(normalizedCode, accountUid),
       });
 
       if (!response.data.success) {
@@ -288,6 +302,7 @@ const AudienceAnonymousChat = () => {
         titleIcon={<MessageSquare className="w-4 h-4 shrink-0 text-[#6D415F]" />}
         participantName={participantDisplayName}
         onLogoClick={handleLeave}
+        showLoggedInLogoutMenu
         className="fixed inset-x-0 top-0 z-30"
       />
       <div className="h-16 shrink-0" aria-hidden="true" />

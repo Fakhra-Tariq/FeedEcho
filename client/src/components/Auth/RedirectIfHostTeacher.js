@@ -23,9 +23,15 @@ const restoreStudentSession = (userProfile) => {
  * Uses replace so Back cannot return here.
  */
 export default function RedirectIfHostTeacher({ children, redirectStudent = false }) {
-  const { userProfile, activePortal, loading } = useAuth();
-  const isHost = !loading && isActiveHostTeacher(userProfile, activePortal);
-  const isStudent = !loading && isActiveAudienceStudent(userProfile, activePortal);
+  const { userProfile, activePortal, loading, portalIntent } = useAuth();
+  const isHost =
+    !loading &&
+    portalIntent !== 'student' &&
+    isActiveHostTeacher(userProfile, activePortal);
+  const isStudent =
+    !loading &&
+    portalIntent !== 'teacher' &&
+    isActiveAudienceStudent(userProfile, activePortal);
 
   useEffect(() => {
     if (isHost) {

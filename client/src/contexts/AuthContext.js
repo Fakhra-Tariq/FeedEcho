@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useState } from 'react';
+import React, { createContext, useContext, useEffect, useRef, useState } from 'react';
 import { auth } from '../firebase';
 import { 
   signInWithEmailAndPassword,
@@ -152,6 +152,20 @@ export const AuthProvider = ({ children }) => {
     if (!cached?.uid) return getActivePortal();
     return restoreActivePortalForUser(cached.uid) || getActivePortal();
   });
+  // Which dashboard this login requested. Must be set BEFORE Firebase sign-in so
+  // onAuthStateChanged cannot default a dual-role account to the other portal.
+  const portalIntentRef = useRef(null);
+  const [portalIntent, setPortalIntent] = useState(null);
+
+  const setLoginPortalIntent = (portal) => {
+    portalIntentRef.current = portal;
+    setPortalIntent(portal);
+  };
+
+  const clearLoginPortalIntent = () => {
+    portalIntentRef.current = null;
+    setPortalIntent(null);
+  };
 
   const markActivePortal = (portal, uid = null) => {
     persistActivePortal(portal, uid);
@@ -204,12 +218,16 @@ export const AuthProvider = ({ children }) => {
           sessionStorage.setItem('feedecho-user-id', firebaseUser.uid);
 
           const restoredPortal = restoreActivePortalForUser(firebaseUser.uid);
-          if (restoredPortal) {
+          if (
+            restoredPortal &&
+            (!portalIntentRef.current || restoredPortal === portalIntentRef.current)
+          ) {
             setActivePortalState(restoredPortal);
           }
 
           const applyVerifiedPortal = (profile) => {
-            const lastPortal = restoredPortal || getActivePortal();
+            const lastPortal =
+              portalIntentRef.current || getActivePortal() || restoredPortal;
             const canTeacher = canAccessTeacherPortal(profile);
             const studentOnly =
               hasUserRole(profile, 'student') && !canTeacher;
@@ -299,6 +317,9 @@ export const AuthProvider = ({ children }) => {
         clearStoredRole();
         clearPersistedActivePortal();
         setActivePortalState(null);
+        if (!portalIntentRef.current) {
+          clearLoginPortalIntent();
+        }
       }
 
       finishAuthInit();
@@ -433,6 +454,7 @@ export const AuthProvider = ({ children }) => {
   };
 
   const hostSignIn = async (email, password) => {
+    setLoginPortalIntent('teacher');
     try {
       const result = await signInWithEmailAndPassword(auth, email, password);
       // Backend/Firebase role value remains 'teacher' (stored contract — do not rename)
@@ -447,6 +469,7 @@ export const AuthProvider = ({ children }) => {
         const errorMessage =
           'This account does not have host access. Sign up as a host or use the audience login.';
         toast.error(errorMessage);
+        clearLoginPortalIntent();
         return { success: false, error: errorMessage };
       }
 
@@ -455,8 +478,10 @@ export const AuthProvider = ({ children }) => {
       persistRole('teacher', result.user.uid);
       clearAudienceSession();
       toast.success('Welcome back!');
+      clearLoginPortalIntent();
       return { success: true, user: profile };
     } catch (error) {
+      clearLoginPortalIntent();
       let errorMessage = 'Login failed';
       
       // Handle Firebase auth errors
@@ -495,6 +520,7 @@ export const AuthProvider = ({ children }) => {
   };
 
   const hostSignUp = async ({ firstName, lastName, email, password }) => {
+    setLoginPortalIntent('teacher');
     try {
       const firebaseUser = await createAccountOrSignIn(
         email,
@@ -512,6 +538,7 @@ export const AuthProvider = ({ children }) => {
       if (!canAccessTeacherPortal(profile)) {
         const errorMessage = 'Could not enable host access for this account.';
         toast.error(errorMessage);
+        clearLoginPortalIntent();
         return { success: false, error: errorMessage };
       }
 
@@ -519,8 +546,10 @@ export const AuthProvider = ({ children }) => {
       persistRole('teacher', firebaseUser.uid);
       clearAudienceSession();
       toast.success('Account created successfully');
+      clearLoginPortalIntent();
       return { success: true, user: profile };
     } catch (error) {
+      clearLoginPortalIntent();
       const errorMessage = error?.message || 'Signup failed';
       toast.error(errorMessage);
       return { success: false, error: errorMessage };
@@ -528,6 +557,7 @@ export const AuthProvider = ({ children }) => {
   };
 
   const audienceSignIn = async (email, password) => {
+    setLoginPortalIntent('student');
     try {
       const result = await signInWithEmailAndPassword(auth, email, password);
       const profile = await syncProfileFromBackend(result.user, 'student', undefined, undefined, {
@@ -541,6 +571,7 @@ export const AuthProvider = ({ children }) => {
         const errorMessage =
           'This account does not have audience access. Sign up as an audience member first.';
         toast.error(errorMessage);
+        clearLoginPortalIntent();
         return { success: false, error: errorMessage };
       }
 
@@ -548,8 +579,10 @@ export const AuthProvider = ({ children }) => {
       persistRole('student', result.user.uid);
       persistAudienceSession(profile);
       toast.success('Welcome back!');
+      clearLoginPortalIntent();
       return { success: true, user: profile };
     } catch (error) {
+      clearLoginPortalIntent();
       let errorMessage = 'Login failed';
 
       if (error.code) {
@@ -587,6 +620,7 @@ export const AuthProvider = ({ children }) => {
   };
 
   const audienceSignUp = async ({ firstName, lastName, email, password }) => {
+    setLoginPortalIntent('student');
     try {
       const firebaseUser = await createAccountOrSignIn(
         email,
@@ -604,6 +638,7 @@ export const AuthProvider = ({ children }) => {
       if (!canAccessStudentPortal(profile)) {
         const errorMessage = 'Could not enable audience access for this account.';
         toast.error(errorMessage);
+        clearLoginPortalIntent();
         return { success: false, error: errorMessage };
       }
 
@@ -611,8 +646,10 @@ export const AuthProvider = ({ children }) => {
       persistRole('student', firebaseUser.uid);
       persistAudienceSession(profile);
       toast.success('Account created successfully');
+      clearLoginPortalIntent();
       return { success: true, user: profile };
     } catch (error) {
+      clearLoginPortalIntent();
       const errorMessage = error?.message || 'Signup failed';
       toast.error(errorMessage);
       return { success: false, error: errorMessage };
@@ -621,11 +658,13 @@ export const AuthProvider = ({ children }) => {
 
   const audienceLogout = async () => {
     try {
+      clearLoginPortalIntent();
       await signOut(auth);
       setUser(null);
       setUserProfile(null);
       localStorage.removeItem('token');
       localStorage.removeItem('authUser');
+      sessionStorage.removeItem('feedecho-user-id');
       clearAudienceSession();
       clearStoredRole();
       clearActivePortalState();
@@ -637,6 +676,7 @@ export const AuthProvider = ({ children }) => {
   };
 
   const hostSignInWithGoogle = async () => {
+    setLoginPortalIntent('teacher');
     try {
       const provider = new GoogleAuthProvider();
       const result = await signInWithPopup(auth, provider);
@@ -647,6 +687,7 @@ export const AuthProvider = ({ children }) => {
       if (!canAccessTeacherPortal(profile)) {
         const errorMessage = 'This Google account does not have host access.';
         toast.error(errorMessage);
+        clearLoginPortalIntent();
         return { success: false, error: errorMessage };
       }
 
@@ -654,8 +695,10 @@ export const AuthProvider = ({ children }) => {
       persistRole('teacher', result.user.uid);
       clearAudienceSession();
       toast.success('Signed in with Google');
+      clearLoginPortalIntent();
       return { success: true, user: profile };
     } catch (error) {
+      clearLoginPortalIntent();
       let errorMessage = 'Google sign-in failed';
       
       // Handle Firebase auth errors
@@ -688,6 +731,7 @@ export const AuthProvider = ({ children }) => {
   };
 
   const audienceSignInWithGoogle = async () => {
+    setLoginPortalIntent('student');
     try {
       const provider = new GoogleAuthProvider();
       const result = await signInWithPopup(auth, provider);
@@ -698,6 +742,7 @@ export const AuthProvider = ({ children }) => {
       if (!canAccessStudentPortal(profile)) {
         const errorMessage = 'This Google account does not have audience access.';
         toast.error(errorMessage);
+        clearLoginPortalIntent();
         return { success: false, error: errorMessage };
       }
 
@@ -705,8 +750,10 @@ export const AuthProvider = ({ children }) => {
       persistRole('student', result.user.uid);
       persistAudienceSession(profile);
       toast.success('Signed in with Google');
+      clearLoginPortalIntent();
       return { success: true, user: profile };
     } catch (error) {
+      clearLoginPortalIntent();
       let errorMessage = 'Google sign-in failed';
 
       if (error.code) {
@@ -789,11 +836,13 @@ export const AuthProvider = ({ children }) => {
 
   const logout = async () => {
     try {
+      clearLoginPortalIntent();
       await signOut(auth);
       setUser(null);
       setUserProfile(null);
       localStorage.removeItem('token');
       localStorage.removeItem('authUser');
+      sessionStorage.removeItem('feedecho-user-id');
       clearAudienceSession();
       clearStoredRole();
       clearActivePortalState();
@@ -920,6 +969,7 @@ export const AuthProvider = ({ children }) => {
     user,
     userProfile,
     activePortal,
+    portalIntent,
     loading,
     login,
     register,
