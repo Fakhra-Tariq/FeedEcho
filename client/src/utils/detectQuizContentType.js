@@ -91,6 +91,10 @@ export function getQuizTypeMismatchError(content, selectedType, source = 'pasted
   const detected = detectQuizContentType(content);
   if (!detected || detected === selectedType) return null;
 
+  if (selectedType === 'Mixed Type' && detected === 'Multiple Choice') {
+    return 'Mixed Type quizzes need a tag above each question: [MCQ], [TRUE/FALSE], or [SHORT ANSWER]. Add a tag before each question and try again.';
+  }
+
   const sourceLabel = source === 'uploaded' ? 'uploaded' : 'pasted';
   return `The ${sourceLabel} content appears to contain a ${detected} quiz, but "${selectedType}" is currently selected. Please select the correct quiz type and try again.`;
 }
