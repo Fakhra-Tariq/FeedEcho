@@ -1,12 +1,10 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { createPortal } from 'react-dom';
 import { Send, Paperclip, Image as ImageIcon, FileText, Link as LinkIcon, X } from 'lucide-react';
 import { useRtdbList } from '../../hooks/useRtdb';
 import { spaceRacesAPI } from '../../services/api';
 import { useHybridAlert } from '../../contexts/HybridAlertContext';
 import { prepareChatImage } from '../../utils/compressChatImage';
 
-const GALLERY_ACCEPT = 'image/jpeg,image/png,image/webp,image/gif';
 const DOCUMENT_ACCEPT = '.pdf,.doc,.docx,.txt,.ppt,.pptx,.xls,.xlsx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain,application/vnd.ms-powerpoint,application/vnd.openxmlformats-officedocument.presentationml.presentation,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
 const MAX_ATTACHMENT_BYTES = 100 * 1024 * 1024;
 const IMAGE_EXT = /\.(jpe?g|png|webp|gif)$/i;
@@ -21,11 +19,6 @@ const DOCUMENT_TYPES = new Set([
   'application/vnd.ms-excel',
   'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
 ]);
-
-const isPhoneImagePicker = () => {
-  if (typeof window === 'undefined') return false;
-  return window.matchMedia('(max-width: 767px), (hover: none) and (pointer: coarse)').matches;
-};
 
 const isAllowedImage = (file) => {
   const type = String(file?.type || '').toLowerCase();
@@ -105,13 +98,17 @@ const LinkPreview = ({ url, title }) => {
       href={url}
       target="_blank"
       rel="noopener noreferrer"
-      className="block p-2 rounded-lg border border-primary/20 bg-primary/5 hover:bg-primary/10 transition-colors"
+      className="block p-2 rounded-lg border border-primary/20 bg-primary/5 hover:bg-primary/10 transition-colors min-w-0 max-w-full"
     >
-      <div className="flex items-center gap-2 text-primary text-sm font-medium">
+      <div className="flex items-center gap-2 text-primary text-sm font-medium min-w-0">
         <LinkIcon className="w-4 h-4 flex-shrink-0" />
-        <span className="truncate">{title || hostname}</span>
+        <span className="min-w-0 flex-1 line-clamp-2 break-words [overflow-wrap:anywhere]">
+          {title || hostname}
+        </span>
       </div>
-      <p className="text-xs text-gray-500 mt-1 truncate">{url}</p>
+      <p className="text-xs text-gray-500 mt-1 min-w-0 max-w-full whitespace-normal break-words [overflow-wrap:anywhere]">
+        {url}
+      </p>
     </a>
   );
 };
@@ -130,7 +127,6 @@ export default function SpaceRaceTeamChat({
   const { alert } = useHybridAlert();
   const [message, setMessage] = useState('');
   const [isSending, setIsSending] = useState(false);
-  const [imageSourceOpen, setImageSourceOpen] = useState(false);
   const [apiMessages, setApiMessages] = useState([]);
   const [pendingMessages, setPendingMessages] = useState([]);
   const [selectedImage, setSelectedImage] = useState(null);
@@ -145,7 +141,6 @@ export default function SpaceRaceTeamChat({
   const forceScrollRef = useRef(false);
   const fileInputRef = useRef(null);
   const galleryInputRef = useRef(null);
-  const cameraInputRef = useRef(null);
   const uploadFilesRef = useRef(new Map());
   const previewUrlsRef = useRef(new Map());
   const attachmentArmedRef = useRef(false);
@@ -623,10 +618,6 @@ export default function SpaceRaceTeamChat({
   };
 
   const openImagePicker = () => {
-    if (isPhoneImagePicker()) {
-      setImageSourceOpen(true);
-      return;
-    }
     galleryInputRef.current?.click();
   };
 
@@ -657,7 +648,7 @@ export default function SpaceRaceTeamChat({
     if (msg.uploadState === 'uploading') {
       const percent = Math.max(0, Math.min(100, Math.round(msg.uploadProgress || 0)));
       return (
-        <p className="text-xs mt-1 flex items-center gap-1">
+        <p className="text-xs mt-1 flex items-center gap-1 min-w-0 max-w-full whitespace-normal [overflow-wrap:anywhere]">
           {msg.type !== 'file' ? (
             <span className="inline-block w-3 h-3 border-2 border-current border-t-transparent rounded-full animate-spin" />
           ) : null}
@@ -667,7 +658,7 @@ export default function SpaceRaceTeamChat({
     }
     if (msg.uploadState === 'error') {
       return (
-        <p className="text-xs mt-1">
+        <p className="text-xs mt-1 min-w-0 max-w-full whitespace-normal [overflow-wrap:anywhere]">
           Upload failed.{' '}
           <button
             type="button"
@@ -686,7 +677,7 @@ export default function SpaceRaceTeamChat({
     if (msg.type === 'image' && (msg.url || msg.uploadState)) {
       const caption = String(msg.text || '').trim();
       return (
-        <div>
+        <div className="min-w-0 max-w-full">
           {msg.url ? (
             <img
               src={msg.url}
@@ -696,7 +687,11 @@ export default function SpaceRaceTeamChat({
               onLoad={stickToBottomIfNeeded}
             />
           ) : null}
-          {caption ? <p className="text-sm mt-1">{caption}</p> : null}
+          {caption ? (
+            <p className="text-sm mt-1 min-w-0 max-w-full whitespace-normal break-words [overflow-wrap:anywhere]">
+              {caption}
+            </p>
+          ) : null}
           {renderUploadStatus(msg)}
         </div>
       );
@@ -705,32 +700,40 @@ export default function SpaceRaceTeamChat({
     if (msg.type === 'file' && (msg.url || msg.fileName || msg.uploadState)) {
       const caption = String(msg.text || '').trim();
       const fileCard = (
-        <span className="flex items-center gap-2 p-2 rounded-lg border border-gray-200 bg-white text-sm text-primary">
+        <span className="flex items-center gap-2 p-2 rounded-lg border border-gray-200 bg-white text-sm text-primary min-w-0 w-full max-w-full">
           {msg.uploadState === 'uploading' ? (
             <span className="inline-block w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin flex-shrink-0" />
           ) : (
-            <FileText className="w-4 h-4" />
+            <FileText className="w-4 h-4 flex-shrink-0" />
           )}
-          <span className="truncate">{msg.fileName || 'Download file'}</span>
+          <span className="min-w-0 flex-1 line-clamp-2 break-words [overflow-wrap:anywhere]">
+            {msg.fileName || 'Download file'}
+          </span>
         </span>
       );
       return (
-        <div>
+        <div className="min-w-0 max-w-full">
           {msg.url && msg.uploadState !== 'uploading' ? (
             <a
               href={msg.url}
               target="_blank"
               rel="noopener noreferrer"
               download={msg.fileName}
-              className="flex items-center gap-2 p-2 rounded-lg border border-gray-200 bg-white hover:bg-gray-50 text-sm text-primary"
+              className="flex items-center gap-2 p-2 rounded-lg border border-gray-200 bg-white hover:bg-gray-50 text-sm text-primary min-w-0 w-full max-w-full"
             >
-              <FileText className="w-4 h-4" />
-              <span className="truncate">{msg.fileName || 'Download file'}</span>
+              <FileText className="w-4 h-4 flex-shrink-0" />
+              <span className="min-w-0 flex-1 line-clamp-2 break-words [overflow-wrap:anywhere]">
+                {msg.fileName || 'Download file'}
+              </span>
             </a>
           ) : (
             fileCard
           )}
-          {caption ? <p className="text-sm mt-1">{caption}</p> : null}
+          {caption ? (
+            <p className="text-sm mt-1 min-w-0 max-w-full whitespace-normal break-words [overflow-wrap:anywhere]">
+              {caption}
+            </p>
+          ) : null}
           {renderUploadStatus(msg)}
         </div>
       );
@@ -739,16 +742,20 @@ export default function SpaceRaceTeamChat({
     if (msg.type === 'link' && msg.url) {
       const caption = String(msg.text || '').trim();
       return (
-        <div>
+        <div className="min-w-0 max-w-full">
           <LinkPreview url={msg.url} title={msg.linkTitle} />
-          {caption ? <p className="text-sm mt-1">{caption}</p> : null}
+          {caption ? (
+            <p className="text-sm mt-1 min-w-0 max-w-full whitespace-normal break-words [overflow-wrap:anywhere]">
+              {caption}
+            </p>
+          ) : null}
         </div>
       );
     }
 
     const parts = String(msg.text || '').split(URL_REGEX);
     return (
-      <p className="text-sm whitespace-pre-wrap break-words">
+      <p className="text-sm whitespace-pre-wrap break-words [overflow-wrap:anywhere] min-w-0 max-w-full">
         {parts.map((part, i) =>
           /^https?:\/\//i.test(part) ? (
             <a
@@ -806,7 +813,7 @@ export default function SpaceRaceTeamChat({
 
       <div
         ref={listRef}
-        className="flex-1 min-h-0 overflow-y-auto overscroll-contain p-4 space-y-2 bg-[#f0ebe8]"
+        className="flex-1 min-h-0 min-w-0 overflow-y-auto overflow-x-hidden overscroll-contain p-4 space-y-2 bg-[#f0ebe8]"
         style={{ WebkitOverflowScrolling: 'touch' }}
       >
         {messages.length === 0 ? (
@@ -824,16 +831,18 @@ export default function SpaceRaceTeamChat({
             return (
               <div
                 key={messageKey(msg)}
-                className={`flex ${isOwn ? 'justify-end' : 'justify-start'}`}
+                className={`flex min-w-0 w-full ${isOwn ? 'justify-end' : 'justify-start'}`}
               >
-                <div className={`max-w-[80%] ${isOwn ? 'items-end' : 'items-start'} flex flex-col`}>
+                <div
+                  className={`max-w-[80%] min-w-0 ${isOwn ? 'items-end' : 'items-start'} flex flex-col`}
+                >
                   {showSender && (
-                    <p className="text-xs font-medium text-primary mb-1 px-1">
+                    <p className="text-xs font-medium text-primary mb-1 px-1 min-w-0 max-w-full break-words [overflow-wrap:anywhere]">
                       {msg.senderName || 'Teammate'}
                     </p>
                   )}
                   <div
-                    className={`relative px-3 py-2 rounded-2xl shadow-sm ${
+                    className={`relative px-3 py-2 rounded-2xl shadow-sm min-w-0 max-w-full ${
                       isOwn
                         ? 'bg-primary text-white rounded-br-md'
                         : 'bg-white text-gray-800 rounded-bl-md border border-gray-100'
@@ -908,15 +917,7 @@ export default function SpaceRaceTeamChat({
           <input
             ref={galleryInputRef}
             type="file"
-            accept={GALLERY_ACCEPT}
-            className="hidden"
-            onChange={handleImageSelect}
-          />
-          <input
-            ref={cameraInputRef}
-            type="file"
             accept="image/*"
-            capture="environment"
             className="hidden"
             onChange={handleImageSelect}
           />
@@ -975,50 +976,6 @@ export default function SpaceRaceTeamChat({
           </p>
         )}
       </div>
-
-      {imageSourceOpen && typeof document !== 'undefined'
-        ? createPortal(
-            <div className="fixed inset-0 z-[80]">
-              <button
-                type="button"
-                aria-label="Close photo options"
-                className="absolute inset-0 bg-black/40"
-                onClick={() => setImageSourceOpen(false)}
-              />
-              <div
-                role="dialog"
-                aria-modal="true"
-                aria-label="Add photo"
-                className="absolute inset-x-0 bottom-0 bg-white rounded-t-2xl shadow-[0_-8px_24px_-8px_rgba(46,31,42,0.28)] pb-[max(0.75rem,env(safe-area-inset-bottom))]"
-              >
-                <div className="flex justify-center pt-3 pb-1">
-                  <div className="w-10 h-1 rounded-full bg-neutral-300" />
-                </div>
-                <button
-                  type="button"
-                  className="w-full min-h-11 px-4 py-3 text-left text-base text-text hover:bg-gray-50"
-                  onClick={() => {
-                    setImageSourceOpen(false);
-                    cameraInputRef.current?.click();
-                  }}
-                >
-                  Take Photo
-                </button>
-                <button
-                  type="button"
-                  className="w-full min-h-11 px-4 py-3 text-left text-base text-text hover:bg-gray-50"
-                  onClick={() => {
-                    setImageSourceOpen(false);
-                    galleryInputRef.current?.click();
-                  }}
-                >
-                  Choose from Gallery
-                </button>
-              </div>
-            </div>,
-            document.body
-          )
-        : null}
 
       {/* Image Modal */}
       {selectedImage && (

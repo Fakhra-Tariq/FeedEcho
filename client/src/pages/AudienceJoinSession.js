@@ -218,22 +218,22 @@ const AudienceJoinSession = () => {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-orange-50 via-white to-purple-50">
-      <div className="container mx-auto px-4 py-8">
-        <div className="text-center mb-12">
-          <div className="inline-flex items-center justify-center w-20 h-20 bg-gradient-to-br from-primary to-primary/80 rounded-3xl mb-6 shadow-soft">
-            <Users className="w-10 h-10 text-white" />
+      <div className="max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8 py-8">
+        <div className="text-center mb-8">
+          <div className="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-br from-primary to-primary/80 rounded-3xl mb-6 shadow-soft">
+            <Users className="w-8 h-8 text-white" />
           </div>
 
-          <h1 className="text-4xl md:text-5xl font-bold text-text mb-4">
+          <h1 className="text-3xl md:text-4xl font-bold text-text mb-4">
             Join Session
           </h1>
-          <p className="text-lg text-text-light max-w-2xl mx-auto">
+          <p className="text-sm sm:text-base sm:text-lg text-text-light max-w-2xl mx-auto">
             Enter your name and session code provided by your host to join quiz, space race, or exit ticket
           </p>
         </div>
 
         <div className="max-w-md mx-auto">
-          <div className="bg-white rounded-3xl shadow-soft border border-primary/10 p-8">
+          <div className="bg-white rounded-3xl shadow-soft border border-primary/10 p-5 sm:p-6">
             <div className="mb-6">
               <label className="block text-sm font-semibold text-text mb-3">
                 <div className="flex items-center space-x-2">

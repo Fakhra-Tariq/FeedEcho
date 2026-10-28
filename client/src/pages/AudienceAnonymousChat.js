@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Send, MessageSquare, Users, AlertCircle } from 'lucide-react';
 import { useHybridAlert } from '../contexts/HybridAlertContext';
 import { anonymousChatAPI } from '../services/api';
@@ -50,6 +50,8 @@ const chatParticipantStorageKey = (sessionCode, identity) => {
 
 const getOrCreateChatParticipantId = (sessionCode) => {
   const identity = currentChatJoinIdentity();
+  // Logged-in: stable account uid so the same student matches across devices.
+  if (identity?.uid) return identity.uid;
   const storageKey = chatParticipantStorageKey(sessionCode, identity);
   if (!storageKey) {
     return `student-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
@@ -62,11 +64,20 @@ const getOrCreateChatParticipantId = (sessionCode) => {
   return participantId;
 };
 
+/** Per-browser random id from the guest-identity fix; used only to keep this device's old bubbles. */
+const getLegacyStoredParticipantId = (sessionCode) => {
+  const identity = currentChatJoinIdentity();
+  const storageKey = chatParticipantStorageKey(sessionCode, identity);
+  if (!storageKey) return '';
+  return sessionStorage.getItem(storageKey) || '';
+};
+
 const isChatSessionEnded = (session) =>
   Boolean(session && (session.status === 'ended' || session.isActive === false));
 
 const AudienceAnonymousChat = () => {
   const [searchParams] = useSearchParams();
+  const navigate = useNavigate();
   const { alert } = useHybridAlert();
   const [sessionCode, setSessionCode] = useState('');
   const [message, setMessage] = useState('');
@@ -122,21 +133,30 @@ const AudienceAnonymousChat = () => {
   const visibleMessages = messages.filter((msg) => !msg.isHidden);
   const showActiveChat = Boolean(chatSession && !isChatEnded);
 
-  const isOwnStudentMessage = (msg) => {
-    if (!msg || msg.isTeacher) return false;
-    if (!participantId) return false;
-    if (msg.participantId) {
-      return String(msg.participantId) === String(participantId);
-    }
-    // No stored sender identity — never guess (name-only would be unsafe).
-    return false;
-  };
-
   const participantDisplayName =
     (typeof window !== 'undefined' ? (sessionStorage.getItem('studentName') || '').trim() : '') ||
     getStoredAudienceSession()?.name ||
     'Audience';
-  const loggedInUid = getStoredAudienceSession()?.uid || '';
+  const loggedInAudience = getStoredAudienceSession();
+  const loggedInUid = loggedInAudience?.uid || '';
+  const isLoggedInStudent = Boolean(loggedInUid && loggedInAudience?.email);
+
+  const isOwnStudentMessage = (msg) => {
+    if (!msg || msg.isTeacher) return false;
+    const stored = String(msg.participantId || '');
+    if (!stored) return false;
+    // Logged-in account (same uid on every device). Never match by display name.
+    if (loggedInUid && stored === String(loggedInUid)) return true;
+    if (participantId && stored === String(participantId)) return true;
+    // Same-device messages sent before uid-as-participantId.
+    const legacy = getLegacyStoredParticipantId(normalizedCode);
+    if (legacy && stored === String(legacy)) return true;
+    return false;
+  };
+
+  const handleLeave = () => {
+    navigate(isLoggedInStudent ? '/audience/home' : '/join');
+  };
 
   useEffect(() => {
     if (!normalizedCode) return;
@@ -267,6 +287,7 @@ const AudienceAnonymousChat = () => {
         title={showActiveChat && chatSession?.title ? chatSession.title : 'Anonymous Chat'}
         titleIcon={<MessageSquare className="w-4 h-4 shrink-0 text-[#6D415F]" />}
         participantName={participantDisplayName}
+        onLogoClick={handleLeave}
         className="fixed inset-x-0 top-0 z-30"
       />
       <div className="h-16 shrink-0" aria-hidden="true" />

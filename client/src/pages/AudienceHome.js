@@ -7,6 +7,7 @@ import { appToast } from '../contexts/HybridAlertContext';
 import { useAuth } from '../contexts/AuthContext';
 import { getStoredAudienceSession } from '../utils/audienceSession';
 import AudienceDashboardNavbar from '../components/Audience/AudienceDashboardNavbar';
+import { AUDIENCE_ACTIVITY_PAGE_WIDTH } from '../components/Audience/AudienceActivityLayout';
 import { useAudienceLiveActivity } from '../hooks/useAudienceLiveActivity';
 import { joinSessionByCode } from '../utils/joinSessionFlow';
 import { schedulePendingQuizSubmissionSync } from '../utils/quizSubmissionSync';
@@ -684,18 +685,18 @@ const AudienceHome = () => {
 
       {/* Main Content Area */}
       <div className="flex-1 overflow-y-auto min-h-0">
-      <div className="container mx-auto p-6 max-md:p-4">
+      <div className={`${AUDIENCE_ACTIVITY_PAGE_WIDTH} py-6 max-md:py-4`}>
         {/* Hero Banner */}
-        <div className="relative bg-gradient-to-r from-primary to-primary/90 text-white rounded-xl shadow-lg p-10 mb-6 overflow-hidden max-md:p-5 max-[480px]:mb-3">
+        <div className="relative bg-gradient-to-r from-primary to-primary/90 text-white rounded-xl shadow-lg p-5 sm:p-8 mb-6 overflow-hidden max-md:p-5 max-[480px]:mb-3">
           <div className="absolute top-0 right-0 w-full h-full bg-gradient-to-l from-black/20 to-transparent"></div>
           <div className="relative flex items-center justify-between max-md:gap-3">
             <div className="min-w-0">
-              <h1 className="text-4xl font-bold mb-3 max-md:text-xl max-md:mb-2 break-words">{greeting}, {student?.name?.split(' ')[0] || 'Audience'}!</h1>
-              <p className="text-lg max-md:text-sm">Welcome back to your audience dashboard. Track your progress and join live sessions.</p>
+              <h1 className="text-3xl md:text-4xl font-bold mb-2 max-md:text-xl max-md:mb-2 break-words">{greeting}, {student?.name?.split(' ')[0] || 'Audience'}!</h1>
+              <p className="text-sm sm:text-base sm:text-lg max-md:text-sm">Welcome back to your audience dashboard. Track your progress and join live sessions.</p>
             </div>
             <div className="relative shrink-0">
-              <div className="w-28 h-28 bg-black/10 rounded-full flex items-center justify-center cursor-pointer transition-all duration-200 hover:bg-black/20 max-md:w-16 max-md:h-16">
-                <Rocket className="w-14 h-14 text-white max-md:w-8 max-md:h-8" />
+              <div className="w-16 h-16 bg-black/10 rounded-full flex items-center justify-center cursor-pointer transition-all duration-200 hover:bg-black/20 max-md:w-16 max-md:h-16">
+                <Rocket className="w-8 h-8 text-white max-md:w-8 max-md:h-8" />
               </div>
             </div>
           </div>
@@ -737,7 +738,7 @@ const AudienceHome = () => {
         </div>
 
         {/* Join a Session Section */}
-        <div className="bg-white rounded-xl shadow-lg p-8 mb-6 border-2 border-primary max-md:p-4">
+        <div className="bg-white rounded-xl shadow-lg p-5 sm:p-6 mb-6 border-2 border-primary max-md:p-4">
           <div className="mb-6 max-md:mb-4">
             <h3 className="text-xl font-bold text-primary mb-2 max-md:text-lg">Join a Session</h3>
             <p className="text-sm text-gray-600">Enter 6-digit code your host shared with you</p>
@@ -759,7 +760,7 @@ const AudienceHome = () => {
                   spellCheck={false}
                   inputMode="text"
                   autoCapitalize="characters"
-                  className="w-12 h-14 bg-gray-100 text-center rounded-lg border-2 border-gray-300 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 text-xl font-bold text-primary transition-all duration-200 max-md:w-full max-md:min-w-0 max-md:h-11 max-md:min-h-11"
+                  className="w-12 h-12 bg-gray-100 text-center rounded-lg border-2 border-gray-300 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 text-lg font-bold text-primary transition-all duration-200 max-md:w-full max-md:min-w-0 max-md:h-11 max-md:min-h-11"
                 />
               ))}
             </div>

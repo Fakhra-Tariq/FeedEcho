@@ -178,7 +178,8 @@ export async function proceedWithSessionJoin({
 
   if (type === 'liveChat' || type === 'anonymousChat') {
     const code = String(joinCode || trimmedCode).toUpperCase();
-    navigate(`/audience/chat?code=${encodeURIComponent(code)}`, { replace: true });
+    // Push so Back returns to the page that joined (student home or public /join).
+    navigate(`/audience/chat?code=${encodeURIComponent(code)}`);
     return { success: true, type: 'liveChat', chatId, joinCode: code };
   }
 

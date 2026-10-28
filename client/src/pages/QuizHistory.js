@@ -297,7 +297,7 @@ const QuizHistory = () => {
         </div>
       </div>
 
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 max-[480px]:pt-3 max-[480px]:pb-8">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 max-[480px]:pt-3 max-[480px]:pb-8">
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8 max-[480px]:grid-cols-2 max-[480px]:gap-2 max-[480px]:mb-3">
           <div className="p-6 shadow-sm max-[480px]:p-3 max-[480px]:min-h-[56px] max-[480px]:flex max-[480px]:items-center" style={{ backgroundColor: '#FFFFFF', border: '0.5px solid #E8E0F0', borderRadius: '12px' }}>
             <div className="flex items-center space-x-3 max-[480px]:space-x-2 min-w-0 w-full">

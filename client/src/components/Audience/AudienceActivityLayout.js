@@ -32,7 +32,11 @@ export function AudienceActivityHeader({
     <img
       src="/FeedEcho-logo.png.png"
       alt="FeedEcho"
-      className="h-40 w-auto max-w-[min(11rem,calc(100vw-8rem))] max-md:max-w-[min(9.5rem,calc(100vw-11rem))] object-contain object-left mix-blend-multiply"
+      className={`h-40 w-auto object-contain object-left mix-blend-multiply ${
+        compactMobileZones
+          ? 'max-w-[min(11rem,calc(100vw-8rem))] max-md:max-w-[6.75rem]'
+          : 'max-w-[min(11rem,calc(100vw-8rem))] max-md:max-w-[min(9.5rem,calc(100vw-11rem))]'
+      }`}
     />
   );
 
@@ -58,7 +62,7 @@ export function AudienceActivityHeader({
       />
     </div>
   ) : (
-    <div className="md:hidden flex items-center justify-end min-w-0 max-w-[6.5rem]">
+    <div className={`md:hidden flex items-center justify-end min-w-0 ${rightAddon ? 'max-w-[4.5rem]' : 'max-w-[6.5rem]'}`}>
       <span className="text-xs text-text-light truncate text-right">{participantName}</span>
     </div>
   );
@@ -137,7 +141,7 @@ export function AudienceActivityHeader({
           )}
           <div className={`flex justify-end items-center shrink-0 min-w-0 ${trueCenterTitle ? 'relative z-10 ml-auto md:ml-0' : ''}`}>
             {rightAddon ? (
-              <div className="flex items-center gap-2 min-[481px]:gap-4 min-w-0">
+              <div className="flex items-center gap-2 min-[481px]:gap-4 min-w-0 max-md:gap-2 shrink-0">
                 {rightAddon}
                 {identity}
               </div>

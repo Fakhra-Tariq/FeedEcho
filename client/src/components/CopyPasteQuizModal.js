@@ -421,8 +421,13 @@ Sample Answer: H2O`;
         // Look for sample answer in next few lines
         for (let j = i + 1; j < Math.min(i + 3, lines.length); j++) {
           const nextLine = lines[j].trim();
-          if (nextLine.toLowerCase().includes('sample answer:')) {
+          const lower = nextLine.toLowerCase();
+          if (lower.includes('sample answer:')) {
             sampleAnswer = nextLine.replace(/sample answer:\s*/i, '');
+            break;
+          }
+          if (lower.includes('answer:')) {
+            sampleAnswer = nextLine.replace(/answer:\s*/i, '');
             break;
           }
         }

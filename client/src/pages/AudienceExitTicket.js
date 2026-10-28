@@ -2,8 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { ArrowLeft, Send, CheckCircle } from 'lucide-react';
 import { useHybridAlert } from '../contexts/HybridAlertContext';
-import { exitTicketsAPI } from '../services/api';
-import { getStoredAudienceSession } from '../utils/audienceSession';
+import { exitTicketsAPI, studentsAPI } from '../services/api';
+import { getStoredAudienceSession, getStudentQueryParams } from '../utils/audienceSession';
 import GuestProgressLoginBanner from '../components/Audience/GuestProgressLoginBanner';
 import {
   AudienceActivityHeader,
@@ -41,6 +41,31 @@ const AudienceExitTicket = () => {
             initialAnswers[index] = '';
           });
           setAnswers(initialAnswers);
+
+          // Same check as Mobile getMyParticipation: GET /students/activity
+          // matches exit_responses by studentUid (not response content).
+          const loggedInAudience = getStoredAudienceSession();
+          const uid = loggedInAudience?.uid ? String(loggedInAudience.uid).trim() : '';
+          const ticketId = String(response.data.data.id || '').trim();
+          if (uid && ticketId) {
+            try {
+              const activityRes = await studentsAPI.getActivity({
+                ...getStudentQueryParams(loggedInAudience),
+                limit: 200,
+              });
+              const items = Array.isArray(activityRes.data?.data) ? activityRes.data.data : [];
+              const alreadySubmitted = items.some(
+                (item) =>
+                  String(item.type || '') === 'exitTicket' &&
+                  String(item.ticketId || '') === ticketId
+              );
+              if (alreadySubmitted) {
+                setIsSubmitted(true);
+              }
+            } catch {
+              // Network / missing record: keep the form (never block a first submit).
+            }
+          }
         } else {
           alert.toast.error(response.data.error || 'Invalid or inactive Exit Ticket code');
           navigate('/audience/join');
@@ -83,6 +108,29 @@ const AudienceExitTicket = () => {
     if (unansweredQuestions?.length > 0) {
       alert.toast.error('Please answer all questions');
       return;
+    }
+
+    const loggedInBeforeSubmit = getStoredAudienceSession();
+    const submitUid = loggedInBeforeSubmit?.uid ? String(loggedInBeforeSubmit.uid).trim() : '';
+    if (submitUid && exitTicket?.id) {
+      try {
+        const activityRes = await studentsAPI.getActivity({
+          ...getStudentQueryParams(loggedInBeforeSubmit),
+          limit: 200,
+        });
+        const items = Array.isArray(activityRes.data?.data) ? activityRes.data.data : [];
+        const alreadySubmitted = items.some(
+          (item) =>
+            String(item.type || '') === 'exitTicket' &&
+            String(item.ticketId || '') === String(exitTicket.id)
+        );
+        if (alreadySubmitted) {
+          setIsSubmitted(true);
+          return;
+        }
+      } catch {
+        // Allow submit if the check fails.
+      }
     }
 
     setIsSubmitting(true);

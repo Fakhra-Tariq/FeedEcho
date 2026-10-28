@@ -27,6 +27,7 @@ import {
 import { useAudienceLiveActivity } from '../hooks/useAudienceLiveActivity';
 import { useAuth } from '../contexts/AuthContext';
 import AudienceDashboardNavbar from '../components/Audience/AudienceDashboardNavbar';
+import { AUDIENCE_ACTIVITY_PAGE_WIDTH } from '../components/Audience/AudienceActivityLayout';
 import {
   collapseQuizAttemptRows,
   getAttemptKey,
@@ -1052,17 +1053,17 @@ export default function AudienceProgress() {
       />
 
       <div className="flex-1 overflow-y-auto min-h-0">
-      <div className="container mx-auto p-6 max-w-7xl">
-        <div className="relative bg-gradient-to-r from-primary to-primary/90 text-white rounded-xl shadow-lg p-8 mb-6 overflow-hidden">
+      <div className={`${AUDIENCE_ACTIVITY_PAGE_WIDTH} py-6 max-md:py-4`}>
+        <div className="relative bg-gradient-to-r from-primary to-primary/90 text-white rounded-xl shadow-lg p-5 sm:p-8 mb-6 overflow-hidden">
           <div className="absolute top-0 right-0 w-full h-full bg-gradient-to-l from-black/20 to-transparent" />
           <div className="relative flex items-center justify-between flex-wrap gap-4">
             <div>
               <h1 className="text-3xl md:text-4xl font-bold mb-2">Your Progress</h1>
-              <p className="text-white/90">
+              <p className="text-white/90 text-sm sm:text-base sm:text-lg">
                 Track quizzes, space races, and exit tickets — updated live.
               </p>
             </div>
-            <TrendingUp className="w-14 h-14 text-white/80 hidden sm:block" />
+            <TrendingUp className="w-8 h-8 text-white/80 hidden sm:block" />
           </div>
         </div>
 

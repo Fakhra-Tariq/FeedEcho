@@ -6,6 +6,7 @@ import { Rocket, ArrowLeft, ExternalLink, Users, ChevronDown, ChevronUp, Clock, 
 // Full Tailwind class strings only — dynamic `bg-${color}-500` is purged by JIT.
 const TEAM_COLORS = [
   {
+    fill: '#3B82F6',
     bg: 'bg-blue-500',
     border: 'border-blue-500',
     text: 'text-blue-700',
@@ -16,6 +17,7 @@ const TEAM_COLORS = [
     label: 'Blue',
   },
   {
+    fill: '#EF4444',
     bg: 'bg-red-500',
     border: 'border-red-500',
     text: 'text-red-700',
@@ -26,6 +28,7 @@ const TEAM_COLORS = [
     label: 'Red',
   },
   {
+    fill: '#22C55E',
     bg: 'bg-green-500',
     border: 'border-green-500',
     text: 'text-green-700',
@@ -36,6 +39,7 @@ const TEAM_COLORS = [
     label: 'Green',
   },
   {
+    fill: '#F59E0B',
     bg: 'bg-amber-500',
     border: 'border-amber-500',
     text: 'text-amber-700',
@@ -46,6 +50,7 @@ const TEAM_COLORS = [
     label: 'Yellow',
   },
   {
+    fill: '#A855F7',
     bg: 'bg-purple-500',
     border: 'border-purple-500',
     text: 'text-purple-700',
@@ -56,6 +61,7 @@ const TEAM_COLORS = [
     label: 'Purple',
   },
   {
+    fill: '#EC4899',
     bg: 'bg-pink-500',
     border: 'border-pink-500',
     text: 'text-pink-700',
@@ -66,6 +72,7 @@ const TEAM_COLORS = [
     label: 'Pink',
   },
   {
+    fill: '#06B6D4',
     bg: 'bg-cyan-500',
     border: 'border-cyan-500',
     text: 'text-cyan-700',
@@ -76,6 +83,7 @@ const TEAM_COLORS = [
     label: 'Cyan',
   },
   {
+    fill: '#F97316',
     bg: 'bg-orange-500',
     border: 'border-orange-500',
     text: 'text-orange-700',
@@ -86,6 +94,7 @@ const TEAM_COLORS = [
     label: 'Orange',
   },
   {
+    fill: '#14B8A6',
     bg: 'bg-teal-500',
     border: 'border-teal-500',
     text: 'text-teal-700',
@@ -96,6 +105,7 @@ const TEAM_COLORS = [
     label: 'Teal',
   },
   {
+    fill: '#6366F1',
     bg: 'bg-indigo-500',
     border: 'border-indigo-500',
     text: 'text-indigo-700',
@@ -110,6 +120,45 @@ const TEAM_COLORS = [
 const getTeamStyle = (teamId) => {
   const idx = Math.max(0, (Number(teamId) || 1) - 1);
   return TEAM_COLORS[idx % TEAM_COLORS.length];
+};
+
+const clampByte = (value) => Math.max(0, Math.min(255, Math.round(value)));
+
+const parseHexColor = (hex) => {
+  const raw = String(hex || '').replace('#', '');
+  if (raw.length === 3) {
+    return [
+      parseInt(raw[0] + raw[0], 16),
+      parseInt(raw[1] + raw[1], 16),
+      parseInt(raw[2] + raw[2], 16),
+    ];
+  }
+  return [
+    parseInt(raw.slice(0, 2), 16) || 0,
+    parseInt(raw.slice(2, 4), 16) || 0,
+    parseInt(raw.slice(4, 6), 16) || 0,
+  ];
+};
+
+const mixHex = (hex, other, amount) => {
+  const [r, g, b] = parseHexColor(hex);
+  const t = Math.max(0, Math.min(1, amount));
+  const toHex = (c, o) => clampByte(c * (1 - t) + o * t).toString(16).padStart(2, '0');
+  return `#${toHex(r, other[0])}${toHex(g, other[1])}${toHex(b, other[2])}`;
+};
+
+const pastelFromTeamColor = (base) => {
+  const white = [255, 255, 255];
+  const black = [0, 0, 0];
+  return {
+    track: mixHex(base, white, 0.92),
+    trackBorder: mixHex(base, white, 0.72),
+    fillStart: mixHex(base, white, 0.58),
+    fillEnd: mixHex(base, white, 0.38),
+    flag: mixHex(base, white, 0.28),
+    btnBorder: mixHex(base, white, 0.38),
+    btnFill: mixHex(base, white, 0.82),
+  };
 };
 
 const getRaceIcon = (icon) => {
@@ -461,8 +510,6 @@ export default function HostSpaceRaceDisplay() {
     const teamId = i + 1;
     return { teamId, score: Math.round(resolveTeamScore(teamId)) };
   });
-  const leadingScore = teamPositions.reduce((max, pos) => Math.max(max, pos.score), 0);
-  const leadingTeamCount = teamPositions.filter((pos) => pos.score === leadingScore).length;
 
   return (
     <div className="min-h-screen bg-gray-50 text-text overflow-x-hidden [overflow-anchor:none]">
@@ -506,91 +553,77 @@ export default function HostSpaceRaceDisplay() {
                   ? Math.min((teamScore / maxPossibleScore) * 100, 100)
                   : 0;
               const style = getTeamStyle(teamId);
+              const pastel = pastelFromTeamColor(style.fill);
               const teamParticipants = getTeamParticipants(teamId);
-
-              const isUniqueLeader =
-                teamScore > 0 && teamScore === leadingScore && leadingTeamCount === 1;
-              const isTiedLead =
-                teamScore > 0 && teamScore === leadingScore && leadingTeamCount > 1;
-              const isLeading = isUniqueLeader;
+              const expanded = expandedTeams.has(teamId);
+              const IconComponent = getRaceIcon(raceData?.settings?.icon || 'rocket');
 
               return (
-                <div key={teamId} className="space-y-4">
-                  {/* Team Header with Score */}
-                  <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 min-w-0">
+                <div key={teamId} className="space-y-2">
+                  <div className="flex items-center justify-between gap-2 min-w-0">
+                    <div className="flex items-center gap-2 min-w-0 flex-1">
                       <span
-                        className={`inline-flex h-3 w-3 rounded-full ${style.bg}`}
+                        className="inline-flex h-3 w-3 rounded-full shrink-0"
+                        style={{ backgroundColor: style.fill }}
                         aria-hidden="true"
                       />
-                      <span className={`text-lg font-semibold ${style.text}`}>
+                      <span className={`text-lg font-semibold truncate min-w-0 ${style.text}`}>
                         {style.label} Team
                       </span>
-                      {isTiedLead && (
-                        <span className="text-xs font-medium text-amber-600">Tied</span>
-                      )}
                     </div>
-                    <div className="flex items-center gap-3 shrink-0">
-                      <span className={`text-xl font-bold tabular-nums ${style.text}`}>
-                        {teamScore}
-                      </span>
-                      {teamParticipants.length > 0 && (
-                        <button
-                          onClick={() => toggleTeamMembers(teamId)}
-                          className={[
-                            'flex items-center space-x-1 px-3 py-1 min-h-11 rounded-lg border transition-colors',
-                            expandedTeams.has(teamId)
-                              ? `${style.softBg} ${style.softBorder} ${style.softText}`
-                              : 'bg-gray-50 border-gray-200 text-text-light hover:bg-gray-100',
-                          ].join(' ')}
-                        >
-                          <Users className="h-4 w-4" />
-                          <span className="text-sm font-medium">Show Members</span>
-                          {expandedTeams.has(teamId) ? (
-                            <ChevronUp className="h-3 w-3" />
-                          ) : (
-                            <ChevronDown className="h-3 w-3" />
-                          )}
-                        </button>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Rocket Progress Bar — width + icon follow live team score */}
-                  <div
-                    className={`relative h-14 rounded-full border-2 overflow-hidden ${style.track} ${style.border}`}
-                  >
-                    <div
-                      className={`absolute left-0 top-0 bottom-0 rounded-full transition-all duration-700 ease-in-out ${style.bg}`}
+                    <button
+                      type="button"
+                      onClick={() => toggleTeamMembers(teamId)}
+                      aria-expanded={expanded}
+                      aria-label={
+                        expanded
+                          ? `Hide members of ${style.label} Team`
+                          : `Show members of ${style.label} Team`
+                      }
+                      className="flex items-center gap-1.5 px-4 min-h-11 h-11 shrink-0 whitespace-nowrap rounded-2xl border-2 text-sm font-semibold transition-colors"
                       style={{
-                        width: `${percentage}%`,
-                        minWidth: percentage > 0 ? '2.5rem' : '0',
-                      }}
-                    />
-                    <div
-                      className={`absolute top-1/2 -translate-y-1/2 z-20 transition-all duration-700 ease-in-out flex items-center justify-center ${
-                        isLeading ? 'scale-110' : 'scale-100'
-                      }`}
-                      style={{
-                        left: `clamp(0.25rem, calc(${percentage}% - 1.25rem), calc(100% - 2.75rem))`,
+                        color: pastel.flag,
+                        borderColor: pastel.btnBorder,
+                        backgroundColor: expanded ? pastel.btnFill : '#ffffff',
                       }}
                     >
-                      <div
-                        className={`w-10 h-10 rounded-full ${style.bg} flex items-center justify-center shadow-md ${
-                          isLeading ? 'animate-pulse' : ''
-                        }`}
-                      >
-                        {(() => {
-                          const IconComponent = getRaceIcon(raceData?.settings?.icon || 'rocket');
-                          return (
-                            <IconComponent className="w-6 h-6 text-white drop-shadow" strokeWidth={2} />
-                          );
-                        })()}
+                      <Users className="h-4 w-4 shrink-0" />
+                      <span>{expanded ? 'Hide Members' : 'Show Members'}</span>
+                      {expanded ? (
+                        <ChevronUp className="h-3 w-3 shrink-0" />
+                      ) : (
+                        <ChevronDown className="h-3 w-3 shrink-0" />
+                      )}
+                    </button>
+                  </div>
+
+                  <div
+                    className="relative h-11 rounded-full overflow-hidden"
+                    style={{
+                      backgroundColor: pastel.track,
+                      border: `1.5px solid ${pastel.trackBorder}`,
+                    }}
+                  >
+                    <div
+                      className="h-full rounded-full flex items-center justify-end transition-all duration-700 ease-in-out"
+                      style={{
+                        width: `${percentage}%`,
+                        minWidth: 42,
+                        paddingLeft: 5,
+                        paddingRight: 5,
+                        background: `linear-gradient(90deg, ${pastel.fillStart}, ${pastel.fillEnd})`,
+                      }}
+                    >
+                      <div className="w-8 h-8 rounded-full bg-white flex items-center justify-center shrink-0">
+                        <IconComponent
+                          className="w-4 h-4"
+                          style={{ color: pastel.flag }}
+                          strokeWidth={2}
+                        />
                       </div>
                     </div>
                   </div>
 
-                  {/* Team Stats */}
                   <div className={`flex items-center justify-between text-sm ${style.softText}`}>
                     <span>
                       {teamParticipants.length} participant
@@ -599,28 +632,33 @@ export default function HostSpaceRaceDisplay() {
                     <span className={`font-semibold ${style.text}`}>Score: {teamScore}</span>
                   </div>
 
-                  {/* Team Members List — individual scores unchanged */}
-                  {expandedTeams.has(teamId) && teamParticipants.length > 0 && (
+                  {expanded && (
                     <div
-                      className={`rounded-lg border p-4 space-y-2 ${style.softBg} ${style.softBorder}`}
+                      className={`rounded-xl border p-3 space-y-2 ${style.softBg} ${style.softBorder}`}
                     >
-                      <h4 className={`text-sm font-semibold mb-3 ${style.text}`}>Team Members</h4>
-                      {teamParticipants.map((participant, memberIndex) => (
-                        <div
-                          key={participant.id}
-                          className="flex items-center justify-between gap-3 py-2 px-3 bg-white rounded-md border border-gray-100 min-w-0"
-                        >
-                          <div className="flex items-center space-x-3 min-w-0">
-                            <span className={`text-sm font-medium w-6 shrink-0 ${style.softText}`}>
-                              {memberIndex + 1}.
+                      <h4 className={`text-sm font-semibold mb-1 ${style.text}`}>Team Members</h4>
+                      {teamParticipants.length === 0 ? (
+                        <p className="text-sm text-text-light">No members yet</p>
+                      ) : (
+                        teamParticipants.map((participant, memberIndex) => (
+                          <div
+                            key={participant.id}
+                            className="flex items-center justify-between gap-3 py-2 px-3 bg-white rounded-lg border border-gray-100 min-w-0 min-h-11"
+                          >
+                            <div className="flex items-center space-x-3 min-w-0">
+                              <span className={`text-sm font-medium w-6 shrink-0 ${style.softText}`}>
+                                {memberIndex + 1}.
+                              </span>
+                              <span className="font-medium text-text break-words min-w-0">
+                                {participant.name}
+                              </span>
+                            </div>
+                            <span className={`font-bold ${style.text}`}>
+                              {Math.round(teamScore)}
                             </span>
-                            <span className="font-medium text-text break-words min-w-0">{participant.name}</span>
                           </div>
-                          <span className={`font-bold ${style.text}`}>
-                            {Math.round(teamScore)}
-                          </span>
-                        </div>
-                      ))}
+                        ))
+                      )}
                     </div>
                   )}
                 </div>

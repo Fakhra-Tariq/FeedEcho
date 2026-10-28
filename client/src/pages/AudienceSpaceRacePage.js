@@ -525,7 +525,7 @@ export default function AudienceSpaceRacePage() {
     <div className="flex flex-col md:flex-row h-[100dvh] max-h-[100dvh] overflow-hidden overflow-x-hidden bg-background">
       <div className="w-full md:flex-1 flex flex-col min-w-0 min-h-0 overflow-hidden">
         <div className="flex-shrink-0">
-          <div className="h-16 overflow-hidden max-md:h-auto max-md:overflow-visible">
+          <div className="h-16 overflow-hidden">
             <AudienceActivityHeader
               title={spaceRaceQuizTitle}
               titleIcon={<Rocket className="w-4 h-4 shrink-0 text-[#6D415F] max-md:w-3.5 max-md:h-3.5" />}
@@ -537,8 +537,8 @@ export default function AudienceSpaceRacePage() {
               leftAlignMobileTitle
               rightAddon={
                 isQuizView && quizTimerLabel != null ? (
-                  <span className="hidden md:inline-flex items-center gap-1 font-semibold text-primary text-sm whitespace-nowrap tabular-nums shrink-0">
-                    <Clock className="w-4 h-4" />
+                  <span className="inline-flex items-center gap-1 font-semibold text-primary text-sm whitespace-nowrap tabular-nums shrink-0 max-md:gap-1 max-md:px-1.5 max-md:py-0.5 max-md:rounded-full max-md:bg-primary/10 max-md:text-[13px] max-md:font-medium">
+                    <Clock className="w-4 h-4 max-md:w-3.5 max-md:h-3.5 shrink-0" />
                     {quizTimerLabel}
                   </span>
                 ) : null

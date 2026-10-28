@@ -42,7 +42,7 @@ export default function AudienceDashboardNavbar({
           <div className="hidden md:flex items-center space-x-6">
             <a
               href="/audience/home"
-              className={`flex items-center space-x-2 ${
+              className={`flex items-center space-x-2 text-sm ${
                 isHome ? 'text-primary font-medium' : 'text-gray-700 hover:text-primary transition-colors'
               }`}
             >
@@ -51,7 +51,7 @@ export default function AudienceDashboardNavbar({
             </a>
             <Link
               to="/audience/progress"
-              className={`flex items-center space-x-2 ${
+              className={`flex items-center space-x-2 text-sm ${
                 isProgress ? 'text-primary font-medium' : 'text-gray-700 hover:text-primary transition-colors'
               }`}
             >
@@ -83,7 +83,7 @@ export default function AudienceDashboardNavbar({
                 className="flex items-center space-x-2 p-2 rounded-lg hover:bg-gray-100 transition-colors min-h-11 max-[480px]:min-w-11 max-[480px]:justify-center"
               >
                 <AudienceAvatar name={name} />
-                <span className="font-medium text-text max-md:max-w-[4.5rem] max-md:truncate max-[480px]:hidden">
+                <span className="text-sm font-medium text-text max-md:max-w-[4.5rem] max-md:truncate max-[480px]:hidden">
                   {name.split(' ')[0] || 'Audience'}
                 </span>
                 <ChevronDown className="w-4 h-4 text-gray-500 shrink-0 max-[480px]:hidden" />
