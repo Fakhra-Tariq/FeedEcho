@@ -1,6 +1,11 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Plus, Play, Square, Eye, Users, FileText, X, BarChart3, CheckCircle, Copy, Trash2, Loader2, Check, Edit } from 'lucide-react';
+import {
+  ExitTicketPresentButton,
+  ExitTicketWordCloudPresent,
+  useExitTicketCloudItems,
+} from '../components/Host/ExitTicketWordCloud';
 import { useHybridAlert } from '../contexts/HybridAlertContext';
 import { exitTicketsAPI } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
@@ -111,6 +116,7 @@ export default function ExitTicketDashboard() {
   const fallbackRequestedRef = useRef(false);
   const rtdbSignatureRef = useRef('');
   const [viewingResponses, setViewingResponses] = useState(null);
+  const [presentingCloud, setPresentingCloud] = useState(false);
   const [responses, setResponses] = useState([]);
   const [isLoadingResponses, setIsLoadingResponses] = useState(false);
   const [showJoinCodeModal, setShowJoinCodeModal] = useState(false);
@@ -311,6 +317,7 @@ export default function ExitTicketDashboard() {
       if (response.data.success) {
         alert.toast.success('All responses cleared successfully!');
         setViewingResponses(null);
+        setPresentingCloud(false);
         setResponses([]);
         // Tickets update in realtime via RTDB listener
         
@@ -827,6 +834,9 @@ export default function ExitTicketDashboard() {
                 </div>
                 <div className="flex gap-2">
                   {responses.length > 0 && (
+                    <ExitTicketPresentButton onClick={() => setPresentingCloud(true)} />
+                  )}
+                  {responses.length > 0 && (
                     <button
                       onClick={() => clearResponses(viewingResponses)}
                       className="px-3 py-2 bg-primary text-white rounded hover:bg-opacity-80 transition-colors text-sm font-medium"
@@ -837,6 +847,7 @@ export default function ExitTicketDashboard() {
                   <button
                     onClick={() => {
                       setViewingResponses(null);
+                      setPresentingCloud(false);
                       setResponses([]);
                     }}
                     className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
@@ -858,7 +869,14 @@ export default function ExitTicketDashboard() {
                   <p className="mt-1 text-xs text-text-light">Audience members haven't submitted any feedback.</p>
                 </div>
               ) : (
-                <FeedbackView responses={responses} showAttendanceNames={showAttendanceNames} setShowAttendanceNames={setShowAttendanceNames} />
+                <FeedbackView
+                  responses={responses}
+                  ticket={tickets.find((t) => t.id === viewingResponses)}
+                  showAttendanceNames={showAttendanceNames}
+                  setShowAttendanceNames={setShowAttendanceNames}
+                  presentingCloud={presentingCloud}
+                  setPresentingCloud={setPresentingCloud}
+                />
               )}
             </div>
           </div>
@@ -977,20 +995,43 @@ export default function ExitTicketDashboard() {
 }
 
 // Feedback View Component
-const FeedbackView = ({ responses, showAttendanceNames, setShowAttendanceNames }) => {
+const FeedbackView = ({
+  responses,
+  ticket,
+  showAttendanceNames,
+  setShowAttendanceNames,
+  presentingCloud,
+  setPresentingCloud,
+}) => {
   const [selectedQuestion, setSelectedQuestion] = useState(0);
-  
+  const [shortTextMode, setShortTextMode] = useState('words');
+
+  const questions = useMemo(() => {
+    const firstResponse = responses?.[0];
+    const ticketQuestions = Array.isArray(ticket?.questions) ? ticket.questions : [];
+    const answerCount = Array.isArray(firstResponse?.answers)
+      ? firstResponse.answers.length
+      : Object.keys(firstResponse?.answers || {}).length;
+    const source = ticketQuestions.length
+      ? ticketQuestions
+      : Array.from({ length: answerCount }, () => ({}));
+    return source.map((question, index) => ({
+      index,
+      prompt: question.prompt || `Question ${index + 1}`,
+      type: question.type || 'short_text',
+      options: question.options,
+    }));
+  }, [responses, ticket]);
+
+  const activeQuestion = questions[selectedQuestion] || questions[0] || { type: 'short_text' };
+  const cloudData = useExitTicketCloudItems(
+    responses,
+    selectedQuestion,
+    activeQuestion,
+    shortTextMode
+  );
   if (!responses || responses.length === 0) return null;
-  
-  // Get questions from first response
-  const firstResponse = responses[0];
-  if (!firstResponse || !firstResponse.answers) return null;
-  
-  const questions = firstResponse.answers.map((_, index) => ({
-    index,
-    prompt: `Question ${index + 1}`,
-    type: 'short_text'
-  }));
+  if (!questions.length) return null;
   
   return (
     <div className="space-y-6">
@@ -1110,6 +1151,22 @@ const FeedbackView = ({ responses, showAttendanceNames, setShowAttendanceNames }
           </div>
         </div>
       </div>
+      <ExitTicketWordCloudPresent
+        open={Boolean(presentingCloud)}
+        onClose={() => setPresentingCloud(false)}
+        questionIndex={selectedQuestion}
+        questionCount={questions.length}
+        onPrev={() =>
+          setSelectedQuestion((prev) => (prev - 1 + questions.length) % questions.length)
+        }
+        onNext={() => setSelectedQuestion((prev) => (prev + 1) % questions.length)}
+        question={activeQuestion}
+        items={cloudData.items}
+        extra={cloudData.extra}
+        responseCount={responses.length}
+        shortTextMode={shortTextMode}
+        onShortTextModeChange={setShortTextMode}
+      />
     </div>
   );
 };
