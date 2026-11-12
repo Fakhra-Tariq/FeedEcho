@@ -3,6 +3,7 @@ import {
   buildBulbCloudLists,
   cloudListSeed,
   colorForCloudItem,
+  fillerCountForArea,
   sanitizeCloudText,
   sortCloudItems,
   tooltipForCloudItem,
@@ -74,6 +75,14 @@ describe('buildBulbCloudLists', () => {
     });
     expect(fillerList.every((row) => row[2].real === false)).toBe(true);
     expect(realList.every((row) => row[2].real === true)).toBe(true);
+  });
+
+  it('uses a one-shot filler count between 120 and 250 minus reals', () => {
+    const copies = fillerCountForArea(1392, 720, 3);
+    expect(copies).toBeGreaterThanOrEqual(117);
+    expect(copies).toBeLessThanOrEqual(247);
+    expect(fillerCountForArea(800, 600, 0)).toBe(0);
+    expect(fillerCountForArea(800, 600, 40)).toBe(0);
   });
 
   it('does not add filler at 40+ real items', () => {

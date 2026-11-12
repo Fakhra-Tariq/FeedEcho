@@ -2,7 +2,6 @@ const PLUM = '#4A1F3D';
 const MASK_OCCUPIED = '#010203';
 const GOLD = '#F4C95D';
 const FILL_THRESHOLD = 40;
-const FILLER_COPIES = 160;
 
 export const WORD_CLOUD_BG = PLUM;
 
@@ -132,11 +131,48 @@ export function paintBulbOccupancyMask(ctx, width, height, backgroundColor = PLU
 }
 
 export function clipCanvasToBulb(ctx, width, height) {
+  const tmp = document.createElement('canvas');
+  tmp.width = width;
+  tmp.height = height;
+  const tctx = tmp.getContext('2d');
+  if (!tctx) return;
+  tctx.fillStyle = '#ffffff';
+  fillBulbShape(tctx, width, height);
   ctx.save();
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
   ctx.globalCompositeOperation = 'destination-in';
-  ctx.fillStyle = '#ffffff';
-  fillBulbShape(ctx, width, height);
+  ctx.drawImage(tmp, 0, 0);
   ctx.restore();
+}
+
+export function fillerCountForArea(width, height, realCount) {
+  const n = Math.max(0, realCount);
+  if (n === 0 || n >= FILL_THRESHOLD) return 0;
+  const area = Math.max(1, width) * Math.max(1, height);
+  const target = Math.max(120, Math.min(250, Math.round(area / 2200)));
+  return Math.max(0, target - n);
+}
+
+export function isPointInBulb(x, y, width, height) {
+  const m = bulbMetrics(width, height);
+  const dx = x - m.cx;
+  const dy = y - m.cy;
+  if (dx * dx + dy * dy <= m.R * m.R) return true;
+  if (y >= m.neckTop && y <= m.neckBottom) {
+    const t = (y - m.neckTop) / Math.max(1, m.neckBottom - m.neckTop);
+    const half = m.neckTopW + t * (m.neckBotW - m.neckTopW);
+    if (Math.abs(x - m.cx) <= half) return true;
+  }
+  if (y >= m.baseTop && y <= m.baseBottom && Math.abs(x - m.cx) <= m.baseW) return true;
+  return false;
+}
+
+export function countGlyphsOutsideBulb(hits, width, height) {
+  return (hits || []).filter((box) => {
+    const cx = (box.left + box.right) / 2;
+    const cy = (box.top + box.bottom) / 2;
+    return !isPointInBulb(cx, cy, width, height);
+  }).length;
 }
 
 export function colorForCloudItem(item, rank, total) {
@@ -156,7 +192,7 @@ const fillerTint = (index) => {
  * Real items first (weights 70-100). If fewer than 40, cycle dim filler copies
  * (weights 22-32) that exist only for packing. Never use filler in counts.
  */
-export function buildBulbCloudLists(items) {
+export function buildBulbCloudLists(items, { width = 800, height = 600, fillerScale = 1 } = {}) {
   const real = sortCloudItems(items);
   const maxCount = real[0]?.count || 1;
   const minCount = real[real.length - 1]?.count || 1;
@@ -169,11 +205,9 @@ export function buildBulbCloudLists(items) {
       { real: true, count: item.count, color: colorForCloudItem(item, index, real.length) },
     ];
   });
-  if (real.length === 0 || real.length >= FILL_THRESHOLD) {
-    return { realList, fillerList: [], realCount: real.length };
-  }
+  const copies = Math.round(fillerCountForArea(width, height, real.length) * fillerScale);
   const fillerList = [];
-  for (let i = 0; i < FILLER_COPIES; i += 1) {
+  for (let i = 0; i < copies; i += 1) {
     const item = real[i % real.length];
     const weight = 22 + (i % 6) * 2;
     fillerList.push([item.label, weight, { real: false, color: fillerTint(i) }]);

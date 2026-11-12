@@ -58,6 +58,10 @@ const AudienceExitTicketJoin = lazy(() => import('./pages/AudienceExitTicketJoin
 const HostExitTicketResponses = lazy(() => import('./pages/HostExitTicketResponses'));
 const HostSpaceRaceDisplay = lazy(() => import('./pages/HostSpaceRaceDisplay'));
 const HostAnonymousChat = lazy(() => import('./pages/HostAnonymousChat'));
+const WordCloudPreview =
+  process.env.NODE_ENV !== 'production'
+    ? lazy(() => import('./pages/dev/WordCloudPreview'))
+    : null;
 
 function RouteFallback() {
   return (
@@ -100,6 +104,9 @@ function AppContent() {
       <main className="flex-grow">
         <Suspense fallback={<RouteFallback />}>
           <Routes>
+            {WordCloudPreview ? (
+              <Route path="/dev/word-cloud" element={<WordCloudPreview />} />
+            ) : null}
             {/* Public Routes */}
             <Route path="/" element={<RedirectIfHostTeacher redirectStudent><Home /></RedirectIfHostTeacher>} />
             <Route path="/join" element={<RedirectIfHostTeacher redirectStudent><AudienceJoin /></RedirectIfHostTeacher>} />

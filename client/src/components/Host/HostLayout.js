@@ -10,6 +10,7 @@ const navItems = [
   { label: 'Sessions', to: '/sessions' },
   { label: 'Quiz', to: '/host/launch' },
   { label: 'Library', to: '/host/library' },
+  { label: 'Live Chat', to: '/host/anonymous-chat' },
   { label: 'Space Race', to: '/host/space-race' },
   { label: 'Exit Ticket', to: '/host/exit-tickets' },
   { label: 'Reports', to: '/host/reports' },
@@ -96,7 +97,7 @@ const HostLayout = () => {
       )}
       <header className="fixed inset-x-0 top-0 z-40 bg-white/80 backdrop-blur-md border-b border-gray-200">
         <div className={TEACHER_PAGE_GUTTER}>
-          <div className="relative flex items-center justify-start h-16 w-full min-w-0 gap-2 max-[480px]:gap-1 lg:gap-8 xl:gap-12">
+          <div className="relative flex items-center justify-start h-16 w-full min-w-0 gap-2 max-[480px]:gap-1 lg:gap-4 xl:gap-12">
             <button
               ref={menuButtonRef}
               type="button"
@@ -126,14 +127,14 @@ const HostLayout = () => {
               />
             </div>
 
-            <nav className="hidden lg:flex flex-1 items-center justify-center gap-3 min-w-0">
+            <nav className="hidden lg:flex flex-1 items-center justify-center min-w-0 gap-1.5 xl:gap-3">
               {navItems.map((item) => (
                 <NavLink
                   key={item.to}
                   to={item.to}
                   className={({ isActive }) =>
                     clsx(
-                      'shrink-0 whitespace-nowrap px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200',
+                      'shrink-0 whitespace-nowrap px-2 xl:px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200',
                       isActive ? 'bg-[#6D415F] text-white shadow-soft' : 'hover:bg-[#6D415F]/10 hover:text-[#6D415F]'
                     )
                   }
