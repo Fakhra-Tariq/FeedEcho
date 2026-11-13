@@ -105,9 +105,8 @@ function BrainWordCloud({ items, extra, empty }) {
     if (!el) return undefined;
     let debounce = 0;
     const apply = () => {
-      const parent = el.parentElement;
-      const pw = parent?.clientWidth || el.getBoundingClientRect().width;
-      const ph = parent?.clientHeight || el.getBoundingClientRect().height;
+      const pw = el.clientWidth || el.getBoundingClientRect().width;
+      const ph = el.clientHeight || el.getBoundingClientRect().height;
       if (pw < 40 || ph < 40) return;
       const next = fitBrainBox(pw, ph, {
         viewportW: window.innerWidth,
@@ -127,15 +126,16 @@ function BrainWordCloud({ items, extra, empty }) {
     };
     apply();
     const ro = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(schedule) : null;
-    if (el.parentElement) ro?.observe(el.parentElement);
-    else ro?.observe(el);
+    ro?.observe(el);
     window.addEventListener('resize', schedule);
     window.addEventListener('orientationchange', schedule);
+    document.addEventListener('fullscreenchange', schedule);
     return () => {
       window.clearTimeout(debounce);
       ro?.disconnect();
       window.removeEventListener('resize', schedule);
       window.removeEventListener('orientationchange', schedule);
+      document.removeEventListener('fullscreenchange', schedule);
     };
   }, []);
 
@@ -196,14 +196,14 @@ function BrainWordCloud({ items, extra, empty }) {
           fontFamily: CLOUD_FONT_STACK,
           backgroundColor: WORD_CLOUD_SHAPE_FILL,
           clearCanvas: false,
-          minSize: cssW < 640 ? Math.max(6, Math.round(11 * (window.devicePixelRatio || 1))) : 6,
+          minSize: options.minSize,
           drawOutOfBound: false,
           minRotation: 0,
           maxRotation: Math.PI / 2,
           rotationSteps: 2,
           shuffle: true,
-          shape: 'circle',
-          ellipticity: 440 / 700,
+          shape: 'square',
+          ellipticity: 1,
           wait: 0,
           list: list.map((row) => row.slice()),
           ...options,
@@ -253,17 +253,22 @@ function BrainWordCloud({ items, extra, empty }) {
       logCloud('lists', { real: realList.length, filler: fillerList.length });
       const seed = cloudListSeed(items);
       const metrics = brainMetrics(cw, ch);
-      const phone = cssW < 640;
-      const maxFont = phone
-        ? Math.min(38 * dpr, Math.max(22 * dpr, metrics.drawnH * 0.16))
-        : Math.max(28 * dpr, Math.min(metrics.R * 0.5, 96 * dpr));
-      const gridSize = Math.max(4, Math.min(6, Math.round(4 * dpr)));
+      const phone = Math.min(window.innerWidth, cssW) < 640;
+      const drawnHcss = metrics.drawnH / dpr;
+      const maxFontCss = phone
+        ? Math.min(38, Math.max(22, drawnHcss * 0.16))
+        : Math.min(90, Math.max(64, drawnHcss * 0.11));
+      const minFontCss = phone ? 11 : 14;
+      const maxFont = maxFontCss * dpr;
+      const minSize = minFontCss * dpr;
+      const gridSize = Math.max(2, Math.min(4, Math.round(3 * dpr)));
       const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
       const restoreRandom = installSeededRandom(seed);
       canvas._restoreRandom = restoreRandom;
 
       const shared = {
         gridSize,
+        minSize,
         origin: [metrics.cx, metrics.cy],
         weightFactor: (weight) => (Number(weight) / 100) * maxFont,
         color: (word, weight, fontSize, distance, theta, extra) => {
@@ -378,10 +383,12 @@ function BrainWordCloud({ items, extra, empty }) {
           const ctx = canvas.getContext('2d');
           const { realList } = buildBulbCloudLists(items, { width: cssW, height: cssH });
           const metrics = brainMetrics(cw, ch);
-          const phone = cssW < 640;
-          const maxFont = phone
-            ? Math.min(38 * dpr, Math.max(22 * dpr, metrics.drawnH * 0.16))
-            : Math.max(28 * dpr, Math.min(metrics.R * 0.5, 96 * dpr));
+          const phone = Math.min(window.innerWidth, cssW) < 640;
+          const drawnHcss = metrics.drawnH / dpr;
+          const maxFontCss = phone
+            ? Math.min(38, Math.max(22, drawnHcss * 0.16))
+            : Math.min(90, Math.max(64, drawnHcss * 0.11));
+          const maxFont = maxFontCss * dpr;
           if (ctx) {
             drawFallbackReals(ctx, realList, maxFont);
             clipCanvasToBrain(ctx, cw, ch);
@@ -415,59 +422,66 @@ function BrainWordCloud({ items, extra, empty }) {
   return (
     <div
       ref={wrapRef}
-      className="relative mx-auto min-h-0 overflow-x-hidden shrink-0"
-      style={{
-        width: size.width ? `${size.width}px` : '100%',
-        height: size.height ? `${size.height}px` : '100%',
-        maxWidth: '100%',
-        maxHeight: '100%',
-      }}
+      className="relative w-full h-full min-h-0 overflow-hidden flex items-center justify-center"
     >
       {empty ? (
         <p className="absolute inset-0 flex items-center justify-center text-center text-sm text-white/85 px-6">
           No responses yet. The cloud will appear as answers come in.
         </p>
       ) : (
-        <canvas
-          ref={canvasRef}
-          className="absolute inset-0 w-full h-full block bg-[#4A1F3D]"
-          role="img"
-          aria-label="Word cloud"
-          onMouseMove={(event) => {
-            const hits = canvasRef.current?._realHits;
-            if (!hits?.length) {
-              setTooltip(null);
-              return;
-            }
-            const rect = canvasRef.current.getBoundingClientRect();
-            const scaleX = canvasRef.current.width / rect.width;
-            const scaleY = canvasRef.current.height / rect.height;
-            const x = (event.clientX - rect.left) * scaleX;
-            const y = (event.clientY - rect.top) * scaleY;
-            const hit = hits.find(
-              (box) => x >= box.left && x <= box.right && y >= box.top && y <= box.bottom
-            );
-            if (hit) {
-              setTooltip({
-                text: `${hit.text}: ${hit.count} response${hit.count === 1 ? '' : 's'}`,
-                x: event.clientX,
-                y: event.clientY,
-              });
-            } else {
-              setTooltip(null);
-            }
+        <div
+          className="relative max-w-full max-h-full"
+          style={{
+            width: size.width ? `${size.width}px` : '100%',
+            height: size.height ? `${size.height}px` : '100%',
           }}
-          onMouseLeave={() => setTooltip(null)}
-          onClick={(event) => {
-            event.currentTarget.dispatchEvent(
-              new MouseEvent('mousemove', {
-                clientX: event.clientX,
-                clientY: event.clientY,
-                bubbles: true,
-              })
-            );
-          }}
-        />
+        >
+          <canvas
+            ref={canvasRef}
+            className="block bg-[#4A1F3D]"
+            role="img"
+            aria-label="Word cloud"
+            onMouseMove={(event) => {
+              const hits = canvasRef.current?._realHits;
+              if (!hits?.length) {
+                setTooltip(null);
+                return;
+              }
+              const rect = canvasRef.current.getBoundingClientRect();
+              const scaleX = canvasRef.current.width / rect.width;
+              const scaleY = canvasRef.current.height / rect.height;
+              const x = (event.clientX - rect.left) * scaleX;
+              const y = (event.clientY - rect.top) * scaleY;
+              const hit = hits.find(
+                (box) => x >= box.left && x <= box.right && y >= box.top && y <= box.bottom
+              );
+              if (hit) {
+                setTooltip({
+                  text: `${hit.text}: ${hit.count} response${hit.count === 1 ? '' : 's'}`,
+                  x: event.clientX,
+                  y: event.clientY,
+                });
+              } else {
+                setTooltip(null);
+              }
+            }}
+            onMouseLeave={() => setTooltip(null)}
+            onClick={(event) => {
+              event.currentTarget.dispatchEvent(
+                new MouseEvent('mousemove', {
+                  clientX: event.clientX,
+                  clientY: event.clientY,
+                  bubbles: true,
+                })
+              );
+            }}
+          />
+          {extra > 0 ? (
+            <p className="absolute bottom-1 left-0 right-0 text-center text-[11px] text-white/70 pointer-events-none">
+              +{extra} more
+            </p>
+          ) : null}
+        </div>
       )}
       {tooltip ? (
         <div
@@ -476,11 +490,6 @@ function BrainWordCloud({ items, extra, empty }) {
         >
           {tooltip.text}
         </div>
-      ) : null}
-      {!empty && extra > 0 ? (
-        <p className="absolute bottom-1 left-0 right-0 text-center text-[11px] text-white/70">
-          +{extra} more
-        </p>
       ) : null}
     </div>
   );
@@ -586,7 +595,7 @@ export function ExitTicketWordCloudPresent({
           <ExitTicketShortTextModeChips value={shortTextMode} onChange={onShortTextModeChange} />
         </div>
       ) : null}
-      <div className="flex-1 flex items-stretch justify-center min-h-0 w-full">
+      <div className="flex-1 flex items-center justify-center min-h-0 w-full h-full">
         <BrainWordCloud items={items} extra={extra} empty={!items.length} />
       </div>
       {questionCount > 1 ? (

@@ -190,9 +190,18 @@ describe('BRAIN_SHAPE', () => {
 });
 
 describe('fitBrainBox', () => {
-  it('caps desktop size to 80% of the shorter viewport side', () => {
+  it('fills about 92% of a large desktop stage and keeps aspect ratio', () => {
+    const box = fitBrainBox(1800, 900, { viewportW: 1920, viewportH: 1080 });
+    expect(box.height).toBeGreaterThan(700);
+    expect(box.height).toBeCloseTo(900 * 0.92, 0);
+    expect(box.width).toBeLessThanOrEqual(1920 * 0.75);
+    expect(box.width / box.height).toBeCloseTo(700 / 440);
+  });
+
+  it('does not cap desktop width to 80% of the shorter viewport side', () => {
     const box = fitBrainBox(1400, 800, { viewportW: 1400, viewportH: 900 });
-    expect(box.width).toBeLessThanOrEqual(720);
+    expect(box.width).toBeGreaterThan(720);
+    expect(box.width).toBeLessThanOrEqual(1400 * 0.75);
     expect(box.width / box.height).toBeCloseTo(700 / 440);
   });
 
@@ -203,9 +212,9 @@ describe('fitBrainBox', () => {
     expect(box.width / box.height).toBeCloseTo(700 / 440);
   });
 
-  it('uses full padded width on phone portrait', () => {
+  it('uses nearly the full padded width on phone portrait', () => {
     const box = fitBrainBox(272, 500, { viewportW: 320, viewportH: 568 });
-    expect(box.width).toBeCloseTo(272);
+    expect(box.width).toBeGreaterThan(260);
     expect(box.width).toBeLessThanOrEqual(272);
   });
 });

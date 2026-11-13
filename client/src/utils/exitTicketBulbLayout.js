@@ -101,32 +101,26 @@ export function withSeededRandom(seed, fn) {
   }
 }
 
-/** Fit the 700×440 design canvas inside available Present-mode space. */
+/**
+ * Fit the 700×440 design canvas in the Present stage (object-fit: contain).
+ * Desktop uses 92% of the stage and never exceeds 75% of the viewport width.
+ * Phone/tablet use almost the full padded stage (no vmin cap).
+ */
 export function fitBrainBox(availW, availH, { viewportW = availW, viewportH = availH } = {}) {
-  const aspect = BRAIN_SHAPE.designWidth / BRAIN_SHAPE.designHeight;
+  const dw = BRAIN_SHAPE.designWidth;
+  const dh = BRAIN_SHAPE.designHeight;
   const vw = Math.max(1, viewportW);
-  const vh = Math.max(1, viewportH);
-  const vmin = Math.min(vw, vh);
-  let maxW = Math.max(1, availW);
+  const stageW = Math.max(1, availW);
+  const stageH = Math.max(1, availH);
+  const fill = vw >= 1024 ? 0.92 : 0.98;
+  let maxW = stageW * fill;
+  const maxH = stageH * fill;
   if (vw >= 1024) {
-    maxW = Math.min(maxW, vmin * 0.8);
+    maxW = Math.min(maxW, vw * 0.75);
   }
-  const maxH = Math.max(1, availH);
-  let w = maxW;
-  let h = w / aspect;
-  if (h > maxH || vh < 500) {
-    h = Math.min(maxH, h);
-    w = h * aspect;
-    if (w > maxW) {
-      w = maxW;
-      h = w / aspect;
-      if (h > maxH) {
-        h = maxH;
-        w = h * aspect;
-      }
-    }
-  }
-  return { width: w, height: h };
+  const scale = Math.min(maxW / dw, maxH / dh);
+  const safe = Number.isFinite(scale) && scale > 0 ? scale : 1;
+  return { width: dw * safe, height: dh * safe };
 }
 
 export function brainMetrics(width, height) {
