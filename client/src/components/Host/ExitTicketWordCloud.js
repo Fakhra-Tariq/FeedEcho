@@ -11,6 +11,7 @@ import {
 import {
   CLOUD_FONT_STACK,
   WORD_CLOUD_BG,
+  WORD_CLOUD_BULB_FILL,
   bulbMetrics,
   buildBulbCloudLists,
   clipCanvasToBulb,
@@ -177,7 +178,7 @@ function BulbWordCloud({ items, extra, empty }) {
         logCloud('library-start', { n: list.length, shrinkToFit: options.shrinkToFit });
         WordCloud(canvas, {
           fontFamily: CLOUD_FONT_STACK,
-          backgroundColor: WORD_CLOUD_BG,
+          backgroundColor: WORD_CLOUD_BULB_FILL,
           clearCanvas: false,
           minSize: 6,
           drawOutOfBound: false,
@@ -194,8 +195,9 @@ function BulbWordCloud({ items, extra, empty }) {
       });
 
     const drawFallbackReals = (ctx, realList, maxFont) => {
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      paintBulbOccupancyMask(ctx, cw, ch);
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-      ctx.clearRect(0, 0, cssW, cssH);
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       const gap = 16;
@@ -224,7 +226,7 @@ function BulbWordCloud({ items, extra, empty }) {
       canvas.style.height = `${cssH}px`;
       canvas.style.backgroundColor = WORD_CLOUD_BG;
       ctx.setTransform(1, 0, 0, 1, 0, 0);
-      paintBulbOccupancyMask(ctx, cw, ch, WORD_CLOUD_BG);
+      paintBulbOccupancyMask(ctx, cw, ch);
       logCloud('mask-built', { fillerScale, sizeChanged });
 
       const { realList, fillerList, realCount } = buildBulbCloudLists(items, {
@@ -358,7 +360,10 @@ function BulbWordCloud({ items, extra, empty }) {
           const { realList } = buildBulbCloudLists(items, { width: cssW, height: cssH });
           const metrics = bulbMetrics(cw, ch);
           const maxFont = Math.max(28 * dpr, Math.min(metrics.R * 0.55, 96 * dpr));
-          if (ctx) drawFallbackReals(ctx, realList, maxFont);
+          if (ctx) {
+            drawFallbackReals(ctx, realList, maxFont);
+            clipCanvasToBulb(ctx, cw, ch);
+          }
         }
       } catch (err) {
         logCloud('error', String(err && err.message));

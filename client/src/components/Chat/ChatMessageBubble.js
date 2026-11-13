@@ -12,11 +12,20 @@ export function formatChatMessageTime(timestamp) {
  * Shared anonymous-chat bubble used by host and audience views.
  * `isOwn` is always from the current viewer's perspective.
  */
+export function audienceMessageLabel(message) {
+  if (message?.showName === true) {
+    const name = String(message.senderName || '').trim();
+    if (name) return name;
+  }
+  return 'Audience';
+}
+
 export default function ChatMessageBubble({
   message,
   isOwn,
   label,
   showStudentDot = false,
+  namedSender = false,
 }) {
   const text = message?.content || message?.message || '';
   const isHidden = Boolean(message?.isHidden);
@@ -27,14 +36,23 @@ export default function ChatMessageBubble({
       <div className="max-w-[80%] min-w-0">
         <div
           className={clsx(
-            'flex items-center gap-1.5 mb-1',
+            'flex items-center gap-1.5 mb-1 min-w-0',
             isOwn ? 'justify-end' : 'justify-start'
           )}
         >
           {showStudentDot && (
-            <span className="w-2 h-2 rounded-full bg-muted-purple" />
+            <span className="w-2 h-2 rounded-full bg-muted-purple shrink-0" />
           )}
-          <span className="text-[11px] font-medium text-text-light">{label}</span>
+          <span
+            dir="auto"
+            title={label}
+            className={clsx(
+              'text-[11px] font-medium min-w-0 max-w-full truncate',
+              namedSender ? 'text-[#6B3A5C]' : 'text-text-light'
+            )}
+          >
+            {label}
+          </span>
         </div>
 
         <div

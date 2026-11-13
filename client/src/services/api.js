@@ -269,6 +269,7 @@ export const anonymousChatAPI = {
   leave: (id, payload) => anonymousApi.post(`/anonymous-chats/${id}/leave`, payload),
   syncStats: (id) => api.post(`/anonymous-chats/${id}/sync-stats`),
   toggleModeration: (id, moderationMode) => api.put(`/anonymous-chats/${id}/toggle-moderation`, { moderationMode }),
+  toggleNamesVisible: (id, namesVisible) => api.put(`/anonymous-chats/${id}/toggle-names`, { namesVisible }),
   endChat: (id) => api.put(`/anonymous-chats/${id}/end`),
   delete: (id) => api.delete(`/anonymous-chats/${id}`),
 };

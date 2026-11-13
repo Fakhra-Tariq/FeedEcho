@@ -6,6 +6,8 @@ import {
   MessageSquare,
   Users,
   Settings,
+  Eye,
+  EyeOff,
   Trash2,
   Clock,
   Copy,
@@ -26,7 +28,7 @@ import {
 import InfoRecap from '../components/Host/InfoRecap';
 import SessionLaunchBanner from '../components/Host/SessionLaunchBanner';
 import PageHeaderCard from '../components/Host/PageHeaderCard';
-import ChatMessageBubble from '../components/Chat/ChatMessageBubble';
+import ChatMessageBubble, { audienceMessageLabel } from '../components/Chat/ChatMessageBubble';
 import { toParticipantCount } from '../utils/toParticipantCount';
 
 const MOBILE_CHAT_QUERY = 'chat';
@@ -38,12 +40,57 @@ const isMobileChatLayout = () =>
 const getMobileChatIdFromSearch = (search) =>
   new URLSearchParams(search || '').get(MOBILE_CHAT_QUERY) || '';
 
+function NamesToggleButton({ namesVisible, disabled, onClick, variant = 'onDark' }) {
+  const label = namesVisible ? 'Names visible' : 'Names hidden';
+  const Icon = namesVisible ? Eye : EyeOff;
+  const onDark = variant === 'onDark';
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      aria-pressed={namesVisible}
+      aria-label={label}
+      title="Show sender names on new messages"
+      className={clsx(
+        'inline-flex items-center justify-center min-h-11 px-3 sm:px-4 py-2 rounded-lg text-sm border transition-colors disabled:opacity-50 disabled:cursor-not-allowed',
+        namesVisible ? 'font-medium' : 'font-medium',
+        onDark &&
+          (namesVisible
+            ? 'bg-white border-white text-[#4A1F3D]'
+            : 'bg-white/10 border-white/30 text-white/90 hover:bg-white/20'),
+        !onDark &&
+          (namesVisible
+            ? 'bg-white border-[#6B3A5C] text-[#4A1F3D]'
+            : 'bg-white border-[#6D415F]/40 text-[#6D415F]')
+      )}
+    >
+      <Icon className="w-4 h-4 shrink-0" />
+      <span className="hidden min-[400px]:inline ml-2 whitespace-nowrap">{label}</span>
+      <span
+        aria-hidden="true"
+        className={clsx(
+          'ml-2 inline-flex h-5 w-9 shrink-0 items-center rounded-full p-0.5',
+          namesVisible ? 'bg-[#6B3A5C]' : onDark ? 'bg-white/30' : 'bg-[#6D415F]/25'
+        )}
+      >
+        <span
+          className={clsx(
+            'h-4 w-4 rounded-full bg-white shadow-sm motion-reduce:transition-none transition-transform duration-200',
+            namesVisible ? 'translate-x-4' : 'translate-x-0'
+          )}
+        />
+      </span>
+    </button>
+  );
+}
+
 export default function HostAnonymousChat() {
   const { user, userProfile } = useAuth();
   const uid = userProfile?.uid || user?.uid;
   const navigate = useNavigate();
   const location = useLocation();
-  const { data, setData, addAnonymousChatSession, updateAnonymousChat, logActivity, toggleChatModeration } = useHostData();
+  const { data, setData, addAnonymousChatSession, updateAnonymousChat, logActivity, toggleChatModeration, toggleChatNamesVisible } = useHostData();
   const { alert } = useHybridAlert();
   const { list: anonymousChats } = useRtdbList('chat_sessions', {
     enabled: true,
@@ -65,6 +112,7 @@ export default function HostAnonymousChat() {
   const [createdChatCode, setCreatedChatCode] = useState('');
   const [deleteConfirmChat, setDeleteConfirmChat] = useState(null);
   const [moderationMode, setModerationMode] = useState(false);
+  const [namesVisible, setNamesVisible] = useState(false);
   const [copiedCode, setCopiedCode] = useState(null);
   const [apiChats, setApiChats] = useState([]);
   const [isCreating, setIsCreating] = useState(false);
@@ -126,6 +174,7 @@ export default function HostAnonymousChat() {
       messages: selectedChatMessages,
     }));
     setModerationMode(selectedChatLive?.settings?.moderationMode || false);
+    setNamesVisible(Boolean(selectedChatLive?.namesVisible || selectedChatLive?.settings?.namesVisible));
   }, [selectedChatId, selectedChatLive, selectedChatMessages]);
 
   const sidebarChats = (anonymousChats && anonymousChats.length > 0) ? anonymousChats : apiChats;
@@ -383,6 +432,7 @@ export default function HostAnonymousChat() {
       
       // Update moderation mode state to match backend
       setModerationMode(chat.moderationMode || false);
+      setNamesVisible(Boolean(chat.namesVisible || chat.settings?.namesVisible));
       loadChatsFromApi();
     } catch (error) {
       console.error('Error creating chat:', error);
@@ -418,6 +468,20 @@ export default function HostAnonymousChat() {
     } catch (error) {
       console.error('Error toggling moderation:', error);
       alert.toast.error('Failed to toggle moderation mode. Please try again.');
+    }
+  };
+
+  const namesToggleDisabled = !selectedChat || selectedChat.status !== 'active';
+
+  const toggleNamesVisible = async () => {
+    if (namesToggleDisabled) return;
+    try {
+      const next = !namesVisible;
+      await toggleChatNamesVisible(selectedChat.id, next);
+      setNamesVisible(next);
+    } catch (error) {
+      console.error('Error toggling names visibility:', error);
+      alert.toast.error('Failed to toggle names visibility. Please try again.');
     }
   };
 
@@ -623,11 +687,11 @@ export default function HostAnonymousChat() {
         }
         subtitle="Anonymous Q&A and feedback sessions"
         actions={
-          <>
+          <div className="flex flex-wrap items-stretch gap-2 w-full sm:w-auto min-w-0">
             <button
               onClick={toggleModeration}
               className={clsx(
-                'hidden md:inline-flex items-center justify-center min-h-11 px-4 py-2 rounded-lg text-sm font-medium border transition-colors',
+                'inline-flex items-center justify-center min-h-11 px-4 py-2 rounded-lg text-sm font-medium border transition-colors',
                 moderationMode
                   ? 'bg-white/25 border-white/60 text-white hover:bg-white/35'
                   : 'bg-white/10 border-white/30 text-white/90 hover:bg-white/20'
@@ -636,6 +700,12 @@ export default function HostAnonymousChat() {
               <Settings className="w-4 h-4 mr-2" />
               {moderationMode ? 'Moderation ON' : 'Moderation OFF'}
             </button>
+            <NamesToggleButton
+              namesVisible={namesVisible}
+              disabled={namesToggleDisabled}
+              onClick={toggleNamesVisible}
+              variant="onDark"
+            />
             <button
               onClick={() => setShowCreate(true)}
               className="inline-flex items-center justify-center min-h-11 px-4 py-2 bg-white text-primary text-sm font-medium rounded-lg hover:bg-white/90 transition-colors shadow-sm"
@@ -643,7 +713,7 @@ export default function HostAnonymousChat() {
               <MessageSquare className="w-4 h-4 mr-2" />
               New Chat
             </button>
-          </>
+          </div>
         }
       />
       </div>
@@ -777,7 +847,7 @@ export default function HostAnonymousChat() {
                         </span>
                       )}
                     </div>
-                    <div className="flex items-stretch gap-2">
+                    <div className="flex flex-wrap items-stretch gap-2">
                       <button
                         type="button"
                         onClick={toggleModeration}
@@ -793,6 +863,12 @@ export default function HostAnonymousChat() {
                           {moderationMode ? 'Moderation ON' : 'Moderation OFF'}
                         </span>
                       </button>
+                      <NamesToggleButton
+                        namesVisible={namesVisible}
+                        disabled={namesToggleDisabled}
+                        onClick={toggleNamesVisible}
+                        variant="onLight"
+                      />
                       {selectedChat.status === 'active' && (
                         <button
                           type="button"
@@ -886,12 +962,14 @@ export default function HostAnonymousChat() {
                   ) : (
                     selectedMessages.map((msg) => {
                       const fromTeacher = Boolean(msg.isTeacher);
+                      const named = !fromTeacher && msg.showName === true && Boolean(String(msg.senderName || '').trim());
                       return (
                         <ChatMessageBubble
                           key={msg.id}
                           message={msg}
                           isOwn={fromTeacher}
-                          label={fromTeacher ? 'You' : 'Audience'}
+                          label={fromTeacher ? 'You' : audienceMessageLabel(msg)}
+                          namedSender={named}
                           showStudentDot={!fromTeacher}
                         />
                       );

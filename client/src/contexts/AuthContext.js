@@ -6,6 +6,7 @@ import {
   signOut,
   onAuthStateChanged,
   sendPasswordResetEmail,
+  sendEmailVerification,
   updateProfile,
   GoogleAuthProvider,
   signInWithPopup,
@@ -26,6 +27,14 @@ import {
   getActivePortal,
   restoreActivePortalForUser,
 } from '../utils/userRoles';
+import {
+  isDisposableEmail,
+  isEmailFormatValid,
+  isPasswordValid,
+  mapAuthError,
+  needsEmailVerification as userNeedsEmailVerification,
+  normalizeEmail,
+} from '../utils/emailAuth';
 
 const isFirebaseOnly = process.env.REACT_APP_FIREBASE_ONLY === 'true';
 const AUTH_INIT_TIMEOUT_MS = process.env.NODE_ENV === 'production' ? 90000 : 25000;
@@ -334,7 +343,7 @@ export const AuthProvider = ({ children }) => {
 
   const login = async (email, password) => {
     try {
-      const result = await signInWithEmailAndPassword(auth, email, password);
+      const result = await signInWithEmailAndPassword(auth, normalizeEmail(email), password);
       const token = await result.user.getIdToken();
       localStorage.setItem('token', token);
       if (isFirebaseOnly) {
@@ -363,28 +372,7 @@ export const AuthProvider = ({ children }) => {
       const normalizedLogin = { ...loggedIn, uid: loggedIn?.uid || result.user.uid };
       return { success: true, user: normalizedLogin };
     } catch (error) {
-      let errorMessage = 'Login failed';
-      
-      switch (error.code) {
-        case 'auth/user-not-found':
-          errorMessage = 'No account found with this email';
-          break;
-        case 'auth/wrong-password':
-          errorMessage = 'Incorrect password';
-          break;
-        case 'auth/invalid-email':
-          errorMessage = 'Invalid email address';
-          break;
-        case 'auth/user-disabled':
-          errorMessage = 'Account has been disabled';
-          break;
-        case 'auth/too-many-requests':
-          errorMessage = 'Too many failed attempts. Please try again later';
-          break;
-        default:
-          errorMessage = error.message;
-      }
-      
+      const errorMessage = mapAuthError(error, { context: 'login' });
       toast.error(errorMessage);
       return { success: false, error: errorMessage };
     }
@@ -437,26 +425,41 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  const createAccountOrSignIn = async (email, password, displayName) => {
-    try {
-      const result = await createUserWithEmailAndPassword(auth, email, password);
-      if (displayName) {
-        await updateProfile(result.user, { displayName });
-      }
-      return result.user;
-    } catch (error) {
-      if (error.code === 'auth/email-already-in-use') {
-        const result = await signInWithEmailAndPassword(auth, email, password);
-        return result.user;
-      }
-      throw error;
+  const createEmailPasswordAccount = async (email, password, displayName, continuePath) => {
+    const normalizedEmail = normalizeEmail(email);
+    if (!isEmailFormatValid(normalizedEmail)) {
+      const err = new Error('Please enter a valid email address.');
+      err.code = 'auth/invalid-email';
+      throw err;
     }
+    if (isDisposableEmail(normalizedEmail)) {
+      const err = new Error('Please use a permanent email address.');
+      err.code = 'auth/disposable-email';
+      throw err;
+    }
+    if (!isPasswordValid(password)) {
+      const err = new Error('Password is too weak. Follow the rules below.');
+      err.code = 'auth/weak-password';
+      throw err;
+    }
+
+    const result = await createUserWithEmailAndPassword(auth, normalizedEmail, password);
+    if (displayName) {
+      await updateProfile(result.user, { displayName });
+    }
+    try {
+      const url = `${window.location.origin}${continuePath || '/join'}`;
+      await sendEmailVerification(result.user, { url });
+    } catch (verifyError) {
+      console.error('sendEmailVerification failed:', verifyError);
+    }
+    return result.user;
   };
 
   const hostSignIn = async (email, password) => {
     setLoginPortalIntent('teacher');
     try {
-      const result = await signInWithEmailAndPassword(auth, email, password);
+      const result = await signInWithEmailAndPassword(auth, normalizeEmail(email), password);
       // Backend/Firebase role value remains 'teacher' (stored contract — do not rename)
       const profile = await syncProfileFromBackend(result.user, 'teacher', undefined, undefined, {
         mergeRole: false,
@@ -482,38 +485,7 @@ export const AuthProvider = ({ children }) => {
       return { success: true, user: profile };
     } catch (error) {
       clearLoginPortalIntent();
-      let errorMessage = 'Login failed';
-      
-      // Handle Firebase auth errors
-      if (error.code) {
-        switch (error.code) {
-          case 'auth/user-not-found':
-            errorMessage = 'No account found with this email';
-            break;
-          case 'auth/wrong-password':
-            errorMessage = 'Incorrect password';
-            break;
-          case 'auth/invalid-email':
-            errorMessage = 'Invalid email address';
-            break;
-          case 'auth/user-disabled':
-            errorMessage = 'Account has been disabled';
-            break;
-          case 'auth/too-many-requests':
-            errorMessage = 'Too many failed attempts. Please try again later';
-            break;
-          case 'auth/network-request-failed':
-            errorMessage = 'Network error. Please check your connection';
-            break;
-          default:
-            errorMessage = error.message || 'Login failed';
-        }
-      } else if (backendUnavailableMessage(error)) {
-        errorMessage = backendUnavailableMessage(error);
-      } else {
-        errorMessage = error?.message || 'Login failed';
-      }
-      
+      const errorMessage = mapAuthError(error, { context: 'login' });
       toast.error(errorMessage);
       return { success: false, error: errorMessage };
     }
@@ -522,10 +494,11 @@ export const AuthProvider = ({ children }) => {
   const hostSignUp = async ({ firstName, lastName, email, password }) => {
     setLoginPortalIntent('teacher');
     try {
-      const firebaseUser = await createAccountOrSignIn(
+      const firebaseUser = await createEmailPasswordAccount(
         email,
         password,
-        `${firstName} ${lastName}`.trim()
+        `${firstName} ${lastName}`.trim(),
+        '/host/signin'
       );
       const profile = await syncProfileFromBackend(
         firebaseUser,
@@ -545,12 +518,11 @@ export const AuthProvider = ({ children }) => {
       markActivePortal('teacher', firebaseUser.uid);
       persistRole('teacher', firebaseUser.uid);
       clearAudienceSession();
-      toast.success('Account created successfully');
       clearLoginPortalIntent();
-      return { success: true, user: profile };
+      return { success: true, user: profile, needsVerification: true };
     } catch (error) {
       clearLoginPortalIntent();
-      const errorMessage = error?.message || 'Signup failed';
+      const errorMessage = mapAuthError(error, { context: 'signup' });
       toast.error(errorMessage);
       return { success: false, error: errorMessage };
     }
@@ -559,7 +531,7 @@ export const AuthProvider = ({ children }) => {
   const audienceSignIn = async (email, password) => {
     setLoginPortalIntent('student');
     try {
-      const result = await signInWithEmailAndPassword(auth, email, password);
+      const result = await signInWithEmailAndPassword(auth, normalizeEmail(email), password);
       const profile = await syncProfileFromBackend(result.user, 'student', undefined, undefined, {
         mergeRole: true,
       });
@@ -583,37 +555,7 @@ export const AuthProvider = ({ children }) => {
       return { success: true, user: profile };
     } catch (error) {
       clearLoginPortalIntent();
-      let errorMessage = 'Login failed';
-
-      if (error.code) {
-        switch (error.code) {
-          case 'auth/user-not-found':
-            errorMessage = 'No account found with this email';
-            break;
-          case 'auth/wrong-password':
-            errorMessage = 'Incorrect password';
-            break;
-          case 'auth/invalid-email':
-            errorMessage = 'Invalid email address';
-            break;
-          case 'auth/user-disabled':
-            errorMessage = 'Account has been disabled';
-            break;
-          case 'auth/too-many-requests':
-            errorMessage = 'Too many failed attempts. Please try again later';
-            break;
-          case 'auth/network-request-failed':
-            errorMessage = 'Network error. Please check your connection';
-            break;
-          default:
-            errorMessage = error.message || 'Login failed';
-        }
-      } else if (backendUnavailableMessage(error)) {
-        errorMessage = backendUnavailableMessage(error);
-      } else {
-        errorMessage = error?.message || 'Login failed';
-      }
-
+      const errorMessage = mapAuthError(error, { context: 'login' });
       toast.error(errorMessage);
       return { success: false, error: errorMessage };
     }
@@ -622,10 +564,11 @@ export const AuthProvider = ({ children }) => {
   const audienceSignUp = async ({ firstName, lastName, email, password }) => {
     setLoginPortalIntent('student');
     try {
-      const firebaseUser = await createAccountOrSignIn(
+      const firebaseUser = await createEmailPasswordAccount(
         email,
         password,
-        `${firstName} ${lastName}`.trim()
+        `${firstName} ${lastName}`.trim(),
+        '/join'
       );
       const profile = await syncProfileFromBackend(
         firebaseUser,
@@ -645,12 +588,11 @@ export const AuthProvider = ({ children }) => {
       markActivePortal('student', firebaseUser.uid);
       persistRole('student', firebaseUser.uid);
       persistAudienceSession(profile);
-      toast.success('Account created successfully');
       clearLoginPortalIntent();
-      return { success: true, user: profile };
+      return { success: true, user: profile, needsVerification: true };
     } catch (error) {
       clearLoginPortalIntent();
-      const errorMessage = error?.message || 'Signup failed';
+      const errorMessage = mapAuthError(error, { context: 'signup' });
       toast.error(errorMessage);
       return { success: false, error: errorMessage };
     }
@@ -787,20 +729,17 @@ export const AuthProvider = ({ children }) => {
   const register = async (userData) => {
     try {
       const { email, password, firstName, lastName, role } = userData;
-      
-      // Create user in Firebase Auth
-      const result = await createUserWithEmailAndPassword(auth, email, password);
-      
-      // Update display name
-      await updateProfile(result.user, {
-        displayName: `${firstName} ${lastName}`
-      });
+      const firebaseUser = await createEmailPasswordAccount(
+        email,
+        password,
+        `${firstName} ${lastName}`.trim(),
+        '/join'
+      );
 
-      // Register user in backend
-      const token = await result.user.getIdToken();
+      const token = await firebaseUser.getIdToken();
       localStorage.setItem('token', token);
       const response = await authAPI.register({
-        email,
+        email: normalizeEmail(email),
         password,
         firstName,
         lastName,
@@ -808,27 +747,11 @@ export const AuthProvider = ({ children }) => {
       });
 
       const created = response.data.user;
-      const normalized = { ...created, uid: created?.uid || result.user.uid };
+      const normalized = { ...created, uid: created?.uid || firebaseUser.uid };
       setUserProfile(normalized);
-      toast.success('Account created successfully!');
-      return { success: true, user: normalized };
+      return { success: true, user: normalized, needsVerification: true };
     } catch (error) {
-      let errorMessage = 'Registration failed';
-      
-      switch (error.code) {
-        case 'auth/email-already-in-use':
-          errorMessage = 'Email already registered';
-          break;
-        case 'auth/weak-password':
-          errorMessage = 'Password should be at least 6 characters';
-          break;
-        case 'auth/invalid-email':
-          errorMessage = 'Invalid email address';
-          break;
-        default:
-          errorMessage = error.message;
-      }
-      
+      const errorMessage = mapAuthError(error, { context: 'signup' });
       toast.error(errorMessage);
       return { success: false, error: errorMessage };
     }
@@ -939,6 +862,10 @@ export const AuthProvider = ({ children }) => {
         return { success: false, error: 'No email associated with this account.' };
       }
 
+      if (!isPasswordValid(newPassword)) {
+        return { success: false, error: 'Password is too weak. Follow the rules below.' };
+      }
+
       const credential = EmailAuthProvider.credential(user.email, currentPassword);
       await reauthenticateWithCredential(user, credential);
       await updatePassword(user, newPassword);
@@ -946,23 +873,22 @@ export const AuthProvider = ({ children }) => {
       toast.success('Password updated successfully');
       return { success: true };
     } catch (error) {
-      let errorMessage = 'Failed to update password';
-      switch (error.code) {
-        case 'auth/wrong-password':
-        case 'auth/invalid-credential':
-          errorMessage = 'Current password is incorrect';
-          break;
-        case 'auth/weak-password':
-          errorMessage = 'Password must be at least 8 characters';
-          break;
-        case 'auth/too-many-requests':
-          errorMessage = 'Too many attempts. Please try again later.';
-          break;
-        default:
-          errorMessage = error.message || errorMessage;
+      if (error.code === 'auth/wrong-password' || error.code === 'auth/invalid-credential') {
+        return { success: false, error: 'Current password is incorrect' };
       }
-      return { success: false, error: errorMessage };
+      return { success: false, error: mapAuthError(error, { context: 'signup' }) };
     }
+  };
+
+  const [authUserVersion, setAuthUserVersion] = useState(0);
+
+  const refreshAuthUser = async () => {
+    if (!auth.currentUser) return false;
+    await auth.currentUser.reload();
+    const next = auth.currentUser;
+    setUser(next);
+    setAuthUserVersion((n) => n + 1);
+    return Boolean(next?.emailVerified);
   };
 
   const value = {
@@ -984,6 +910,8 @@ export const AuthProvider = ({ children }) => {
     resetPassword,
     updateUserProfile,
     changeUserPassword,
+    refreshAuthUser,
+    needsEmailVerification: userNeedsEmailVerification(user),
   };
 
   return (

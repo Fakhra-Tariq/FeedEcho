@@ -9,6 +9,7 @@ import {
   marketingSectionBottomClass,
 } from '../components/marketing/SurfaceCard';
 import { MarketingHeroBackdrop } from '../components/marketing/MarketingHeroBackdrop';
+import MeetTheTeam from '../components/marketing/MeetTheTeam';
 import {
   MessageCircle,
   ClipboardCheck,
@@ -211,6 +212,10 @@ const About = () => {
             })}
           </RevealStagger>
         </div>
+      </section>
+
+      <section className="relative" aria-labelledby="meet-the-team-heading">
+        <MeetTheTeam />
       </section>
     </div>
   );

@@ -4,6 +4,8 @@ const GOLD = '#F4C95D';
 const FILL_THRESHOLD = 40;
 
 export const WORD_CLOUD_BG = PLUM;
+/** Opaque near-black used as the bulb fill (wordcloud empty pixels). */
+export const WORD_CLOUD_BULB_FILL = MASK_OCCUPIED;
 
 export const CLOUD_FONT_STACK =
   'Inter, system-ui, "Segoe UI", "Noto Nastaliq Urdu", "Noto Sans Arabic", "Segoe UI Historic", Tahoma, sans-serif';
@@ -121,11 +123,17 @@ export function fillBulbShape(ctx, width, height) {
   ctx.fill();
 }
 
-export function paintBulbOccupancyMask(ctx, width, height, backgroundColor = PLUM) {
+export function paintBulbOccupancyMask(
+  ctx,
+  width,
+  height,
+  emptyColor = MASK_OCCUPIED,
+  occupiedColor = PLUM
+) {
   ctx.save();
-  ctx.fillStyle = MASK_OCCUPIED;
+  ctx.fillStyle = occupiedColor;
   ctx.fillRect(0, 0, width, height);
-  ctx.fillStyle = backgroundColor;
+  ctx.fillStyle = emptyColor;
   fillBulbShape(ctx, width, height);
   ctx.restore();
 }

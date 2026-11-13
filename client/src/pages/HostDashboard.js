@@ -19,6 +19,7 @@ import {
   Copy,
 } from 'lucide-react';
 import clsx from 'clsx';
+import { useAuth } from '../contexts/AuthContext';
 import { useHostData } from '../contexts/HostDataContext';
 import { getSessionActivityLabel, normalizeSessionCurrentActivity } from '../utils/sessionActivityLabel';
 import { isQuizCurrentlyActive } from '../utils/quizExpiry';
@@ -29,10 +30,15 @@ import EndSessionButton from '../components/Host/EndSessionButton';
 
 const HostDashboard = () => {
   const navigate = useNavigate();
-  const { data, incrementParticipantCount, createSession } = useHostData();
+  const { data, workspaceUserId, incrementParticipantCount, createSession } = useHostData();
+  const { userProfile } = useAuth();
   const { alert } = useHybridAlert();
 
-  const recentActivity = data.activityLog.slice(0, 6);
+  const teacherUid = userProfile?.uid || null;
+  const recentActivity =
+    teacherUid && workspaceUserId === teacherUid
+      ? (data.activityLog || []).slice(0, 6)
+      : [];
   const activeSession = data.activeSession;
 
   const resolvedCurrentActivity = normalizeSessionCurrentActivity(activeSession?.currentActivity);

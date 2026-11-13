@@ -4,7 +4,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { canAccessTeacherPortal } from '../../utils/userRoles';
 
 const ProtectedRoute = ({ children, requiredRole = null }) => {
-  const { userProfile, loading } = useAuth();
+  const { userProfile, loading, needsEmailVerification } = useAuth();
 
   if (loading) {
     return (
@@ -12,6 +12,10 @@ const ProtectedRoute = ({ children, requiredRole = null }) => {
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary" />
       </div>
     );
+  }
+
+  if (needsEmailVerification) {
+    return null;
   }
 
   if (!userProfile) {

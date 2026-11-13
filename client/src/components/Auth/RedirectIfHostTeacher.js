@@ -23,7 +23,7 @@ const restoreStudentSession = (userProfile) => {
  * Uses replace so Back cannot return here.
  */
 export default function RedirectIfHostTeacher({ children, redirectStudent = false }) {
-  const { userProfile, activePortal, loading, portalIntent } = useAuth();
+  const { userProfile, activePortal, loading, portalIntent, needsEmailVerification } = useAuth();
   const isHost =
     !loading &&
     portalIntent !== 'student' &&
@@ -43,6 +43,10 @@ export default function RedirectIfHostTeacher({ children, redirectStudent = fals
 
   // Render immediately while Firebase/profile settle so login/join stay interactive.
   // Redirect only after auth is known — same destination, no blocking spinner.
+  if (needsEmailVerification) {
+    return children;
+  }
+
   if (isHost) {
     return <Navigate to={HOST_HOME} replace />;
   }

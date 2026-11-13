@@ -8,7 +8,7 @@ import { toParticipantCount } from '../utils/toParticipantCount';
 import { useAuth } from '../contexts/AuthContext';
 import { auth } from '../firebase';
 import { getStoredAudienceSession } from '../utils/audienceSession';
-import ChatMessageBubble from '../components/Chat/ChatMessageBubble';
+import ChatMessageBubble, { audienceMessageLabel } from '../components/Chat/ChatMessageBubble';
 import GuestProgressLoginBanner, {
   GUEST_LOGIN_BANNER_BG_CLASS,
 } from '../components/Audience/GuestProgressLoginBanner';
@@ -149,6 +149,7 @@ const AudienceAnonymousChat = () => {
   const participantDisplayName =
     (typeof window !== 'undefined' ? (sessionStorage.getItem('studentName') || '').trim() : '') ||
     getStoredAudienceSession()?.name ||
+    String(userProfile?.displayName || userProfile?.name || user?.displayName || '').trim() ||
     'Audience';
   const loggedInAudience = getStoredAudienceSession();
   const isLoggedInStudent = Boolean(accountUid && (loggedInAudience?.email || user?.email || userProfile?.email));
@@ -272,11 +273,17 @@ const AudienceAnonymousChat = () => {
       setMessage('');
       scrollToBottom();
 
-      const response = await anonymousChatAPI.addMessage(chatSession.id, {
+      const namesVisible = Boolean(chatSession?.namesVisible || chatSession?.settings?.namesVisible);
+      const payload = {
         message: trimmed,
         sender: 'Anonymous Audience',
         participantId: getOrCreateChatParticipantId(normalizedCode, accountUid),
-      });
+        showName: namesVisible,
+      };
+      if (namesVisible) {
+        payload.senderName = participantDisplayName;
+      }
+      const response = await anonymousChatAPI.addMessage(chatSession.id, payload);
 
       if (!response.data.success) {
         const errorText = response.data.error || 'Failed to send message';
@@ -393,12 +400,14 @@ const AudienceAnonymousChat = () => {
                 visibleMessages.map((msg) => {
                   const isOwn = isOwnStudentMessage(msg);
                   const fromTeacher = Boolean(msg.isTeacher);
+                  const named = !fromTeacher && !isOwn && msg.showName === true && Boolean(String(msg.senderName || '').trim());
                   return (
                     <ChatMessageBubble
                       key={msg.id}
                       message={msg}
                       isOwn={isOwn}
-                      label={isOwn ? 'You' : fromTeacher ? 'Host' : 'Audience'}
+                      label={isOwn ? 'You' : fromTeacher ? 'Host' : audienceMessageLabel(msg)}
+                      namedSender={named}
                       showStudentDot={!isOwn && !fromTeacher}
                     />
                   );

@@ -1,4 +1,6 @@
 import {
+  WORD_CLOUD_BG,
+  WORD_CLOUD_BULB_FILL,
   bulbMetrics,
   buildBulbCloudLists,
   cloudListSeed,
@@ -143,6 +145,14 @@ describe('cloudListSeed', () => {
   it('seeded random is deterministic', () => {
     const seq = () => withSeededRandom(42, () => [Math.random(), Math.random(), Math.random()]);
     expect(seq()).toEqual(seq());
+  });
+});
+
+describe('bulb fill vs page', () => {
+  it('keeps the near-black bulb fill distinct from the plum page', () => {
+    expect(WORD_CLOUD_BULB_FILL).toBe('#010203');
+    expect(WORD_CLOUD_BG).toBe('#4A1F3D');
+    expect(WORD_CLOUD_BULB_FILL).not.toBe(WORD_CLOUD_BG);
   });
 });
 

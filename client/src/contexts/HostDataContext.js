@@ -186,54 +186,113 @@ const defaultData = {
       lastUpdated: '2026-01-10T17:45:00.000Z',
     },
   ],
-  activityLog: [
-    {
-      id: 'activity-1',
-      type: 'quiz',
-      title: 'Algebra Warmup',
-      status: 'Ready',
-      timestamp: '2026-01-10T08:20:00.000Z',
-    },
-    {
-      id: 'activity-2',
-      type: 'spaceRace',
-      title: 'Geometry Sprint',
-      status: 'Ended',
-      timestamp: '2026-01-04T09:25:00.000Z',
-    },
-    {
-      id: 'activity-3',
-      type: 'exitTicket',
-      title: 'Exit Ticket · Fractions',
-      status: 'Ready',
-      timestamp: '2026-01-05T15:10:00.000Z',
-    },
-    {
-      id: 'activity-4',
-      type: 'anonymousChat',
-      title: 'Lecture · Climate Change Impacts',
-      status: 'Archived',
-      timestamp: '2026-01-07T11:35:00.000Z',
-    },
-  ],
+  activityLog: [],
 };
 
-const withDefaults = (saved) => ({
-  ...defaultData,
-  ...saved,
-  settings: {
-    ...defaultData.settings,
-    ...(saved?.settings || {}),
-    quizDefaults: {
-      ...defaultData.settings.quizDefaults,
-      ...(saved?.settings?.quizDefaults || {}),
+function workspaceStorageKey(uid) {
+  return `${STORAGE_KEY}:${uid}`;
+}
+
+function activityLogFromWorkspace({
+  quizzes = [],
+  exitTickets = [],
+  spaceRaces = [],
+  anonymousChats = [],
+} = {}) {
+  const items = [];
+  quizzes.forEach((quiz) => {
+    if (!quiz?.id) return;
+    items.push({
+      id: `quiz-${quiz.id}`,
+      type: 'quiz',
+      title: quiz.title || 'Quiz',
+      status: quiz.status || 'Ready',
+      timestamp: quiz.updatedAt || quiz.createdAt || '',
+    });
+  });
+  exitTickets.forEach((ticket) => {
+    if (!ticket?.id) return;
+    items.push({
+      id: `exitTicket-${ticket.id}`,
+      type: 'exitTicket',
+      title: ticket.title || 'Exit ticket',
+      status: ticket.status || 'Ready',
+      timestamp: ticket.updatedAt || ticket.createdAt || '',
+    });
+  });
+  spaceRaces.forEach((race) => {
+    if (!race?.id) return;
+    items.push({
+      id: `spaceRace-${race.id}`,
+      type: 'spaceRace',
+      title: race.title || 'Space race',
+      status: race.status || 'Ready',
+      timestamp: race.updatedAt || race.createdAt || '',
+    });
+  });
+  anonymousChats.forEach((chat) => {
+    if (!chat?.id) return;
+    items.push({
+      id: `anonymousChat-${chat.id}`,
+      type: 'anonymousChat',
+      title: chat.title || 'Live chat',
+      status: chat.status || 'Active',
+      timestamp: chat.lastActivity || chat.updatedAt || chat.endedAt || chat.createdAt || '',
+    });
+  });
+  items.sort((a, b) => String(b.timestamp || '').localeCompare(String(a.timestamp || '')));
+  return items.slice(0, 50);
+}
+
+const withDefaults = (saved) => {
+  const merged = {
+    ...defaultData,
+    ...saved,
+    quizzes: Array.isArray(saved?.quizzes) ? saved.quizzes : [],
+    exitTickets: Array.isArray(saved?.exitTickets) ? saved.exitTickets : [],
+    spaceRaces: Array.isArray(saved?.spaceRaces) ? saved.spaceRaces : [],
+    anonymousChats: Array.isArray(saved?.anonymousChats) ? saved.anonymousChats : [],
+    reports: Array.isArray(saved?.reports) ? saved.reports : [],
+    activityLog: Array.isArray(saved?.activityLog) ? saved.activityLog : [],
+    activeSession: saved?.activeSession ?? null,
+    settings: {
+      ...defaultData.settings,
+      ...(saved?.settings || {}),
+      quizDefaults: {
+        ...defaultData.settings.quizDefaults,
+        ...(saved?.settings?.quizDefaults || {}),
+      },
+      notifications: {
+        ...defaultData.settings.notifications,
+        ...(saved?.settings?.notifications || {}),
+      },
     },
-    notifications: {
-      ...defaultData.settings.notifications,
-      ...(saved?.settings?.notifications || {}),
-    },
-  },
-});
+  };
+  return {
+    ...merged,
+    activityLog: activityLogFromWorkspace(merged),
+  };
+};
+
+function emptyHostWorkspace() {
+  return withDefaults({
+    quizzes: [],
+    exitTickets: [],
+    spaceRaces: [],
+    anonymousChats: [],
+    reports: [],
+    activityLog: [],
+    activeSession: null,
+  });
+}
+
+function patchWorkspaceLists(prev, listPatch) {
+  const next = { ...prev, ...listPatch };
+  return {
+    ...next,
+    activityLog: activityLogFromWorkspace(next),
+  };
+}
 
 export const HostDataProvider = ({ children }) => {
   const { userProfile } = useAuth();
@@ -243,29 +302,48 @@ export const HostDataProvider = ({ children }) => {
     (!activePortal || activePortal === 'teacher');
   const dataRevision = useHostRealtimeRevision();
 
-  const [data, setData] = useState(() => {
+  const [data, setData] = useState(emptyHostWorkspace);
+  const [workspaceUserId, setWorkspaceUserId] = useState(null);
+  const uidRef = useRef(userProfile?.uid || null);
+  uidRef.current = userProfile?.uid || null;
+
+  useEffect(() => {
+    const uid = userProfile?.uid || null;
+    if (uid === workspaceUserId) return undefined;
+
+    if (!uid) {
+      setData(emptyHostWorkspace());
+      setWorkspaceUserId(null);
+      return undefined;
+    }
+
     try {
-      const stored =
-        localStorage.getItem(STORAGE_KEY) || localStorage.getItem(LEGACY_STORAGE_KEY);
+      const stored = localStorage.getItem(workspaceStorageKey(uid));
       if (stored) {
-        return withDefaults(JSON.parse(stored));
+        setData(withDefaults(JSON.parse(stored)));
+      } else {
+        setData(emptyHostWorkspace());
       }
     } catch (error) {
       console.error('Failed to parse teacher workspace data:', error);
+      setData(emptyHostWorkspace());
     }
-    return defaultData;
-  });
+    setWorkspaceUserId(uid);
+    return undefined;
+  }, [userProfile?.uid, workspaceUserId]);
 
   useEffect(() => {
+    const uid = userProfile?.uid;
+    if (!uid || workspaceUserId !== uid || !isTeacherPortal) return undefined;
     const timer = setTimeout(() => {
       try {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+        localStorage.setItem(workspaceStorageKey(uid), JSON.stringify(data));
       } catch (error) {
         console.error('Failed to persist teacher workspace data:', error);
       }
     }, 500);
     return () => clearTimeout(timer);
-  }, [data]);
+  }, [data, userProfile?.uid, workspaceUserId, isTeacherPortal]);
 
   // Hydrate activeSession from server (scoped to logged-in teacher)
   useEffect(() => {
@@ -810,15 +888,18 @@ export const HostDataProvider = ({ children }) => {
 
   // Sync anonymous chats from backend
   const syncAnonymousChats = useCallback(async () => {
+    const requestUid = uidRef.current;
+    if (!requestUid) return;
     try {
       const response = await anonymousChatAPI.getAll();
+      if (uidRef.current !== requestUid) return;
       if (response.data.success) {
         const backendChats = response.data.data;
         
         // Update local state with backend chats
         setData((prev) => {
           if (apiListUnchanged(prev.anonymousChats, backendChats)) return prev;
-          return { ...prev, anonymousChats: backendChats };
+          return patchWorkspaceLists(prev, { anonymousChats: backendChats });
         });
       }
     } catch (error) {
@@ -827,13 +908,16 @@ export const HostDataProvider = ({ children }) => {
   }, [setData]);
 
   const syncQuizzes = useCallback(async () => {
+    const requestUid = uidRef.current;
+    if (!requestUid) return;
     try {
       const response = await quizzesAPI.getAll();
+      if (uidRef.current !== requestUid) return;
       if (response.data.success) {
         const backendQuizzes = response.data.data;
         setData((prev) => {
           if (apiListUnchanged(prev.quizzes, backendQuizzes)) return prev;
-          return { ...prev, quizzes: backendQuizzes };
+          return patchWorkspaceLists(prev, { quizzes: backendQuizzes });
         });
       }
     } catch (error) {
@@ -843,13 +927,16 @@ export const HostDataProvider = ({ children }) => {
 
   // Sync exit tickets from backend
   const syncExitTickets = useCallback(async () => {
+    const requestUid = uidRef.current;
+    if (!requestUid) return;
     try {
       const response = await exitTicketsAPI.getAll();
+      if (uidRef.current !== requestUid) return;
       if (response.data.success) {
         const backendExitTickets = response.data.data;
         setData((prev) => {
           if (apiListUnchanged(prev.exitTickets, backendExitTickets)) return prev;
-          return { ...prev, exitTickets: backendExitTickets };
+          return patchWorkspaceLists(prev, { exitTickets: backendExitTickets });
         });
       }
     } catch (error) {
@@ -858,13 +945,16 @@ export const HostDataProvider = ({ children }) => {
   }, [setData]);
 
   const syncSpaceRaces = useCallback(async () => {
+    const requestUid = uidRef.current;
+    if (!requestUid) return;
     try {
       const response = await spaceRacesAPI.getAll();
+      if (uidRef.current !== requestUid) return;
       if (response.data?.success) {
         const list = response.data.data || [];
         setData((prev) => {
           if (apiListUnchanged(prev.spaceRaces, list)) return prev;
-          return { ...prev, spaceRaces: list };
+          return patchWorkspaceLists(prev, { spaceRaces: list });
         });
       }
     } catch (error) {
@@ -898,6 +988,21 @@ export const HostDataProvider = ({ children }) => {
       throw error;
     }
   }, [logActivity, setData]);
+
+  const toggleChatNamesVisible = useCallback(async (chatId, namesVisible) => {
+    const response = await anonymousChatAPI.toggleNamesVisible(chatId, namesVisible);
+    if (response.data.success) {
+      const updatedChat = response.data.data;
+      setData((prev) => ({
+        ...prev,
+        anonymousChats: prev.anonymousChats.map((chat) =>
+          chat.id === chatId ? updatedChat : chat
+        ),
+      }));
+      return updatedChat;
+    }
+    throw new Error(response.data.error || 'Failed to toggle names visibility');
+  }, [setData]);
 
   const updateAnonymousChat = useCallback(async (chatId, updates) => {
     // Special flag used by UI to request a delete without changing UI code paths
@@ -1031,7 +1136,7 @@ export const HostDataProvider = ({ children }) => {
   const syncDebounceRef = useRef(null);
   const lastBulkSyncRef = useRef(0);
   useEffect(() => {
-    if (!isTeacherPortal) return undefined;
+    if (!isTeacherPortal || !userProfile?.uid) return undefined;
     if (syncDebounceRef.current) clearTimeout(syncDebounceRef.current);
     const delay = dataRevision === 0 ? 0 : 450;
     syncDebounceRef.current = setTimeout(() => {
@@ -1054,7 +1159,7 @@ export const HostDataProvider = ({ children }) => {
         syncDebounceRef.current = null;
       }
     };
-  }, [isTeacherPortal, dataRevision, syncQuizzes, syncExitTickets, syncAnonymousChats, syncSpaceRaces]);
+  }, [isTeacherPortal, userProfile?.uid, dataRevision, syncQuizzes, syncExitTickets, syncAnonymousChats, syncSpaceRaces]);
 
   useEffect(() => {
     if (!isTeacherPortal) return undefined;
@@ -1074,6 +1179,7 @@ export const HostDataProvider = ({ children }) => {
   const value = useMemo(
     () => ({
       data,
+      workspaceUserId,
       setData,
       logActivity,
       createQuiz,
@@ -1091,6 +1197,7 @@ export const HostDataProvider = ({ children }) => {
       addAnonymousChatSession,
       syncAnonymousChats,
       toggleChatModeration,
+      toggleChatNamesVisible,
       addAnonymousMessage,
       updateAnonymousChat,
       addStudentToChat,
@@ -1101,6 +1208,7 @@ export const HostDataProvider = ({ children }) => {
     }),
     [
       data,
+      workspaceUserId,
       logActivity,
       createQuiz,
       updateQuizStatus,
@@ -1117,6 +1225,7 @@ export const HostDataProvider = ({ children }) => {
       addAnonymousChatSession,
       syncAnonymousChats,
       toggleChatModeration,
+      toggleChatNamesVisible,
       addAnonymousMessage,
       updateAnonymousChat,
       addStudentToChat,

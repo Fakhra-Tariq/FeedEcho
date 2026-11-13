@@ -1,6 +1,14 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import { Eye, EyeOff } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
+import PasswordRulesChecklist from '../components/Auth/PasswordRulesChecklist';
+import {
+  isDisposableEmail,
+  isEmailFormatValid,
+  isPasswordValid,
+  normalizeEmail,
+} from '../utils/emailAuth';
 
 const AudienceSignup = () => {
   const navigate = useNavigate();
@@ -9,10 +17,14 @@ const AudienceSignup = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [errors, setErrors] = useState({});
-  const [successMessage, setSuccessMessage] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
+
+  const emailOk = isEmailFormatValid(email) && !isDisposableEmail(email);
+  const passwordOk = isPasswordValid(password);
+  const canSubmit = emailOk && passwordOk && fullName.trim();
 
   const validateForm = () => {
     const newErrors = {};
@@ -23,12 +35,16 @@ const AudienceSignup = () => {
 
     if (!email.trim()) {
       newErrors.email = 'Email is required';
+    } else if (!isEmailFormatValid(email)) {
+      newErrors.email = 'Please enter a valid email address.';
+    } else if (isDisposableEmail(email)) {
+      newErrors.email = 'Please use a permanent email address.';
     }
 
     if (!password) {
       newErrors.password = 'Password is required';
-    } else if (password.length < 6) {
-      newErrors.password = 'Password must be at least 6 characters';
+    } else if (!isPasswordValid(password)) {
+      newErrors.password = 'Password is too weak. Follow the rules below.';
     }
 
     if (!confirmPassword) {
@@ -56,18 +72,15 @@ const AudienceSignup = () => {
       const result = await audienceSignUp({
         firstName,
         lastName,
-        email: email.trim(),
+        email: normalizeEmail(email),
         password,
       });
 
-      if (result?.success) {
-        setSuccessMessage('Account created successfully! Redirecting...');
-        setTimeout(() => navigate('/audience/home'), 1500);
-      } else {
-        setErrors({ general: result?.error || 'Failed to create account. Please try again.' });
+      if (!result?.success) {
+        setErrors({ general: result?.error || 'Something went wrong. Please try again.' });
       }
     } catch (error) {
-      setErrors({ general: 'Failed to create account. Please try again.' });
+      setErrors({ general: 'Something went wrong. Please try again.' });
     } finally {
       setIsSubmitting(false);
     }
@@ -96,31 +109,28 @@ const AudienceSignup = () => {
   };
 
   return (
-    <div className="min-h-screen flex flex-col items-center px-4 py-10 bg-background">
-      <div className="w-full max-w-md bg-white rounded-2xl shadow-lg p-8">
+    <div className="min-h-screen flex flex-col items-center px-4 py-10 bg-background overflow-x-hidden max-w-full">
+      <div className="w-full max-w-md bg-white rounded-2xl shadow-lg p-5 sm:p-8">
         <h1 className="text-2xl font-bold text-text mb-2">Audience Sign Up</h1>
         <p className="text-text-light mb-6">Create your audience account.</p>
 
-        {successMessage && (
-          <div className="mb-4 p-3 bg-green-50 border border-green-200 rounded-lg">
-            <p className="text-sm text-green-600">{successMessage}</p>
-          </div>
-        )}
-
         {errors.general && (
-          <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg">
+          <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg" aria-live="polite">
             <p className="text-sm text-red-600">{errors.general}</p>
           </div>
         )}
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-text-light mb-2">Full Name</label>
+            <label htmlFor="audience-full-name" className="block text-sm font-medium text-text-light mb-2">
+              Full Name
+            </label>
             <input
+              id="audience-full-name"
               type="text"
               value={fullName}
               onChange={(e) => setFullName(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
+              className="w-full min-h-11 px-3 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
               placeholder="Enter your full name"
               required
             />
@@ -130,12 +140,16 @@ const AudienceSignup = () => {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-text-light mb-2">Email</label>
+            <label htmlFor="audience-signup-email" className="block text-sm font-medium text-text-light mb-2">
+              Email
+            </label>
             <input
+              id="audience-signup-email"
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
+              autoComplete="email"
+              className="w-full min-h-11 px-3 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
               placeholder="Enter your email"
               required
             />
@@ -145,27 +159,46 @@ const AudienceSignup = () => {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-text-light mb-2">Password</label>
-            <input
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
-              placeholder="Create a password"
-              required
-            />
+            <label htmlFor="audience-signup-password" className="block text-sm font-medium text-text-light mb-2">
+              Password
+            </label>
+            <div className="relative">
+              <input
+                id="audience-signup-password"
+                type={showPassword ? 'text' : 'password'}
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                autoComplete="new-password"
+                className="w-full min-h-11 px-3 py-3 pr-12 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
+                placeholder="Create a password"
+                required
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword((v) => !v)}
+                className="absolute right-2 top-1/2 -translate-y-1/2 min-h-11 min-w-11 inline-flex items-center justify-center text-gray-500"
+                aria-label={showPassword ? 'Hide password' : 'Show password'}
+              >
+                {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+              </button>
+            </div>
+            <PasswordRulesChecklist password={password} />
             {errors.password && (
               <p className="mt-1 text-sm text-red-600">{errors.password}</p>
             )}
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-text-light mb-2">Confirm Password</label>
+            <label htmlFor="audience-signup-confirm" className="block text-sm font-medium text-text-light mb-2">
+              Confirm Password
+            </label>
             <input
-              type="password"
+              id="audience-signup-confirm"
+              type={showPassword ? 'text' : 'password'}
               value={confirmPassword}
               onChange={(e) => setConfirmPassword(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
+              autoComplete="new-password"
+              className="w-full min-h-11 px-3 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
               placeholder="Confirm your password"
               required
             />
@@ -176,8 +209,8 @@ const AudienceSignup = () => {
 
           <button
             type="submit"
-            disabled={isSubmitting}
-            className="w-full bg-primary hover:bg-primary-dark disabled:opacity-50 text-white font-medium py-2.5 rounded-lg transition-colors duration-200 flex items-center justify-center"
+            disabled={isSubmitting || !canSubmit}
+            className="w-full min-h-11 bg-primary hover:bg-primary-dark disabled:opacity-50 text-white font-medium py-3 rounded-lg transition-colors duration-200 flex items-center justify-center"
           >
             {isSubmitting && !googleLoading ? 'Creating account...' : 'Create Account'}
           </button>
@@ -193,7 +226,7 @@ const AudienceSignup = () => {
           type="button"
           onClick={onGoogle}
           disabled={googleLoading || isSubmitting}
-          className="w-full border border-gray-300 hover:bg-gray-100 disabled:opacity-50 text-text font-medium py-2.5 rounded-lg transition-colors duration-200 flex items-center justify-center"
+          className="w-full min-h-11 border border-gray-300 hover:bg-gray-100 disabled:opacity-50 text-text font-medium py-3 rounded-lg transition-colors duration-200 flex items-center justify-center"
         >
           {googleLoading ? (
             <>

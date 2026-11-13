@@ -154,6 +154,7 @@ router.post('/create', optionalAuth, async (req, res) => {
       isActive: true,
       chatEnabled: true,
       moderationMode: settings?.moderationMode || false,
+      namesVisible: false,
       createdBy: ownerId,
       createdAt: now,
       lastActivity: now,
@@ -166,6 +167,7 @@ router.post('/create', optionalAuth, async (req, res) => {
         autoModerate: settings?.autoModerate || false,
         profanityFilter: settings?.profanityFilter !== false,
         moderationMode: settings?.moderationMode || false,
+        namesVisible: false,
       },
       analytics: {
         uniqueStudents: 0,
@@ -395,6 +397,9 @@ router.post('/:id/messages', optionalAuth, async (req, res) => {
     if (participantId) {
       await registerChatParticipant(id, participantId);
     }
+    const namesVisible = Boolean(chat.namesVisible || chat.settings?.namesVisible);
+    const requestedName = String(req.body.senderName || '').trim().slice(0, 80);
+    const showName = Boolean(!isTeacherMessage && namesVisible && requestedName);
     const msgId = generateId('msg');
     const newMessage = {
       id: msgId,
@@ -404,6 +409,8 @@ router.post('/:id/messages', optionalAuth, async (req, res) => {
       isTeacher: isTeacherMessage,
       isAnswered: false,
       isHidden: false,
+      showName,
+      ...(showName ? { senderName: requestedName } : {}),
       ...(isTeacherMessage
         ? {}
         : { participantId: req.body.participantId || req.body.sender || null }),
@@ -554,6 +561,42 @@ router.put('/:id/toggle-moderation', verifyFirebaseToken, async (req, res) => {
   } catch (error) {
     console.error('Error toggling moderation:', error);
     return res.status(500).json({ success: false, error: 'Failed to toggle moderation mode' });
+  }
+});
+
+// Toggle whether new student messages store a display name (teacher)
+router.put('/:id/toggle-names', verifyFirebaseToken, async (req, res) => {
+  try {
+    const id = req.params.id;
+    const ref = chatSessionRef(id);
+    const snap = await ref.get();
+    if (!snap.exists()) {
+      return res.status(404).json({ success: false, error: 'Chat session not found' });
+    }
+    const existing = snap.val() || {};
+    if (existing.createdBy && existing.createdBy !== req.user.uid) {
+      return res.status(403).json({ success: false, error: 'Access denied' });
+    }
+    const namesVisible = !!req.body.namesVisible;
+    const now = new Date().toISOString();
+    await ref.update({
+      namesVisible,
+      settings: { ...(existing.settings || {}), namesVisible },
+      lastActivity: now,
+      updatedAt: now,
+    });
+    const updated = await ref.get();
+    const msgsSnap = await chatMessagesRef(id).get();
+    const msgs = msgsSnap.exists() ? Object.values(msgsSnap.val() || {}) : [];
+    msgs.sort((a, b) => String(a.timestamp || '').localeCompare(String(b.timestamp || '')));
+    return res.status(200).json({
+      success: true,
+      data: { id, ...(updated.val() || {}), messages: msgs },
+      message: `Names ${namesVisible ? 'visible' : 'hidden'} on new messages`,
+    });
+  } catch (error) {
+    console.error('Error toggling names visibility:', error);
+    return res.status(500).json({ success: false, error: 'Failed to toggle names visibility' });
   }
 });
 

@@ -17,6 +17,7 @@ import {
   Target,
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
+import { isPasswordValid } from '../utils/emailAuth';
 import { authAPI } from '../services/api';
 import { getStoredAudienceSession, persistAudienceSession, clearAudienceSession } from '../utils/audienceSession';
 import { useAudienceQuizStats } from '../hooks/useAudienceQuizStats';
@@ -230,8 +231,8 @@ export default function AudienceProfile() {
       setPasswordError('Current password is required');
       return;
     }
-    if (passwordForm.new.length < 8) {
-      setPasswordError('Password must be at least 8 characters');
+    if (!isPasswordValid(passwordForm.new)) {
+      setPasswordError('Password is too weak. Follow the rules below.');
       return;
     }
     if (passwordForm.new !== passwordForm.confirm) {

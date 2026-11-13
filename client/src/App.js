@@ -10,9 +10,11 @@ import Navbar from './components/Layout/Navbar';
 import Footer from './components/Layout/Footer';
 import ProtectedRoute from './components/Auth/ProtectedRoute';
 import RedirectIfHostTeacher from './components/Auth/RedirectIfHostTeacher';
+import VerifyEmailScreen from './components/Auth/VerifyEmailScreen';
 import ScrollToTop from './components/ScrollToTop';
 
 // Eager: landing + both login pages so they paint without waiting on other routes
+import { useAuth } from './contexts/AuthContext';
 import Home from './pages/Home';
 import About from './pages/Courses';
 import Contact from './pages/Contact';
@@ -80,6 +82,7 @@ function LegacyPathRedirect({ fromPrefix, toPrefix }) {
 
 function AppContent() {
   const location = useLocation();
+  const { needsEmailVerification, loading: authLoading } = useAuth();
   // Auth pages that should show the same public Navbar/Footer as /join
   const publicAuthPaths = [
     '/audience/signup',
@@ -97,6 +100,14 @@ function AppContent() {
   const isStudentRoute =
     location.pathname.startsWith('/audience') && !isPublicAuthPage;
   const hidePublicChrome = isStudentRoute || location.pathname === '/space-race';
+
+  if (!authLoading && needsEmailVerification) {
+    return (
+      <div className="min-h-screen">
+        <VerifyEmailScreen />
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen">
