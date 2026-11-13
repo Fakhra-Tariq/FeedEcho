@@ -23,20 +23,30 @@ export default function WordCloudPreview() {
   const n = params.get('n') || '3';
   const [mode, setMode] = useState('words');
   const items = useMemo(() => {
-    if (n === '0') return [];
-    if (n === '1') return ONE;
-    if (n === '3') return THREE;
-    if (n === '4') return THREE_PLUS;
-    if (n === '80') return many(80);
-    return many(40);
-  }, [n]);
+    let base = [];
+    if (n === '0') base = [];
+    else if (n === '1') base = ONE;
+    else if (n === '2') base = THREE.slice(0, 2);
+    else if (n === '3') base = THREE;
+    else if (n === '7') base = many(7);
+    else if (n === '4') base = THREE_PLUS;
+    else if (n === '80') base = many(80);
+    else base = many(40);
+    if (mode === 'phrases') {
+      return base.map((item) => ({
+        ...item,
+        label: item.label.length > 8 ? item.label : `${item.label} answer`,
+      }));
+    }
+    return base;
+  }, [n, mode]);
 
   return (
     <ExitTicketWordCloudPresent
       open
       onClose={() => {}}
       questionIndex={0}
-      questionCount={1}
+      questionCount={2}
       onPrev={() => {}}
       onNext={() => {}}
       question={{ type: 'short_text', prompt: 'Preview' }}

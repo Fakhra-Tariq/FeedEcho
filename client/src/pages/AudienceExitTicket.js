@@ -7,6 +7,9 @@ import { auth } from '../firebase';
 import { exitTicketsAPI, studentsAPI } from '../services/api';
 import { getStoredAudienceSession, getStudentQueryParams } from '../utils/audienceSession';
 import GuestProgressLoginBanner from '../components/Audience/GuestProgressLoginBanner';
+import ExitTicketAttemptPhoneHeader, {
+  isLoggedInAudienceUser,
+} from '../components/Audience/ExitTicketAttemptPhoneHeader';
 import {
   AudienceActivityHeader,
   AudienceActivityContent,
@@ -361,25 +364,35 @@ const AudienceExitTicket = () => {
     );
   }
 
+  const storedAudienceSession = getStoredAudienceSession();
+  const isLoggedInAudience = isLoggedInAudienceUser(userProfile, storedAudienceSession);
   const participantDisplayName =
     getJoinedStudentName() ||
-    getStoredAudienceSession()?.name ||
+    storedAudienceSession?.name ||
     'Audience';
+  const guestDisplayName = getJoinedStudentName() || storedAudienceSession?.name || '';
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-orange-50 via-white to-purple-50 overflow-x-hidden max-w-full">
-      <AudienceActivityHeader
+      <ExitTicketAttemptPhoneHeader
         title={exitTicket?.title}
-        participantName={participantDisplayName}
-        trueCenterTitle
-        showLoggedInLogoutMenu
+        participantName={isLoggedInAudience ? participantDisplayName : guestDisplayName}
+        isLoggedIn={isLoggedInAudience}
       />
+      <div className="hidden md:block">
+        <AudienceActivityHeader
+          title={exitTicket?.title}
+          participantName={participantDisplayName}
+          trueCenterTitle
+          showLoggedInLogoutMenu
+        />
+      </div>
 
       <GuestProgressLoginBanner
         contentClassName={`${AUDIENCE_ACTIVITY_PAGE_WIDTH} py-2 flex items-center justify-between gap-2 min-w-0`}
       />
 
-      <AudienceActivityContent>
+      <AudienceActivityContent className="max-md:!pt-3 max-md:!pb-[calc(1rem+env(safe-area-inset-bottom,0px))]">
         <AudienceActivityCard>
           <form onSubmit={handleSubmit}>
             {exitTicket?.questions?.map((question, index) => (

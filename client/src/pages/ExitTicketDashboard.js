@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, Play, Square, Eye, Users, FileText, X, BarChart3, CheckCircle, Copy, Trash2, Loader2, Check, Edit } from 'lucide-react';
+import { Plus, Play, Square, Eye, Users, FileText, X, BarChart3, CheckCircle, Copy, Trash2, Loader2, Check, Edit, Cloud } from 'lucide-react';
 import {
   ExitTicketPresentButton,
   ExitTicketWordCloudPresent,
@@ -819,10 +819,65 @@ export default function ExitTicketDashboard() {
 
       {/* Feedback Viewing Modal */}
       {viewingResponses && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
-            <div className="p-6">
-              <div className="flex items-center justify-between mb-6">
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 max-md:pt-[max(1rem,env(safe-area-inset-top,0px))] z-50">
+          <div className="bg-white rounded-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto overflow-x-hidden">
+            <div className="p-6 max-md:px-4 max-md:pt-4 max-md:pb-6 [@media(max-width:767px)_and_(max-height:499px)]:pt-2 [@media(max-width:767px)_and_(max-height:499px)]:pb-4">
+              {/* Phone header (< 768px): three stacked rows */}
+              <div className="md:hidden mb-4 border-b border-[#ECE3EA] pb-4 [@media(max-height:499px)]:pb-2 [@media(max-height:499px)]:mb-3">
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <div className="w-[34px] h-[34px] rounded-[10px] bg-[#F1E4EC] flex items-center justify-center shrink-0">
+                    <BarChart3 className="w-4 h-4 text-[#6B3A5C]" aria-hidden="true" />
+                  </div>
+                  <h2
+                    dir="auto"
+                    className="min-w-0 flex-1 text-lg font-medium text-text whitespace-nowrap overflow-hidden text-ellipsis"
+                  >
+                    Feedback Summary
+                  </h2>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setViewingResponses(null);
+                      setPresentingCloud(false);
+                      setResponses([]);
+                    }}
+                    className="shrink-0 inline-flex items-center justify-center min-h-11 min-w-11 rounded-lg hover:bg-gray-100 motion-reduce:transition-none transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#6B3A5C]"
+                    aria-label="Close"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+                <p
+                  dir="auto"
+                  className="mt-2 w-full text-[13px] leading-snug text-[#5F5460]"
+                >
+                  Anonymous responses from {responses.length} audience members
+                </p>
+                {responses.length > 0 ? (
+                  <div className="mt-3 flex gap-2 max-[340px]:flex-col">
+                    <button
+                      type="button"
+                      onClick={() => setPresentingCloud(true)}
+                      aria-label="Word Cloud"
+                      className="flex-1 min-h-11 min-w-0 inline-flex items-center justify-center gap-1.5 rounded-xl bg-white border border-[#6B3A5C] text-[#4A1F3D] text-[13px] max-[340px]:text-xs font-medium whitespace-nowrap px-3 max-[340px]:px-2 motion-reduce:transition-none transition-colors active:bg-[#E6D2DF] hover:bg-[#F1E4EC] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#6B3A5C]"
+                    >
+                      <Cloud className="w-4 h-4 shrink-0" />
+                      <span>Word Cloud</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => clearResponses(viewingResponses)}
+                      className="flex-1 min-h-11 min-w-0 inline-flex items-center justify-center gap-1.5 rounded-xl bg-[#6B3A5C] border border-[#6B3A5C] text-white text-[13px] max-[340px]:text-xs font-medium whitespace-nowrap px-3 max-[340px]:px-2 motion-reduce:transition-none transition-colors active:bg-[#5A2D4C] hover:bg-[#5A2D4C] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#6B3A5C]"
+                    >
+                      <Trash2 className="w-4 h-4 shrink-0" />
+                      <span>Clear Responses</span>
+                    </button>
+                  </div>
+                ) : null}
+              </div>
+
+              {/* Desktop / tablet header (≥ 768px) — unchanged */}
+              <div className="hidden md:flex items-center justify-between mb-6">
                 <div>
                   <h2 className="text-xl font-semibold text-text flex items-center gap-2">
                     <BarChart3 className="w-5 h-5 text-primary" />

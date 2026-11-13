@@ -234,6 +234,44 @@ body {
   }
 }
 
+/* Meet the Team — tighter phone padding; hover lift only on fine pointers */
+.meet-the-team .meet-the-team-card.surface-card {
+  transform: none;
+  padding: 0.875rem;
+}
+@media (min-width: 640px) {
+  .meet-the-team .meet-the-team-card.surface-card {
+    padding: 1.5rem;
+  }
+}
+@media (min-width: 1024px) {
+  .meet-the-team .meet-the-team-card.surface-card {
+    padding: 2rem;
+  }
+}
+.meet-the-team .meet-the-team-card.surface-card:hover {
+  transform: none;
+  box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+  border-color: rgb(109 65 95 / 0.15);
+}
+
+@media (hover: hover) {
+  .meet-the-team .meet-the-team-card.surface-card:hover {
+    transform: translateY(-0.25rem);
+    box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+    border-color: rgb(109 65 95 / 0.3);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .meet-the-team .meet-the-team-card.surface-card {
+    transition: none;
+  }
+  .meet-the-team .meet-the-team-card.surface-card:hover {
+    transform: none;
+  }
+}
+
 .card {
   @apply bg-white rounded-xl shadow-soft p-6 hover:shadow-soft-lg transition-shadow duration-200;
 }

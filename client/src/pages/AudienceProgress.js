@@ -1193,14 +1193,14 @@ export default function AudienceProgress() {
                 <p className="font-medium" style={{ color: '#1a1a1a' }}>
                   {viewModal.data.title || viewModal.data.quizTitle}
                 </p>
-                <p className="text-sm text-gray-600">
-                  Date: {getActivityDisplayTimes(viewModal.data).date}
-                </p>
-                <p className="text-sm text-gray-600">
-                  Time: {getActivityDisplayTimes(viewModal.data).time}
-                </p>
                 {viewModal.type === 'quiz' && (
                   <>
+                    <p className="text-sm text-gray-600">
+                      Date: {getActivityDisplayTimes(viewModal.data).date}
+                    </p>
+                    <p className="text-sm text-gray-600">
+                      Time: {getActivityDisplayTimes(viewModal.data).time}
+                    </p>
                     <p className="text-sm text-gray-600">
                       Score: {viewModal.data.percentage ?? 0}%
                     </p>
@@ -1276,7 +1276,9 @@ export default function AudienceProgress() {
                 {viewModal.type === 'exitTicket' && (
                   <>
                     <p className="text-sm text-gray-600">{viewModal.data.subtitle || 'Exit ticket submitted'}</p>
-                    <p className="text-sm text-gray-600">Submitted: {getActivityDisplayTimes(viewModal.data).date} · {getActivityDisplayTimes(viewModal.data).time}</p>
+                    <p className="text-sm text-gray-600 break-words">
+                      Submitted: {getActivityDisplayTimes(viewModal.data).date} · {getActivityDisplayTimes(viewModal.data).time}
+                    </p>
                   </>
                 )}
               </div>

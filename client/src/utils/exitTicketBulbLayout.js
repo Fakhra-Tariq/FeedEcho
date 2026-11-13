@@ -1,11 +1,44 @@
 const PLUM = '#4A1F3D';
+/** Occupancy-empty / silhouette fill (wordcloud2 treats this as placeable). */
 const MASK_OCCUPIED = '#010203';
 const GOLD = '#F4C95D';
 const FILL_THRESHOLD = 40;
 
 export const WORD_CLOUD_BG = PLUM;
-/** Opaque near-black used as the bulb fill (wordcloud empty pixels). */
+/** Opaque near-black used as the shape fill (wordcloud empty pixels). */
 export const WORD_CLOUD_BULB_FILL = MASK_OCCUPIED;
+export const WORD_CLOUD_SHAPE_FILL = MASK_OCCUPIED;
+
+/**
+ * Side-view brain in a 700×440 design space.
+ * Must stay the single source of truth for Present-mode silhouette.
+ */
+export const BRAIN_SHAPE = {
+  designWidth: 700,
+  designHeight: 440,
+  ellipses: [
+    { cx: 198.8, cy: 215, rx: 69.4, ry: 62 },
+    { cx: 238.0, cy: 150, rx: 73.9, ry: 66 },
+    { cx: 316.4, cy: 118, rx: 76.2, ry: 68 },
+    { cx: 400.4, cy: 120, rx: 76.2, ry: 68 },
+    { cx: 473.2, cy: 155, rx: 73.9, ry: 66 },
+    { cx: 518.0, cy: 215, rx: 69.4, ry: 62 },
+    { cx: 249.2, cy: 260, rx: 71.7, ry: 64 },
+    { cx: 333.2, cy: 272, rx: 73.9, ry: 66 },
+    { cx: 417.2, cy: 268, rx: 69.4, ry: 62 },
+    { cx: 484.4, cy: 262, rx: 58.2, ry: 52 },
+    { cx: 350.0, cy: 195, rx: 106.4, ry: 95 },
+    { cx: 456.4, cy: 335, rx: 80.6, ry: 40 },
+  ],
+  stem: {
+    topLeft: { x: 366, y: 330 },
+    topRight: { x: 410, y: 330 },
+    bottomRight: { x: 406, y: 420 },
+    bottomLeft: { x: 370, y: 420 },
+    cornerRadius: 16,
+  },
+  origin: { x: 350, y: 195 },
+};
 
 export const CLOUD_FONT_STACK =
   'Inter, system-ui, "Segoe UI", "Noto Nastaliq Urdu", "Noto Sans Arabic", "Segoe UI Historic", Tahoma, sans-serif';
@@ -68,62 +101,95 @@ export function withSeededRandom(seed, fn) {
   }
 }
 
-export function bulbMetrics(width, height) {
+/** Fit the 700×440 design canvas inside available Present-mode space. */
+export function fitBrainBox(availW, availH, { viewportW = availW, viewportH = availH } = {}) {
+  const aspect = BRAIN_SHAPE.designWidth / BRAIN_SHAPE.designHeight;
+  const vw = Math.max(1, viewportW);
+  const vh = Math.max(1, viewportH);
+  const vmin = Math.min(vw, vh);
+  let maxW = Math.max(1, availW);
+  if (vw >= 1024) {
+    maxW = Math.min(maxW, vmin * 0.8);
+  }
+  const maxH = Math.max(1, availH);
+  let w = maxW;
+  let h = w / aspect;
+  if (h > maxH || vh < 500) {
+    h = Math.min(maxH, h);
+    w = h * aspect;
+    if (w > maxW) {
+      w = maxW;
+      h = w / aspect;
+      if (h > maxH) {
+        h = maxH;
+        w = h * aspect;
+      }
+    }
+  }
+  return { width: w, height: h };
+}
+
+export function brainMetrics(width, height) {
   const w = Math.max(1, width);
   const h = Math.max(1, height);
+  const dw = BRAIN_SHAPE.designWidth;
+  const dh = BRAIN_SHAPE.designHeight;
   const pad = Math.min(w, h) * 0.02;
-  const glassH = h * 0.7;
-  const R = Math.min((w - pad * 2) * 0.49, glassH * 0.5);
-  const cy = pad + R;
-  const cx = w / 2;
+  const availW = Math.max(1, w - pad * 2);
+  const availH = Math.max(1, h - pad * 2);
+  const scale = Math.min(availW / dw, availH / dh);
+  const drawnW = dw * scale;
+  const drawnH = dh * scale;
+  const ox = (w - drawnW) / 2;
+  const oy = (h - drawnH) / 2;
+  const mid = BRAIN_SHAPE.ellipses[10];
   return {
     w,
     h,
     pad,
-    cx,
-    cy,
-    R,
-    neckTop: cy + R * 0.62,
-    neckBottom: h * 0.87,
-    neckTopW: R * 0.28,
-    neckBotW: R * 0.18,
-    baseTop: h * 0.87,
-    baseBottom: Math.min(h - pad, h * 0.985),
-    baseW: R * 0.42,
+    scale,
+    ox,
+    oy,
+    drawnW,
+    drawnH,
+    cx: ox + BRAIN_SHAPE.origin.x * scale,
+    cy: oy + BRAIN_SHAPE.origin.y * scale,
+    R: mid.rx * scale,
   };
 }
 
-export function fillBulbShape(ctx, width, height) {
-  const m = bulbMetrics(width, height);
+function fillStemPath(ctx, stem) {
+  const tl = stem.topLeft;
+  const tr = stem.topRight;
+  const br = stem.bottomRight;
+  const bl = stem.bottomLeft;
+  const r = Math.min(stem.cornerRadius || 16, Math.abs(br.x - bl.x) / 2, Math.abs(br.y - tr.y) / 2);
   ctx.beginPath();
-  ctx.arc(m.cx, m.cy, m.R, 0, Math.PI * 2);
-  ctx.fill();
-
-  ctx.beginPath();
-  ctx.moveTo(m.cx - m.neckTopW, m.neckTop);
-  ctx.lineTo(m.cx + m.neckTopW, m.neckTop);
-  ctx.lineTo(m.cx + m.neckBotW, m.neckBottom);
-  ctx.lineTo(m.cx - m.neckBotW, m.neckBottom);
-  ctx.closePath();
-  ctx.fill();
-
-  const x = m.cx - m.baseW;
-  const r = Math.min(8, Math.max(3, (m.baseBottom - m.baseTop) / 3));
-  ctx.beginPath();
-  ctx.moveTo(x + r, m.baseTop);
-  ctx.lineTo(x + m.baseW * 2 - r, m.baseTop);
-  ctx.quadraticCurveTo(x + m.baseW * 2, m.baseTop, x + m.baseW * 2, m.baseTop + r);
-  ctx.lineTo(x + m.baseW * 2, m.baseBottom - r);
-  ctx.quadraticCurveTo(x + m.baseW * 2, m.baseBottom, x + m.baseW * 2 - r, m.baseBottom);
-  ctx.lineTo(x + r, m.baseBottom);
-  ctx.quadraticCurveTo(x, m.baseBottom, x, m.baseBottom - r);
-  ctx.lineTo(x, m.baseTop + r);
-  ctx.quadraticCurveTo(x, m.baseTop, x + r, m.baseTop);
+  ctx.moveTo(tl.x, tl.y);
+  ctx.lineTo(tr.x, tr.y);
+  ctx.lineTo(br.x, br.y - r);
+  ctx.quadraticCurveTo(br.x, br.y, br.x - r, br.y);
+  ctx.lineTo(bl.x + r, bl.y);
+  ctx.quadraticCurveTo(bl.x, bl.y, bl.x, bl.y - r);
   ctx.closePath();
   ctx.fill();
 }
 
-export function paintBulbOccupancyMask(
+export function fillBrainShape(ctx, width, height) {
+  const m = brainMetrics(width, height);
+  ctx.save();
+  ctx.translate(m.ox, m.oy);
+  ctx.scale(m.scale, m.scale);
+  BRAIN_SHAPE.ellipses.forEach((e) => {
+    ctx.beginPath();
+    ctx.ellipse(e.cx, e.cy, e.rx, e.ry, 0, 0, Math.PI * 2);
+    ctx.fill();
+  });
+  fillStemPath(ctx, BRAIN_SHAPE.stem);
+  ctx.restore();
+}
+
+export function paintBrainOccupancyMask(
   ctx,
   width,
   height,
@@ -134,24 +200,33 @@ export function paintBulbOccupancyMask(
   ctx.fillStyle = occupiedColor;
   ctx.fillRect(0, 0, width, height);
   ctx.fillStyle = emptyColor;
-  fillBulbShape(ctx, width, height);
+  fillBrainShape(ctx, width, height);
   ctx.restore();
 }
 
-export function clipCanvasToBulb(ctx, width, height) {
+export function clipCanvasToBrain(ctx, width, height) {
   const tmp = document.createElement('canvas');
   tmp.width = width;
   tmp.height = height;
   const tctx = tmp.getContext('2d');
   if (!tctx) return;
   tctx.fillStyle = '#ffffff';
-  fillBulbShape(tctx, width, height);
+  fillBrainShape(tctx, width, height);
   ctx.save();
   ctx.setTransform(1, 0, 0, 1, 0, 0);
   ctx.globalCompositeOperation = 'destination-in';
   ctx.drawImage(tmp, 0, 0);
   ctx.restore();
 }
+
+/** @deprecated Use brainMetrics — Present mode is a brain, not a bulb. */
+export const bulbMetrics = brainMetrics;
+/** @deprecated Use fillBrainShape */
+export const fillBulbShape = fillBrainShape;
+/** @deprecated Use paintBrainOccupancyMask */
+export const paintBulbOccupancyMask = paintBrainOccupancyMask;
+/** @deprecated Use clipCanvasToBrain */
+export const clipCanvasToBulb = clipCanvasToBrain;
 
 export function fillerCountForArea(width, height, realCount) {
   const n = Math.max(0, realCount);
@@ -161,27 +236,43 @@ export function fillerCountForArea(width, height, realCount) {
   return Math.max(0, target - n);
 }
 
-export function isPointInBulb(x, y, width, height) {
-  const m = bulbMetrics(width, height);
-  const dx = x - m.cx;
-  const dy = y - m.cy;
-  if (dx * dx + dy * dy <= m.R * m.R) return true;
-  if (y >= m.neckTop && y <= m.neckBottom) {
-    const t = (y - m.neckTop) / Math.max(1, m.neckBottom - m.neckTop);
-    const half = m.neckTopW + t * (m.neckBotW - m.neckTopW);
-    if (Math.abs(x - m.cx) <= half) return true;
-  }
-  if (y >= m.baseTop && y <= m.baseBottom && Math.abs(x - m.cx) <= m.baseW) return true;
-  return false;
+function pointInEllipse(px, py, e) {
+  const dx = (px - e.cx) / e.rx;
+  const dy = (py - e.cy) / e.ry;
+  return dx * dx + dy * dy <= 1;
 }
 
-export function countGlyphsOutsideBulb(hits, width, height) {
+function pointInStem(px, py, stem) {
+  const y0 = stem.topLeft.y;
+  const y1 = stem.bottomLeft.y;
+  if (py < y0 || py > y1) return false;
+  const t = (py - y0) / Math.max(1, y1 - y0);
+  const left = stem.topLeft.x + t * (stem.bottomLeft.x - stem.topLeft.x);
+  const right = stem.topRight.x + t * (stem.bottomRight.x - stem.topRight.x);
+  return px >= left && px <= right;
+}
+
+export function isPointInBrain(x, y, width, height) {
+  const m = brainMetrics(width, height);
+  if (m.scale <= 0) return false;
+  const dx = (x - m.ox) / m.scale;
+  const dy = (y - m.oy) / m.scale;
+  if (BRAIN_SHAPE.ellipses.some((e) => pointInEllipse(dx, dy, e))) return true;
+  return pointInStem(dx, dy, BRAIN_SHAPE.stem);
+}
+
+export function countGlyphsOutsideBrain(hits, width, height) {
   return (hits || []).filter((box) => {
     const cx = (box.left + box.right) / 2;
     const cy = (box.top + box.bottom) / 2;
-    return !isPointInBulb(cx, cy, width, height);
+    return !isPointInBrain(cx, cy, width, height);
   }).length;
 }
+
+/** @deprecated Use isPointInBrain */
+export const isPointInBulb = isPointInBrain;
+/** @deprecated Use countGlyphsOutsideBrain */
+export const countGlyphsOutsideBulb = countGlyphsOutsideBrain;
 
 export function colorForCloudItem(item, rank, total) {
   if (rank < Math.min(3, total)) return GOLD;

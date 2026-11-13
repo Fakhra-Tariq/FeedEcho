@@ -11,14 +11,15 @@ import {
 import {
   CLOUD_FONT_STACK,
   WORD_CLOUD_BG,
-  WORD_CLOUD_BULB_FILL,
-  bulbMetrics,
+  WORD_CLOUD_SHAPE_FILL,
+  brainMetrics,
   buildBulbCloudLists,
-  clipCanvasToBulb,
+  clipCanvasToBrain,
   cloudListSeed,
-  countGlyphsOutsideBulb,
+  countGlyphsOutsideBrain,
+  fitBrainBox,
   installSeededRandom,
-  paintBulbOccupancyMask,
+  paintBrainOccupancyMask,
 } from '../../utils/exitTicketBulbLayout';
 
 const typeLabel = (type) => {
@@ -92,7 +93,7 @@ function logCloud(stage, detail) {
   }
 }
 
-function BulbWordCloud({ items, extra, empty }) {
+function BrainWordCloud({ items, extra, empty }) {
   const wrapRef = useRef(null);
   const canvasRef = useRef(null);
   const renderIdRef = useRef(0);
@@ -102,24 +103,39 @@ function BulbWordCloud({ items, extra, empty }) {
   useEffect(() => {
     const el = wrapRef.current;
     if (!el) return undefined;
+    let debounce = 0;
     const apply = () => {
-      const rect = el.getBoundingClientRect();
-      if (rect.width >= 40 && rect.height >= 40) {
-        setSize((prev) => {
-          if (Math.abs(prev.width - rect.width) < 2 && Math.abs(prev.height - rect.height) < 2) {
-            return prev;
-          }
-          return { width: rect.width, height: rect.height };
-        });
-      }
+      const parent = el.parentElement;
+      const pw = parent?.clientWidth || el.getBoundingClientRect().width;
+      const ph = parent?.clientHeight || el.getBoundingClientRect().height;
+      if (pw < 40 || ph < 40) return;
+      const next = fitBrainBox(pw, ph, {
+        viewportW: window.innerWidth,
+        viewportH: window.innerHeight,
+      });
+      if (next.width < 40 || next.height < 40) return;
+      setSize((prev) => {
+        if (Math.abs(prev.width - next.width) < 2 && Math.abs(prev.height - next.height) < 2) {
+          return prev;
+        }
+        return { width: next.width, height: next.height };
+      });
+    };
+    const schedule = () => {
+      window.clearTimeout(debounce);
+      debounce = window.setTimeout(apply, 150);
     };
     apply();
-    const ro = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(apply) : null;
-    ro?.observe(el);
-    window.addEventListener('resize', apply);
+    const ro = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(schedule) : null;
+    if (el.parentElement) ro?.observe(el.parentElement);
+    else ro?.observe(el);
+    window.addEventListener('resize', schedule);
+    window.addEventListener('orientationchange', schedule);
     return () => {
+      window.clearTimeout(debounce);
       ro?.disconnect();
-      window.removeEventListener('resize', apply);
+      window.removeEventListener('resize', schedule);
+      window.removeEventListener('orientationchange', schedule);
     };
   }, []);
 
@@ -178,16 +194,16 @@ function BulbWordCloud({ items, extra, empty }) {
         logCloud('library-start', { n: list.length, shrinkToFit: options.shrinkToFit });
         WordCloud(canvas, {
           fontFamily: CLOUD_FONT_STACK,
-          backgroundColor: WORD_CLOUD_BULB_FILL,
+          backgroundColor: WORD_CLOUD_SHAPE_FILL,
           clearCanvas: false,
-          minSize: 6,
+          minSize: cssW < 640 ? Math.max(6, Math.round(11 * (window.devicePixelRatio || 1))) : 6,
           drawOutOfBound: false,
           minRotation: 0,
           maxRotation: Math.PI / 2,
           rotationSteps: 2,
           shuffle: true,
           shape: 'circle',
-          ellipticity: 0.95,
+          ellipticity: 440 / 700,
           wait: 0,
           list: list.map((row) => row.slice()),
           ...options,
@@ -196,7 +212,7 @@ function BulbWordCloud({ items, extra, empty }) {
 
     const drawFallbackReals = (ctx, realList, maxFont) => {
       ctx.setTransform(1, 0, 0, 1, 0, 0);
-      paintBulbOccupancyMask(ctx, cw, ch);
+      paintBrainOccupancyMask(ctx, cw, ch);
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
@@ -213,7 +229,7 @@ function BulbWordCloud({ items, extra, empty }) {
       logCloud('fallback-reals', { n: realList.length });
     };
 
-    const drawBulbCloud = async (fillerScale) => {
+    const drawBrainCloud = async (fillerScale) => {
       const WordCloud = require('wordcloud');
       const ctx = canvas.getContext('2d');
       if (!ctx || !WordCloud?.isSupported) return 0;
@@ -226,7 +242,7 @@ function BulbWordCloud({ items, extra, empty }) {
       canvas.style.height = `${cssH}px`;
       canvas.style.backgroundColor = WORD_CLOUD_BG;
       ctx.setTransform(1, 0, 0, 1, 0, 0);
-      paintBulbOccupancyMask(ctx, cw, ch);
+      paintBrainOccupancyMask(ctx, cw, ch);
       logCloud('mask-built', { fillerScale, sizeChanged });
 
       const { realList, fillerList, realCount } = buildBulbCloudLists(items, {
@@ -236,8 +252,11 @@ function BulbWordCloud({ items, extra, empty }) {
       });
       logCloud('lists', { real: realList.length, filler: fillerList.length });
       const seed = cloudListSeed(items);
-      const metrics = bulbMetrics(cw, ch);
-      const maxFont = Math.max(28 * dpr, Math.min(metrics.R * 0.55, 96 * dpr));
+      const metrics = brainMetrics(cw, ch);
+      const phone = cssW < 640;
+      const maxFont = phone
+        ? Math.min(38 * dpr, Math.max(22 * dpr, metrics.drawnH * 0.16))
+        : Math.max(28 * dpr, Math.min(metrics.R * 0.5, 96 * dpr));
       const gridSize = Math.max(4, Math.min(6, Math.round(4 * dpr)));
       const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
       const restoreRandom = installSeededRandom(seed);
@@ -320,10 +339,10 @@ function BulbWordCloud({ items, extra, empty }) {
         restoreRandom();
         canvas._restoreRandom = null;
         if (drawn > 0) {
-          clipCanvasToBulb(ctx, cw, ch);
+          clipCanvasToBrain(ctx, cw, ch);
           logCloud('clipped', {
             drawn,
-            outside: countGlyphsOutsideBulb(allHits, cw, ch),
+            outside: countGlyphsOutsideBrain(allHits, cw, ch),
           });
         }
       }
@@ -343,13 +362,13 @@ function BulbWordCloud({ items, extra, empty }) {
       logCloud('fonts-ready', { current: stillCurrent() });
       if (!stillCurrent()) return;
       try {
-        let drawn = await drawBulbCloud(1);
+        let drawn = await drawBrainCloud(1);
         if (!stillCurrent()) return;
         if ((!drawn || drawn < 1) && (items || []).length) {
           if (process.env.NODE_ENV === 'development') {
             console.warn('[word-cloud] zero words; retry half filler');
           }
-          drawn = await drawBulbCloud(0.5);
+          drawn = await drawBrainCloud(0.5);
         }
         if (!stillCurrent()) return;
         if (!drawn && (items || []).length) {
@@ -358,11 +377,14 @@ function BulbWordCloud({ items, extra, empty }) {
           }
           const ctx = canvas.getContext('2d');
           const { realList } = buildBulbCloudLists(items, { width: cssW, height: cssH });
-          const metrics = bulbMetrics(cw, ch);
-          const maxFont = Math.max(28 * dpr, Math.min(metrics.R * 0.55, 96 * dpr));
+          const metrics = brainMetrics(cw, ch);
+          const phone = cssW < 640;
+          const maxFont = phone
+            ? Math.min(38 * dpr, Math.max(22 * dpr, metrics.drawnH * 0.16))
+            : Math.max(28 * dpr, Math.min(metrics.R * 0.5, 96 * dpr));
           if (ctx) {
             drawFallbackReals(ctx, realList, maxFont);
-            clipCanvasToBulb(ctx, cw, ch);
+            clipCanvasToBrain(ctx, cw, ch);
           }
         }
       } catch (err) {
@@ -393,7 +415,13 @@ function BulbWordCloud({ items, extra, empty }) {
   return (
     <div
       ref={wrapRef}
-      className="relative w-full h-full min-h-0 max-h-[80vh] overflow-x-hidden"
+      className="relative mx-auto min-h-0 overflow-x-hidden shrink-0"
+      style={{
+        width: size.width ? `${size.width}px` : '100%',
+        height: size.height ? `${size.height}px` : '100%',
+        maxWidth: '100%',
+        maxHeight: '100%',
+      }}
     >
       {empty ? (
         <p className="absolute inset-0 flex items-center justify-center text-center text-sm text-white/85 px-6">
@@ -474,7 +502,6 @@ export function ExitTicketWordCloudPresent({
 }) {
   const rootRef = useRef(null);
   const usedFsRef = useRef(false);
-  const [overlayOnly, setOverlayOnly] = useState(false);
   const showChips = !isChoiceType(question?.type);
 
   useEffect(() => {
@@ -486,13 +513,11 @@ export function ExitTicketWordCloudPresent({
         if (el?.requestFullscreen) {
           await el.requestFullscreen();
           usedFsRef.current = true;
-          setOverlayOnly(false);
           return;
         }
       } catch {
-        // overlay fallback
+        // iPhone / denied Fullscreen API: fixed inset overlay still covers the viewport
       }
-      setOverlayOnly(true);
     };
     start();
     const onFs = () => {
@@ -536,9 +561,7 @@ export function ExitTicketWordCloudPresent({
   return (
     <div
       ref={rootRef}
-      className={`${
-        overlayOnly ? 'fixed inset-0 z-[80]' : ''
-      } bg-[#4A1F3D] text-white w-full h-full min-h-screen flex flex-col p-4 sm:p-6 overflow-x-hidden`}
+      className="fixed inset-0 z-[80] bg-[#4A1F3D] text-white w-full h-full min-h-screen flex flex-col px-6 py-4 sm:p-6 overflow-x-hidden overflow-y-hidden"
     >
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
@@ -564,7 +587,7 @@ export function ExitTicketWordCloudPresent({
         </div>
       ) : null}
       <div className="flex-1 flex items-stretch justify-center min-h-0 w-full">
-        <BulbWordCloud items={items} extra={extra} empty={!items.length} />
+        <BrainWordCloud items={items} extra={extra} empty={!items.length} />
       </div>
       {questionCount > 1 ? (
         <div className="flex items-center justify-center gap-4 pb-2">
