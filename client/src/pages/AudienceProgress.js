@@ -35,6 +35,10 @@ import {
   getQuizAttemptCollapseKey,
 } from '../utils/audienceQuizAttempts';
 import { formatSessionDate } from '../utils/formatLocalDateTime';
+import {
+  resolveExitTicketActivityTitle,
+  useExitTicketActivityTitles,
+} from '../utils/exitTicketActivityTitle';
 
 const PASS_THRESHOLD = 60;
 const LIKERT_SCORES = {
@@ -685,6 +689,7 @@ export default function AudienceProgress() {
     () => mergedActivityHistory.filter((item) => !hiddenActivityIds.includes(item.id)),
     [mergedActivityHistory, hiddenActivityIds]
   );
+  const exitTicketTitles = useExitTicketActivityTitles(visibleActivityHistory);
 
   const summary = useMemo(() => {
     const total = allQuizAttempts.length;
@@ -1082,11 +1087,15 @@ export default function AudienceProgress() {
                 return (
                 <div
                   key={item.id}
-                  className="bg-white rounded-xl p-[14px_18px] border border-gray-200 flex items-center justify-between"
+                  className="bg-white rounded-xl p-[14px_18px] border border-gray-200 flex items-center justify-between min-w-0"
                   style={{ borderRadius: '12px', padding: '14px 18px', border: '0.5px solid #e0e0e0', boxShadow: 'none', marginBottom: '12px' }}
                 >
-                  <div className="flex-1">
-                    <p className="font-medium mb-1" style={{ color: '#1a1a1a' }}>{item.title}</p>
+                  <div className="flex-1 min-w-0">
+                    <p dir="auto" className="font-medium mb-1 truncate whitespace-nowrap" style={{ color: '#1a1a1a' }}>
+                      {item.type === 'exitTicket'
+                        ? resolveExitTicketActivityTitle(item, exitTicketTitles)
+                        : item.title}
+                    </p>
                     <p className="text-sm text-gray-600 mb-1">{shown.date} · {shown.time}</p>
                     <p className="text-sm text-gray-600 mb-2">
                       {item.score
@@ -1190,8 +1199,10 @@ export default function AudienceProgress() {
                 </button>
               </div>
               <div className="space-y-3">
-                <p className="font-medium" style={{ color: '#1a1a1a' }}>
-                  {viewModal.data.title || viewModal.data.quizTitle}
+                <p dir="auto" className="font-medium" style={{ color: '#1a1a1a' }}>
+                  {viewModal.type === 'exitTicket'
+                    ? resolveExitTicketActivityTitle(viewModal.data, exitTicketTitles)
+                    : viewModal.data.title || viewModal.data.quizTitle}
                 </p>
                 {viewModal.type === 'quiz' && (
                   <>

@@ -5,6 +5,8 @@ const ARCHIVE_TYPES = new Set(['link', 'image', 'file']);
 const sharedResourcesRef = (raceId) => db.ref(`space_race_shared_resources/${raceId}`);
 const studentHistoryRef = (studentKey) => db.ref(`space_race_student_history/${studentKey}`);
 const raceParticipantsRef = (id) => db.ref(`space_race_participants/${id}`);
+const teamChatMessagesRef = (raceId, teamId) =>
+  db.ref(`space_race_team_messages/${raceId}/team_${teamId}`);
 
 const normalizeStudentKey = (value) =>
   String(value || '')
@@ -32,16 +34,15 @@ const getSessionDate = (race = {}) => race.startedAt || race.createdAt || null;
 const getQuizName = (race = {}) =>
   race.title || race.quiz?.title || 'Space Race';
 
-async function archiveSharedResource(race, raceId, message) {
-  if (!ARCHIVE_TYPES.has(message.type)) return null;
-
-  const record = {
+function buildResourceRecord(race, raceId, message, teamIdFallback) {
+  const teamId = message.teamId != null && message.teamId !== '' ? message.teamId : teamIdFallback;
+  return {
     id: message.id,
     raceId,
-    quizId: race.quizId || race.quiz?.id || null,
-    quizName: getQuizName(race),
-    sessionDate: getSessionDate(race) || message.timestamp || null,
-    teamId: Number(message.teamId),
+    quizId: race?.quizId || race?.quiz?.id || null,
+    quizName: race ? getQuizName(race) : '',
+    sessionDate: (race ? getSessionDate(race) : null) || message.timestamp || null,
+    teamId: Number(teamId),
     participantId: message.participantId,
     senderName: message.senderName,
     type: message.type,
@@ -52,7 +53,24 @@ async function archiveSharedResource(race, raceId, message) {
     sharedAt: message.timestamp,
     chatMessageId: message.id,
   };
+}
 
+function resourceDedupeKey(resource) {
+  if (resource?.id) return `id:${resource.id}`;
+  if (resource?.chatMessageId) return `id:${resource.chatMessageId}`;
+  return [
+    'mix',
+    resource?.url || '',
+    resource?.fileName || '',
+    resource?.senderName || '',
+    resource?.sharedAt || '',
+  ].join('|');
+}
+
+async function archiveSharedResource(race, raceId, message) {
+  if (!ARCHIVE_TYPES.has(message.type)) return null;
+
+  const record = buildResourceRecord(race, raceId, message);
   await sharedResourcesRef(raceId).child(message.id).set(record);
   return record;
 }
@@ -206,23 +224,42 @@ async function getStudentHistory(query = {}) {
   );
 }
 
+function participantMatchesQuery(participant, query = {}) {
+  if (!participant) return false;
+  const studentUid = query.uid ? String(query.uid).trim() : '';
+  const studentEmail = query.email ? String(query.email).toLowerCase().trim() : '';
+  if (studentUid && participant.studentUid && String(participant.studentUid).trim() === studentUid) {
+    return true;
+  }
+  if (
+    studentEmail &&
+    participant.studentEmail &&
+    String(participant.studentEmail).toLowerCase().trim() === studentEmail
+  ) {
+    return true;
+  }
+  return matchesStudent(participant.name, getStudentIdentifiers(query));
+}
+
 async function verifyStudentTeamAccess(raceId, teamId, query = {}) {
+  const studentUid = query.uid ? String(query.uid).trim() : '';
   const identifiers = getStudentIdentifiers(query);
-  if (!identifiers.length) return false;
+  if (!studentUid && !identifiers.length) return false;
 
   const participantsSnap = await raceParticipantsRef(raceId).get();
   if (participantsSnap.exists()) {
     const participants = participantsSnap.val() || {};
     const hasMatch = Object.values(participants).some(
-      (p) =>
-        p &&
-        matchesStudent(p.name, identifiers) &&
-        String(p.teamId) === String(teamId)
+      (p) => p && String(p.teamId) === String(teamId) && participantMatchesQuery(p, query)
     );
     if (hasMatch) return true;
   }
 
-  const indexMatches = await loadHistoryFromIndex(identifiers);
+  const indexKeys = [
+    ...(studentUid ? [`uid:${studentUid}`] : []),
+    ...identifiers,
+  ];
+  const indexMatches = await loadHistoryFromIndex(indexKeys);
   return indexMatches.some(
     (row) => row.raceId === raceId && String(row.teamId) === String(teamId)
   );
@@ -234,12 +271,29 @@ async function getSharedResources(raceId, teamId, query = {}) {
     return { forbidden: true, resources: [] };
   }
 
-  const snap = await sharedResourcesRef(raceId).get();
-  if (!snap.exists()) return { forbidden: false, resources: [] };
+  const [archiveSnap, chatSnap] = await Promise.all([
+    sharedResourcesRef(raceId).get(),
+    teamChatMessagesRef(raceId, teamId).get(),
+  ]);
 
-  const resources = Object.values(snap.val() || {})
-    .filter((r) => r && String(r.teamId) === String(teamId))
-    .sort((a, b) => String(a.sharedAt || '').localeCompare(String(b.sharedAt || '')));
+  const byKey = new Map();
+  const addResource = (resource) => {
+    if (!resource || !ARCHIVE_TYPES.has(resource.type)) return;
+    if (resource.teamId != null && String(resource.teamId) !== String(teamId)) return;
+    const key = resourceDedupeKey(resource);
+    if (!byKey.has(key)) byKey.set(key, resource);
+  };
+
+  Object.values(archiveSnap.exists() ? archiveSnap.val() || {} : {}).forEach(addResource);
+
+  Object.values(chatSnap.exists() ? chatSnap.val() || {} : {}).forEach((message) => {
+    if (!message || !ARCHIVE_TYPES.has(message.type)) return;
+    addResource(buildResourceRecord(null, raceId, message, teamId));
+  });
+
+  const resources = Array.from(byKey.values()).sort((a, b) =>
+    String(a.sharedAt || '').localeCompare(String(b.sharedAt || ''))
+  );
 
   return { forbidden: false, resources };
 }

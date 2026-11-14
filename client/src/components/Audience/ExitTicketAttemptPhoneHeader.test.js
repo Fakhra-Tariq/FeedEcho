@@ -36,7 +36,11 @@ describe('ExitTicketAttemptPhoneHeader', () => {
         isLoggedIn={false}
       />
     );
-    expect(screen.getByAltText('FeedEcho')).toBeTruthy();
+    const logo = screen.getByAltText('FeedEcho');
+    expect(logo).toBeTruthy();
+    expect(logo.closest('div').className).toMatch(/min-w-\[96px\]/);
+    expect(logo.closest('div').className).toMatch(/shrink-0/);
+    expect(logo.className).toMatch(/object-contain/);
     expect(screen.getByRole('heading', { name: /Demo Feedback/ })).toBeTruthy();
     expect(screen.getByText(/Khansa/)).toBeTruthy();
     expect(screen.queryByText('Exit Ticket')).toBeNull();

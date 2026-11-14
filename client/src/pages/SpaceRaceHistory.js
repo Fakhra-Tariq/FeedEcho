@@ -33,6 +33,17 @@ const mapResource = (resource, index) => ({
   linkTitle: resource.linkTitle,
 });
 
+const fetchTeamResources = async (raceId, teamId, query) => {
+  if (!raceId || teamId == null) return [];
+  try {
+    const resourcesResponse = await spaceRacesAPI.getSharedResources(raceId, teamId, query);
+    if (!resourcesResponse.data?.success) return [];
+    return (resourcesResponse.data?.data || []).map(mapResource);
+  } catch {
+    return [];
+  }
+};
+
 const RESOURCE_FILTERS = ['All', 'Documents', 'Images', 'Links'];
 
 const getFileExtension = (fileName = '') => {
@@ -236,16 +247,7 @@ export default function SpaceRaceHistory() {
         const sessionsWithResources = await Promise.all(
           historyRows.map(async (row) => {
             const { date, time, timestamp } = formatSessionDate(row.joinedAt || row.sessionDate);
-            let resources = [];
-
-            if (row.raceId && row.teamId != null) {
-              try {
-                const resourcesResponse = await spaceRacesAPI.getSharedResources(row.raceId, row.teamId, query);
-                resources = (resourcesResponse.data?.data || []).map(mapResource);
-              } catch {
-                resources = [];
-              }
-            }
+            const resources = await fetchTeamResources(row.raceId, row.teamId, query);
 
             return {
               raceId: row.raceId,
@@ -271,8 +273,24 @@ export default function SpaceRaceHistory() {
     loadHistory();
   }, [navigate]);
 
+  const refreshSessionResources = async (raceId, teamId) => {
+    if (!student || !raceId || teamId == null) return;
+    const query = getStudentQueryParams(student);
+    const resources = await fetchTeamResources(raceId, teamId, query);
+    setSessions((prev) =>
+      prev.map((session) => (session.raceId === raceId ? { ...session, resources } : session))
+    );
+  };
+
   const handleToggle = (raceId) => {
-    setExpandedRaceId((prev) => (prev === raceId ? null : raceId));
+    const session = sessions.find((s) => s.raceId === raceId);
+    setExpandedRaceId((prev) => {
+      const next = prev === raceId ? null : raceId;
+      if (next && session) {
+        void refreshSessionResources(session.raceId, session.teamId);
+      }
+      return next;
+    });
     setResourceFilters((prev) => ({
       ...prev,
       [raceId]: prev[raceId] || 'All',

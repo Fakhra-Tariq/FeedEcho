@@ -665,14 +665,15 @@ export default function HostAnonymousChat() {
   const selectedMessages = selectedChat?.messages || [];
 
   return (
-    <div className="px-0 sm:px-2 lg:px-6 -mt-4 lg:-mt-5 pt-4 lg:pt-5 flex flex-col gap-3 overflow-hidden overflow-x-hidden max-w-full min-h-[450px] h-[calc(100dvh-8.75rem)] lg:h-[calc(100dvh-5.75rem)] max-h-[calc(100dvh-8.75rem)] lg:max-h-[calc(100dvh-5.75rem)]">
+    <div className="host-anon-chat-page px-0 sm:px-2 lg:px-6 -mt-4 lg:-mt-5 pt-4 lg:pt-5 flex flex-col gap-3 overflow-hidden overflow-x-hidden max-w-full min-h-[450px] max-md:h-[calc(100dvh-8.75rem)] max-md:max-h-[calc(100dvh-8.75rem)]">
       <div className={clsx('shrink-0', mobileShowConversation && 'max-md:hidden')}>
-        <SessionLaunchBanner />
+        <SessionLaunchBanner className="host-anon-chat-banner" />
       </div>
 
       <div className={clsx('shrink-0', mobileShowConversation && 'max-md:hidden')}>
         <PageHeaderCard
         compact
+        className="host-anon-chat-hero"
         title="Anonymous Chat"
         titleAccessory={
           <InfoRecap
@@ -718,7 +719,7 @@ export default function HostAnonymousChat() {
       />
       </div>
 
-      <div className="flex flex-col md:flex-row gap-3 md:gap-4 flex-1 min-h-0 overflow-hidden max-w-full">
+      <div className="host-anon-chat-columns flex flex-col md:flex-row gap-3 md:gap-4 flex-1 min-h-0 overflow-hidden max-w-full">
         <aside
           className={clsx(
             'w-full md:w-[min(300px,100%)] shrink-0 min-h-0 bg-white rounded-2xl border border-primary/15 shadow-sm overflow-hidden flex flex-col md:h-full',
@@ -781,9 +782,9 @@ export default function HostAnonymousChat() {
             )}
           </div>
 
-          <div className="hidden md:block p-3 space-y-5 overflow-y-auto md:flex-1 min-h-0">
+          <div className="hidden md:flex md:flex-col md:flex-1 md:min-h-0 p-3 space-y-5 overflow-y-auto chat-messages-scroll">
           <div>
-            <h3 className="px-1 text-xs font-semibold uppercase tracking-wide text-text-light mb-2">Active Chats</h3>
+            <h3 className="px-1 text-xs font-semibold uppercase tracking-wide text-text-light mb-2 sticky top-0 z-[1] bg-white">Active Chats</h3>
             <div className="space-y-2">
               {activeChats.map((chat) => renderChatItem(chat))}
               {activeChats.length === 0 && (
@@ -796,7 +797,7 @@ export default function HostAnonymousChat() {
           </div>
 
           <div>
-            <h3 className="px-1 text-xs font-semibold uppercase tracking-wide text-text-light mb-2">Past Chats</h3>
+            <h3 className="px-1 text-xs font-semibold uppercase tracking-wide text-text-light mb-2 sticky top-0 z-[1] bg-white">Past Chats</h3>
             <div className="space-y-2">
               {endedChats.map((chat) => renderChatItem(chat))}
               {endedChats.length === 0 && (
@@ -948,10 +949,10 @@ export default function HostAnonymousChat() {
               <div className="relative flex-1 min-h-0 flex flex-col overflow-hidden">
                 <div
                   ref={messagesContainerRef}
-                  className="chat-messages-scroll flex-1 min-h-0 overflow-y-auto px-3 sm:px-5 py-4 space-y-3"
+                  className="chat-messages-scroll flex-1 min-h-0 overflow-y-auto px-3 sm:px-5 py-4 space-y-3 flex flex-col"
                 >
                   {selectedMessages.length === 0 ? (
-                    <div className="h-full flex flex-col items-center justify-center text-center px-8">
+                    <div className="flex-1 min-h-0 flex flex-col items-center justify-center text-center px-8">
                       <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center mb-3">
                         <MessageSquare className="w-6 h-6 text-primary/60" />
                       </div>
@@ -989,7 +990,7 @@ export default function HostAnonymousChat() {
               </div>
 
               {isChatActive(selectedChat) && (
-                <form onSubmit={handleSendMessage} className="px-3 sm:px-5 py-3 border-t border-primary/10 shrink-0">
+                <form onSubmit={handleSendMessage} className="px-3 sm:px-5 py-3 border-t border-primary/10 shrink-0 md:min-h-[56px] md:box-border">
                   <div className="flex items-center gap-2 min-h-11 bg-background border border-primary/15 rounded-full pl-4 pr-1.5 py-1.5 transition-colors focus-within:border-primary/40">
                     <input
                       type="text"

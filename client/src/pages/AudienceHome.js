@@ -9,6 +9,10 @@ import { getStoredAudienceSession } from '../utils/audienceSession';
 import AudienceDashboardNavbar from '../components/Audience/AudienceDashboardNavbar';
 import { AUDIENCE_ACTIVITY_PAGE_WIDTH } from '../components/Audience/AudienceActivityLayout';
 import { useAudienceLiveActivity } from '../hooks/useAudienceLiveActivity';
+import {
+  resolveExitTicketActivityTitle,
+  useExitTicketActivityTitles,
+} from '../utils/exitTicketActivityTitle';
 import { joinSessionByCode } from '../utils/joinSessionFlow';
 import { schedulePendingQuizSubmissionSync } from '../utils/quizSubmissionSync';
 import { studyAssistantAPI, studyAssistantConversationsAPI } from '../services/api';
@@ -173,6 +177,7 @@ const AudienceHome = () => {
   const [isDeletingConversation, setIsDeletingConversation] = useState(false);
   const [chatToDelete, setChatToDelete] = useState(null);
   const { items: recentActivity, loading: loadingActivity } = useAudienceLiveActivity(student, 5);
+  const exitTicketTitles = useExitTicketActivityTitles(recentActivity);
   const [isJoining, setIsJoining] = useState(false);
   const joinInProgressRef = useRef(false);
   const prevCodeLengthRef = useRef(0);
@@ -787,21 +792,25 @@ const AudienceHome = () => {
               <p className="text-sm text-gray-500 py-4">No recent activity yet. Join a session to get started!</p>
             ) : (
               recentActivity.map((item) => (
-                <div key={item.id} className="flex items-center justify-between py-3 border-b border-gray-100">
-                  <div className="flex items-center space-x-3">
-                    <div className="w-10 h-10 rounded-lg bg-gray-100 flex items-center justify-center">
+                <div key={item.id} className="flex items-center justify-between py-3 border-b border-gray-100 gap-3 min-w-0">
+                  <div className="flex items-center space-x-3 min-w-0 flex-1">
+                    <div className="w-10 h-10 rounded-lg bg-gray-100 flex items-center justify-center shrink-0">
                       {item.type === 'spaceRace' ? (
                         <Rocket className="w-5 h-5 text-gray-600" />
                       ) : (
                         <Clipboard className="w-5 h-5 text-gray-600" />
                       )}
                     </div>
-                    <div>
-                      <p className="font-medium text-text">{item.title}</p>
+                    <div className="min-w-0 flex-1">
+                      <p dir="auto" className="font-medium text-text truncate whitespace-nowrap">
+                        {item.type === 'exitTicket'
+                          ? resolveExitTicketActivityTitle(item, exitTicketTitles)
+                          : item.title}
+                      </p>
                       <p className="text-sm text-gray-600">{item.subtitle}</p>
                     </div>
                   </div>
-                  <span className="text-sm text-gray-500">{item.shortDate || item.date}</span>
+                  <span className="text-sm text-gray-500 shrink-0">{item.shortDate || item.date}</span>
                 </div>
               ))
             )}

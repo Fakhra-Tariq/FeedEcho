@@ -4,6 +4,9 @@ import {
   BRAIN_SHAPE,
   brainMetrics,
   fitBrainBox,
+  brainSilhouetteBounds,
+  isRectInBrain,
+  presentFontRangeCss,
   buildBulbCloudLists,
   cloudListSeed,
   colorForCloudItem,
@@ -89,6 +92,33 @@ describe('buildBulbCloudLists', () => {
     expect(fillerCountForArea(800, 600, 40)).toBe(0);
   });
 
+  it('caps compact phones at 120 total items with smaller filler weights', () => {
+    const items = [
+      { key: 'a', label: 'Nice project very impressive', count: 1 },
+      { key: 'b', label: 'goood', count: 1 },
+      { key: 'c', label: 'Nice idea', count: 1 },
+      { key: 'd', label: 'clear', count: 1 },
+    ];
+    const packed = buildBulbCloudLists(items, {
+      width: 374,
+      height: 240,
+      compact: true,
+    });
+    expect(packed.realCount).toBe(4);
+    expect(packed.fillerList).toHaveLength(116);
+    expect(packed.realCount + packed.fillerList.length).toBe(120);
+    packed.fillerList.forEach((row) => {
+      expect(row[1]).toBeGreaterThanOrEqual(25);
+      expect(row[1]).toBeLessThanOrEqual(30);
+      expect(row[2].real).toBe(false);
+    });
+    const desk = buildBulbCloudLists(items, { width: 1392, height: 720, compact: false });
+    expect(desk.fillerList.length).toBeGreaterThan(40);
+    expect(desk.fillerList[0][1]).toBe(22);
+    expect(fillerCountForArea(374, 240, 4, { compact: true })).toBe(116);
+    expect(fillerCountForArea(1392, 720, 4)).toBe(fillerCountForArea(1392, 720, 4, { compact: false }));
+  });
+
   it('does not add filler at 40+ real items', () => {
     const items = Array.from({ length: 40 }, (_, i) => ({
       key: `w${i}`,
@@ -142,6 +172,7 @@ describe('cloudListSeed', () => {
       { key: 'good', label: 'good', count: 3 },
     ];
     expect(cloudListSeed(a)).toBe(cloudListSeed(b));
+    expect(cloudListSeed(a, 'q1')).not.toBe(cloudListSeed(a, 'q2'));
   });
 
   it('seeded random is deterministic', () => {
@@ -206,28 +237,71 @@ describe('fitBrainBox', () => {
   });
 
   it('fits landscape phone height without overflowing', () => {
+    const sil = brainSilhouetteBounds();
     const box = fitBrainBox(796, 220, { viewportW: 844, viewportH: 390 });
     expect(box.height).toBeLessThanOrEqual(220);
     expect(box.width).toBeLessThanOrEqual(796);
-    expect(box.width / box.height).toBeCloseTo(700 / 440);
+    expect(box.width / box.height).toBeCloseTo(sil.width / sil.height, 2);
   });
 
   it('uses nearly the full padded width on phone portrait', () => {
+    const sil = brainSilhouetteBounds();
     const box = fitBrainBox(272, 500, { viewportW: 320, viewportH: 568 });
     expect(box.width).toBeGreaterThan(260);
     expect(box.width).toBeLessThanOrEqual(272);
+    expect(box.width / box.height).toBeCloseTo(sil.width / sil.height, 2);
+  });
+
+  it('is width-driven on a 390x844 phone stage', () => {
+    const sil = brainSilhouetteBounds();
+    const box = fitBrainBox(374, 700, { viewportW: 390, viewportH: 844 });
+    expect(box.width).toBeCloseTo(374, 0);
+    expect(box.height).toBeCloseTo(374 / (sil.width / sil.height), 0);
+  });
+
+  it('is width-driven on a 360x640 phone stage', () => {
+    const sil = brainSilhouetteBounds();
+    const box = fitBrainBox(344, 480, { viewportW: 360, viewportH: 640 });
+    expect(box.width).toBeCloseTo(344, 0);
+    expect(box.height).toBeCloseTo(344 / (sil.width / sil.height), 0);
+  });
+
+  it('uses viewport minus 32px on tablet portrait stage', () => {
+    const sil = brainSilhouetteBounds();
+    const box = fitBrainBox(736, 900, { viewportW: 768, viewportH: 1024 });
+    expect(box.width).toBeCloseTo(736, 0);
+    expect(box.width / box.height).toBeCloseTo(sil.width / sil.height, 2);
+  });
+});
+
+describe('presentFontRangeCss', () => {
+  it('uses 11–44px on compact phone brains and keeps desktop range', () => {
+    expect(presentFontRangeCss(370, { compact: true })).toEqual({ min: 11, max: 44 });
+    expect(presentFontRangeCss(304, { compact: true }).min).toBe(11);
+    expect(presentFontRangeCss(304, { compact: true }).max).toBeGreaterThanOrEqual(40);
+    const desk = presentFontRangeCss(1200, { compact: false });
+    expect(desk.min).toBe(14);
+    expect(desk.max).toBeGreaterThanOrEqual(64);
   });
 });
 
 describe('brainMetrics', () => {
   it('fits the 700x440 brain in the canvas and keeps aspect ratio', () => {
     expect(BRAIN_SHAPE.designWidth / BRAIN_SHAPE.designHeight).toBeCloseTo(700 / 440);
-    const m = brainMetrics(1240, 1000);
+    const m = brainMetrics(1591, 1000);
     expect(m.drawnW / m.drawnH).toBeCloseTo(700 / 440);
-    expect(m.drawnW).toBeLessThanOrEqual(1240);
+    expect(m.fit).toBe('design');
+    expect(m.drawnW).toBeLessThanOrEqual(1591);
     expect(m.drawnH).toBeLessThanOrEqual(1000);
     expect(m.cx).toBeCloseTo(m.ox + BRAIN_SHAPE.origin.x * m.scale);
     expect(m.cy).toBeCloseTo(m.oy + BRAIN_SHAPE.origin.y * m.scale);
+  });
+
+  it('fills a silhouette-aspect canvas on compact phones', () => {
+    const sil = brainSilhouetteBounds();
+    const m = brainMetrics(374, 374 / (sil.width / sil.height));
+    expect(m.fit).toBe('silhouette');
+    expect(m.drawnW / m.drawnH).toBeCloseTo(sil.width / sil.height, 2);
   });
 
   it('isPointInBrain covers the middle lobe and not the corners', () => {
@@ -237,6 +311,8 @@ describe('brainMetrics', () => {
     const m = brainMetrics(w, h);
     expect(isPointInBrain(m.cx, m.cy, w, h)).toBe(true);
     expect(isPointInBrain(2, 2, w, h)).toBe(false);
+    expect(isRectInBrain(m.cx - 4, m.cy - 4, m.cx + 4, m.cy + 4, w, h)).toBe(true);
+    expect(isRectInBrain(0, 0, 20, 20, w, h)).toBe(false);
   });
 });
 

@@ -328,9 +328,53 @@ async function getStudentActivity(query = {}, limit = 20) {
   );
   const otherActivities = activities.filter((item) => item.type !== 'quiz');
 
-  return [...quizActivities, ...otherActivities]
+  const ranked = [...quizActivities, ...otherActivities]
     .sort((a, b) => String(b.sortKey).localeCompare(String(a.sortKey)))
     .slice(0, limit);
+
+  await fillExitTicketTitles(ranked);
+  return ranked;
+}
+
+function visibleTicketTitle(value) {
+  const text = String(value ?? '').trim();
+  if (!text || text === 'undefined' || text === 'null' || text === '—') return '';
+  return text;
+}
+
+function isGenericExitTicketTitle(value) {
+  const text = visibleTicketTitle(value);
+  return !text || text === 'Exit Ticket';
+}
+
+/** One RTDB get per unique ticket id among visible generic rows. Does not rewrite records. */
+async function fillExitTicketTitles(activities) {
+  const ids = [];
+  (activities || []).forEach((item) => {
+    if (item?.type !== 'exitTicket') return;
+    if (!isGenericExitTicketTitle(item.title)) return;
+    const id = String(item.ticketId || '').trim();
+    if (id && !ids.includes(id)) ids.push(id);
+  });
+  if (!ids.length) return;
+
+  const snaps = await Promise.all(
+    ids.map((id) => db.ref(`exit_tickets/${id}`).get().catch(() => null))
+  );
+  const titles = {};
+  ids.forEach((id, index) => {
+    const snap = snaps[index];
+    titles[id] =
+      snap && typeof snap.exists === 'function' && snap.exists()
+        ? visibleTicketTitle(snap.val()?.title)
+        : '';
+  });
+
+  activities.forEach((item) => {
+    if (item?.type !== 'exitTicket' || !isGenericExitTicketTitle(item.title)) return;
+    const fetched = titles[String(item.ticketId || '').trim()] || '';
+    item.title = fetched || 'Exit Ticket';
+  });
 }
 
 const toQuizHistoryRow = (quizId, participantId, sub) => {

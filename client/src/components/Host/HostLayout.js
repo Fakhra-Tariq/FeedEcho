@@ -83,8 +83,16 @@ const HostLayout = () => {
     navigate('/');
   };
 
+  const isAnonymousChatPage = location.pathname.startsWith('/host/anonymous-chat');
+
   return (
-    <div className={clsx('min-h-screen bg-background overflow-x-hidden max-w-full', 'text-text')}>
+    <div
+      className={clsx(
+        'min-h-screen bg-background overflow-x-hidden max-w-full',
+        'text-text',
+        isAnonymousChatPage && 'host-anon-chat-shell'
+      )}
+    >
       {isMenuOpen && (
         <div
           role="presentation"
@@ -231,8 +239,8 @@ const HostLayout = () => {
         </div>
       </header>
 
-      <main className="pt-24 pb-12">
-        <div className={TEACHER_PAGE_GUTTER}>
+      <main className={clsx('pt-24 pb-12', isAnonymousChatPage && 'host-anon-chat-main')}>
+        <div className={clsx(TEACHER_PAGE_GUTTER, isAnonymousChatPage && 'host-anon-chat-gutter')}>
           <Outlet />
         </div>
       </main>

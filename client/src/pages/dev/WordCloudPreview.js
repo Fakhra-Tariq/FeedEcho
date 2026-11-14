@@ -26,7 +26,11 @@ export default function WordCloudPreview() {
     let base = [];
     if (n === '0') base = [];
     else if (n === '1') base = ONE;
-    else if (n === '2') base = THREE.slice(0, 2);
+    else if (n === '2')
+      base = [
+        { key: 'excellent', label: 'Excellent', count: 1 },
+        { key: 'goood', label: 'Goood', count: 1 },
+      ];
     else if (n === '3') base = THREE;
     else if (n === '7') base = many(7);
     else if (n === '4') base = THREE_PLUS;

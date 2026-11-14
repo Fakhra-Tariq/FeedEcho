@@ -2454,21 +2454,6 @@ const AudienceQuizAttempt = ({
             <span className="text-sm text-text-light">
               Question {currentQuestion + 1} of {quiz.questions.length}
             </span>
-            {isSpaceRace && timeLeft != null ? (
-              <span
-                className={`hidden md:inline-flex items-center justify-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-semibold tabular-nums ${
-                  timeLeft <= 10
-                    ? 'text-red-600 bg-red-50 animate-pulse'
-                    : timeLeft <= 60
-                      ? 'text-amber-800 bg-amber-50'
-                      : 'text-[#6D415F] bg-[#F1E5EB]'
-                }`}
-                style={{ fontVariantNumeric: 'tabular-nums', minWidth: '4.5rem' }}
-              >
-                <Clock className="w-3.5 h-3.5 shrink-0" />
-                {formatQuizCountdown(timeLeft)}
-              </span>
-            ) : null}
             <span className="text-sm font-medium text-[#6D415F]">
               {Math.round(progress)}% Complete
             </span>

@@ -514,12 +514,14 @@ router.post('/:id/respond', async (req, res) => {
     
     // Save response to exit_responses node
     const responseId = generateId('resp');
+    const snapshotTitle = String(ticket.title || '').trim();
     const responseData = {
       id: responseId,
       ticketId: id,
       studentName: resolvedStudentName,
       answers: answers,
       submittedAt: new Date().toISOString(),
+      ...(snapshotTitle ? { ticketTitle: snapshotTitle } : {}),
       ...(studentUid ? { studentUid } : {}),
       ...(studentEmail ? { studentEmail } : {}),
     };

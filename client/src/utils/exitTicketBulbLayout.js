@@ -43,6 +43,32 @@ export const BRAIN_SHAPE = {
 export const CLOUD_FONT_STACK =
   'Inter, system-ui, "Segoe UI", "Noto Nastaliq Urdu", "Noto Sans Arabic", "Segoe UI Historic", Tahoma, sans-serif';
 
+/** Axis-aligned bounds of the black silhouette in 700×440 design space. */
+export function brainSilhouetteBounds() {
+  let left = Infinity;
+  let right = -Infinity;
+  let top = Infinity;
+  let bottom = -Infinity;
+  BRAIN_SHAPE.ellipses.forEach((e) => {
+    left = Math.min(left, e.cx - e.rx);
+    right = Math.max(right, e.cx + e.rx);
+    top = Math.min(top, e.cy - e.ry);
+    bottom = Math.max(bottom, e.cy + e.ry);
+  });
+  const s = BRAIN_SHAPE.stem;
+  left = Math.min(left, s.topLeft.x, s.bottomLeft.x);
+  right = Math.max(right, s.topRight.x, s.bottomRight.x);
+  top = Math.min(top, s.topLeft.y, s.topRight.y);
+  bottom = Math.max(bottom, s.bottomLeft.y, s.bottomRight.y);
+  return { left, right, top, bottom, width: right - left, height: bottom - top };
+}
+
+export function isCompactPresentViewport(viewportW, viewportH) {
+  const vw = Math.max(1, viewportW);
+  const vh = Math.max(1, viewportH);
+  return vw < 1024 || vh < 500;
+}
+
 const hashString = (value) => {
   let h = 2166136261;
   const s = String(value || '');
@@ -70,8 +96,11 @@ export function sortCloudItems(items) {
     .sort((a, b) => b.count - a.count || a.label.localeCompare(b.label));
 }
 
-export function cloudListSeed(items) {
-  return hashString(sortCloudItems(items).map((i) => `${i.key}:${i.count}`).join('|'));
+export function cloudListSeed(items, extra = '') {
+  const body = sortCloudItems(items)
+    .map((i) => `${i.key}:${i.count}`)
+    .join('|');
+  return hashString(`${extra}|${body}`);
 }
 
 export function installSeededRandom(seed) {
@@ -102,25 +131,45 @@ export function withSeededRandom(seed, fn) {
 }
 
 /**
- * Fit the 700×440 design canvas in the Present stage (object-fit: contain).
- * Desktop uses 92% of the stage and never exceeds 75% of the viewport width.
- * Phone/tablet use almost the full padded stage (no vmin cap).
+ * Fit the Present stage.
+ * Desktop: 700×440 design canvas, 92% of the stage, never over 75% viewport width.
+ * Phone/tablet: width-driven silhouette box (~1.24:1); height only limits if it does not fit.
  */
 export function fitBrainBox(availW, availH, { viewportW = availW, viewportH = availH } = {}) {
   const dw = BRAIN_SHAPE.designWidth;
   const dh = BRAIN_SHAPE.designHeight;
   const vw = Math.max(1, viewportW);
+  const vh = Math.max(1, viewportH);
   const stageW = Math.max(1, availW);
   const stageH = Math.max(1, availH);
-  const fill = vw >= 1024 ? 0.92 : 0.98;
-  let maxW = stageW * fill;
-  const maxH = stageH * fill;
-  if (vw >= 1024) {
+  if (!isCompactPresentViewport(vw, vh)) {
+    const fill = 0.92;
+    let maxW = stageW * fill;
+    const maxH = stageH * fill;
     maxW = Math.min(maxW, vw * 0.75);
+    const scale = Math.min(maxW / dw, maxH / dh);
+    const safe = Number.isFinite(scale) && scale > 0 ? scale : 1;
+    return { width: dw * safe, height: dh * safe };
   }
-  const scale = Math.min(maxW / dw, maxH / dh);
-  const safe = Number.isFinite(scale) && scale > 0 ? scale : 1;
-  return { width: dw * safe, height: dh * safe };
+  const sil = brainSilhouetteBounds();
+  const aspect = sil.width / Math.max(1, sil.height);
+  const landscape = vh < 500;
+  if (landscape) {
+    let height = stageH;
+    let width = height * aspect;
+    if (width > stageW) {
+      width = stageW;
+      height = width / aspect;
+    }
+    return { width, height };
+  }
+  let width = stageW;
+  let height = width / aspect;
+  if (height > stageH) {
+    height = stageH;
+    width = height * aspect;
+  }
+  return { width, height };
 }
 
 export function brainMetrics(width, height) {
@@ -128,6 +177,33 @@ export function brainMetrics(width, height) {
   const h = Math.max(1, height);
   const dw = BRAIN_SHAPE.designWidth;
   const dh = BRAIN_SHAPE.designHeight;
+  const sil = brainSilhouetteBounds();
+  const boxAspect = w / h;
+  const designAspect = dw / dh;
+  const silAspect = sil.width / sil.height;
+  const useSilhouette = Math.abs(boxAspect - silAspect) + 0.04 < Math.abs(boxAspect - designAspect);
+  const mid = BRAIN_SHAPE.ellipses[10];
+  if (useSilhouette) {
+    const scale = Math.min(w / sil.width, h / sil.height);
+    const drawnW = sil.width * scale;
+    const drawnH = sil.height * scale;
+    const ox = (w - drawnW) / 2 - sil.left * scale;
+    const oy = (h - drawnH) / 2 - sil.top * scale;
+    return {
+      w,
+      h,
+      pad: 0,
+      scale,
+      ox,
+      oy,
+      drawnW,
+      drawnH,
+      cx: ox + BRAIN_SHAPE.origin.x * scale,
+      cy: oy + BRAIN_SHAPE.origin.y * scale,
+      R: mid.rx * scale,
+      fit: 'silhouette',
+    };
+  }
   const pad = Math.min(w, h) * 0.02;
   const availW = Math.max(1, w - pad * 2);
   const availH = Math.max(1, h - pad * 2);
@@ -136,7 +212,6 @@ export function brainMetrics(width, height) {
   const drawnH = dh * scale;
   const ox = (w - drawnW) / 2;
   const oy = (h - drawnH) / 2;
-  const mid = BRAIN_SHAPE.ellipses[10];
   return {
     w,
     h,
@@ -149,6 +224,7 @@ export function brainMetrics(width, height) {
     cx: ox + BRAIN_SHAPE.origin.x * scale,
     cy: oy + BRAIN_SHAPE.origin.y * scale,
     R: mid.rx * scale,
+    fit: 'design',
   };
 }
 
@@ -222,9 +298,15 @@ export const paintBulbOccupancyMask = paintBrainOccupancyMask;
 /** @deprecated Use clipCanvasToBrain */
 export const clipCanvasToBulb = clipCanvasToBrain;
 
-export function fillerCountForArea(width, height, realCount) {
+/** Total placed items cap on compact Present brains (reals + filler). */
+export const PHONE_CLOUD_CAP = 120;
+
+export function fillerCountForArea(width, height, realCount, { compact } = {}) {
   const n = Math.max(0, realCount);
   if (n === 0 || n >= FILL_THRESHOLD) return 0;
+  if (compact) {
+    return Math.max(0, PHONE_CLOUD_CAP - n);
+  }
   const area = Math.max(1, width) * Math.max(1, height);
   const target = Math.max(120, Math.min(250, Math.round(area / 2200)));
   return Math.max(0, target - n);
@@ -255,12 +337,108 @@ export function isPointInBrain(x, y, width, height) {
   return pointInStem(dx, dy, BRAIN_SHAPE.stem);
 }
 
+/** True if the axis-aligned glyph box lies inside the silhouette (edge samples). */
+export function isRectInBrain(left, top, right, bottom, width, height) {
+  const bw = Math.max(0, right - left);
+  const bh = Math.max(0, bottom - top);
+  const stepX = Math.max(3, Math.min(10, bw / 8 || 3));
+  const stepY = Math.max(3, Math.min(10, bh / 4 || 3));
+  for (let x = left; x <= right; x += stepX) {
+    if (!isPointInBrain(x, top, width, height)) return false;
+    if (!isPointInBrain(x, (top + bottom) / 2, width, height)) return false;
+    if (!isPointInBrain(x, bottom, width, height)) return false;
+  }
+  for (let y = top; y <= bottom; y += stepY) {
+    if (!isPointInBrain(left, y, width, height)) return false;
+    if (!isPointInBrain((left + right) / 2, y, width, height)) return false;
+    if (!isPointInBrain(right, y, width, height)) return false;
+  }
+  return (
+    isPointInBrain(right, top, width, height) &&
+    isPointInBrain(right, bottom, width, height) &&
+    isPointInBrain(left, bottom, width, height)
+  );
+}
+
 export function countGlyphsOutsideBrain(hits, width, height) {
   return (hits || []).filter((box) => {
-    const cx = (box.left + box.right) / 2;
-    const cy = (box.top + box.bottom) / 2;
-    return !isPointInBrain(cx, cy, width, height);
+    return !isRectInBrain(box.left, box.top, box.right, box.bottom, width, height);
   }).length;
+}
+
+export function presentFontRangeCss(brainCssWidth, { compact } = {}) {
+  const w = Math.max(1, brainCssWidth);
+  if (compact) {
+    const max = Math.round(Math.min(44, Math.max(40, w * 0.118)));
+    return { min: 11, max };
+  }
+  return {
+    min: 14,
+    max: Math.min(90, Math.max(64, w * 0.07)),
+  };
+}
+
+function boxesOverlap(a, b, gap) {
+  return !(
+    a.right + gap < b.left ||
+    b.right + gap < a.left ||
+    a.bottom + gap < b.top ||
+    b.bottom + gap < a.top
+  );
+}
+
+/**
+ * Place 1–4 real labels in the wide central lobes. Font shrinks until the
+ * whole glyph box is inside the silhouette and at most ~70% of brain width.
+ */
+export function layoutSparseBrainWords(ctx, realList, { width, height, minFont, maxFont }) {
+  const placed = [];
+  if (!ctx || !realList?.length) return placed;
+  const m = brainMetrics(width, height);
+  const sil = brainSilhouetteBounds();
+  const brainW = sil.width * m.scale;
+  const maxWordW = brainW * 0.7;
+  const gap = Math.max(6, m.scale * 4);
+  const offsets = [
+    [0, 0],
+    [0, m.R * 0.55],
+    [0, -m.R * 0.45],
+    [m.R * 0.42, m.R * 0.12],
+    [-m.R * 0.42, m.R * 0.12],
+    [m.R * 0.28, m.R * 0.55],
+    [-m.R * 0.28, m.R * 0.55],
+  ];
+  realList.forEach((row) => {
+    const label = row[0];
+    const color = row[2]?.color || '#FFFFFF';
+    let fitted = null;
+    for (let font = maxFont; font >= minFont && !fitted; font -= 1) {
+      ctx.font = `700 ${font}px ${CLOUD_FONT_STACK}`;
+      const w = ctx.measureText(label).width;
+      if (w > maxWordW) continue;
+      const h = font;
+      for (let o = 0; o < offsets.length && !fitted; o += 1) {
+        const cx = m.cx + offsets[o][0];
+        const cy = m.cy + offsets[o][1];
+        const box = {
+          left: cx - w / 2,
+          right: cx + w / 2,
+          top: cy - h / 2,
+          bottom: cy + h / 2,
+          cx,
+          cy,
+          font,
+          label,
+          color,
+        };
+        if (!isRectInBrain(box.left, box.top, box.right, box.bottom, width, height)) continue;
+        if (placed.some((p) => boxesOverlap(p, box, gap))) continue;
+        fitted = box;
+      }
+    }
+    if (fitted) placed.push(fitted);
+  });
+  return placed;
 }
 
 /** @deprecated Use isPointInBrain */
@@ -285,7 +463,10 @@ const fillerTint = (index) => {
  * Real items first (weights 70-100). If fewer than 40, cycle dim filler copies
  * (weights 22-32) that exist only for packing. Never use filler in counts.
  */
-export function buildBulbCloudLists(items, { width = 800, height = 600, fillerScale = 1 } = {}) {
+export function buildBulbCloudLists(
+  items,
+  { width = 800, height = 600, fillerScale = 1, compact = false } = {}
+) {
   const real = sortCloudItems(items);
   const maxCount = real[0]?.count || 1;
   const minCount = real[real.length - 1]?.count || 1;
@@ -298,11 +479,13 @@ export function buildBulbCloudLists(items, { width = 800, height = 600, fillerSc
       { real: true, count: item.count, color: colorForCloudItem(item, index, real.length) },
     ];
   });
-  const copies = Math.round(fillerCountForArea(width, height, real.length) * fillerScale);
+  const copies = Math.round(
+    fillerCountForArea(width, height, real.length, { compact }) * fillerScale
+  );
   const fillerList = [];
   for (let i = 0; i < copies; i += 1) {
     const item = real[i % real.length];
-    const weight = 22 + (i % 6) * 2;
+    const weight = compact ? 25 + (i % 6) : 22 + (i % 6) * 2;
     fillerList.push([item.label, weight, { real: false, color: fillerTint(i) }]);
   }
   return { realList, fillerList, realCount: real.length };
