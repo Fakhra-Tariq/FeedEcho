@@ -116,6 +116,23 @@ function nextAnimationFrame() {
   });
 }
 
+/** Phone-portrait stage used only for desktop CSS-scaled packing. Compact `fitBrainBox` path. */
+function phoneLogicalBrainBox() {
+  return fitBrainBox(359, 700, { viewportW: 375, viewportH: 812 });
+}
+
+function desktopBrainDisplayScale(logical, wrapEl) {
+  const vw = window.innerWidth;
+  const vh = window.innerHeight;
+  const wrapW = wrapEl.clientWidth || wrapEl.getBoundingClientRect().width || 0;
+  const wrapH = wrapEl.clientHeight || wrapEl.getBoundingClientRect().height || 0;
+  const stageW = wrapW >= vw * 0.55 ? wrapW : Math.max(wrapW, vw - 32);
+  const stageH = wrapH >= vh * 0.45 ? wrapH : Math.max(wrapH, vh - 160);
+  const display = fitBrainBox(stageW, stageH, { viewportW: vw, viewportH: vh });
+  const s = Math.min(display.width / logical.width, display.height / logical.height);
+  return Number.isFinite(s) && s > 0 ? s : 1;
+}
+
 function itemSignature(items) {
   return (items || []).map((row) => `${row.key || row.label}:${row.count}`).join('|');
 }
@@ -125,92 +142,80 @@ function BrainWordCloud({ items, extra, empty, seedKey = '' }) {
   const canvasRef = useRef(null);
   const renderIdRef = useRef(0);
   const layoutCacheRef = useRef(new Map());
+  const phoneLogicalLayoutRef = useRef(false);
   const [size, setSize] = useState({ width: 0, height: 0 });
+  const [displayScale, setDisplayScale] = useState(1);
   const [tooltip, setTooltip] = useState(null);
-  const [desktopPainted, setDesktopPainted] = useState(false);
 
   useEffect(() => {
     const el = wrapRef.current;
     if (!el) return undefined;
-    let debounce = 0;
-    let raf = 0;
-    let lastPw = -1;
-    let lastPh = -1;
-    let stableMatches = 0;
-    const readBox = () => ({
-      pw: el.clientWidth || el.getBoundingClientRect().width,
-      ph: el.clientHeight || el.getBoundingClientRect().height,
-    });
-    const apply = () => {
-      const { pw, ph } = readBox();
-      if (pw < 40 || ph < 40) return;
-      const next = fitBrainBox(pw, ph, {
-        viewportW: window.innerWidth,
-        viewportH: window.innerHeight,
-      });
-      if (next.width < 40 || next.height < 40) return;
-      setSize((prev) => {
-        if (Math.abs(prev.width - next.width) < 2 && Math.abs(prev.height - next.height) < 2) {
-          return prev;
-        }
-        return { width: next.width, height: next.height };
-      });
-    };
-    const applyDesktopWhenStable = () => {
-      raf = 0;
-      const { pw, ph } = readBox();
-      if (pw < 40 || ph < 40) {
-        lastPw = -1;
-        lastPh = -1;
-        stableMatches = 0;
-        raf = requestAnimationFrame(applyDesktopWhenStable);
-        return;
-      }
-      if (Math.abs(pw - lastPw) < 2 && Math.abs(ph - lastPh) < 2) {
-        stableMatches += 1;
-      } else {
-        lastPw = pw;
-        lastPh = ph;
-        stableMatches = 0;
-      }
-      if (stableMatches < 1) {
-        raf = requestAnimationFrame(applyDesktopWhenStable);
-        return;
-      }
-      apply();
-    };
-    const schedule = () => {
-      const compact = isCompactPresentViewport(window.innerWidth, window.innerHeight);
-      if (compact) {
-        window.clearTimeout(debounce);
-        debounce = window.setTimeout(apply, 32);
-        return;
-      }
-      if (raf) cancelAnimationFrame(raf);
-      lastPw = -1;
-      lastPh = -1;
-      stableMatches = 0;
-      raf = requestAnimationFrame(applyDesktopWhenStable);
-    };
     const compactMount = isCompactPresentViewport(window.innerWidth, window.innerHeight);
     if (compactMount) {
+      phoneLogicalLayoutRef.current = false;
+      let debounce = 0;
+      const readBox = () => ({
+        pw: el.clientWidth || el.getBoundingClientRect().width,
+        ph: el.clientHeight || el.getBoundingClientRect().height,
+      });
+      const apply = () => {
+        const { pw, ph } = readBox();
+        if (pw < 40 || ph < 40) return;
+        const next = fitBrainBox(pw, ph, {
+          viewportW: window.innerWidth,
+          viewportH: window.innerHeight,
+        });
+        if (next.width < 40 || next.height < 40) return;
+        setSize((prev) => {
+          if (Math.abs(prev.width - next.width) < 2 && Math.abs(prev.height - next.height) < 2) {
+            return prev;
+          }
+          return { width: next.width, height: next.height };
+        });
+      };
+      const schedule = () => {
+        window.clearTimeout(debounce);
+        debounce = window.setTimeout(apply, 32);
+      };
       apply();
-    } else {
-      schedule();
+      const ro = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(schedule) : null;
+      ro?.observe(el);
+      window.addEventListener('resize', schedule);
+      window.addEventListener('orientationchange', schedule);
+      document.addEventListener('fullscreenchange', schedule);
+      return () => {
+        window.clearTimeout(debounce);
+        ro?.disconnect();
+        window.removeEventListener('resize', schedule);
+        window.removeEventListener('orientationchange', schedule);
+        document.removeEventListener('fullscreenchange', schedule);
+      };
     }
-    const ro = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(schedule) : null;
+
+    phoneLogicalLayoutRef.current = true;
+    const logical = phoneLogicalBrainBox();
+    setSize((prev) => {
+      if (Math.abs(prev.width - logical.width) < 2 && Math.abs(prev.height - logical.height) < 2) {
+        return prev;
+      }
+      return { width: logical.width, height: logical.height };
+    });
+    const updateScale = () => {
+      const next = desktopBrainDisplayScale(logical, el);
+      setDisplayScale((prev) => (Math.abs(prev - next) < 0.01 ? prev : next));
+    };
+    updateScale();
+    const ro = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(updateScale) : null;
     ro?.observe(el);
-    if (!compactMount && el.parentElement) ro?.observe(el.parentElement);
-    window.addEventListener('resize', schedule);
-    window.addEventListener('orientationchange', schedule);
-    document.addEventListener('fullscreenchange', schedule);
+    if (el.parentElement) ro?.observe(el.parentElement);
+    window.addEventListener('resize', updateScale);
+    window.addEventListener('orientationchange', updateScale);
+    document.addEventListener('fullscreenchange', updateScale);
     return () => {
-      window.clearTimeout(debounce);
-      if (raf) cancelAnimationFrame(raf);
       ro?.disconnect();
-      window.removeEventListener('resize', schedule);
-      window.removeEventListener('orientationchange', schedule);
-      document.removeEventListener('fullscreenchange', schedule);
+      window.removeEventListener('resize', updateScale);
+      window.removeEventListener('orientationchange', updateScale);
+      document.removeEventListener('fullscreenchange', updateScale);
     };
   }, []);
 
@@ -224,6 +229,9 @@ function BrainWordCloud({ items, extra, empty, seedKey = '' }) {
 
     const myId = (renderIdRef.current += 1);
     let timer = 0;
+    const packingCompact =
+      isCompactPresentViewport(window.innerWidth, window.innerHeight) ||
+      phoneLogicalLayoutRef.current;
     const dpr = Math.max(1, window.devicePixelRatio || 1);
     const cssW = size.width;
     const cssH = size.height;
@@ -359,7 +367,7 @@ function BrainWordCloud({ items, extra, empty, seedKey = '' }) {
 
     const drawBrainCloud = async (fillerScale) => {
       const WordCloud = require('wordcloud');
-      const compact = isCompactPresentViewport(window.innerWidth, window.innerHeight);
+      const compact = packingCompact;
       const cacheKey = `${seedKey}|${cssW}x${cssH}|${compact ? 'c' : 'd'}|${itemSignature(items)}|${fillerScale}`;
       const cached = compact ? layoutCacheRef.current.get(cacheKey) : null;
       const relayout = Boolean(compact && canvas._cloudReady);
@@ -667,7 +675,7 @@ function BrainWordCloud({ items, extra, empty, seedKey = '' }) {
     };
 
     const run = async () => {
-      const compactNow = isCompactPresentViewport(window.innerWidth, window.innerHeight);
+      const compactNow = packingCompact;
       if (document.fonts?.ready) {
         try {
           if (compactNow) {
@@ -707,7 +715,7 @@ function BrainWordCloud({ items, extra, empty, seedKey = '' }) {
           const ctx = canvas.getContext('2d');
           const { realList } = buildBulbCloudLists(items, { width: cssW, height: cssH });
           const metrics = brainMetrics(cw, ch);
-          const compact = isCompactPresentViewport(window.innerWidth, window.innerHeight);
+          const compact = packingCompact;
           const fonts = presentFontRangeCss(metrics.drawnW / dpr, { compact });
           const maxFont = fonts.max * dpr;
           const minFont = fonts.min * dpr;
@@ -715,7 +723,6 @@ function BrainWordCloud({ items, extra, empty, seedKey = '' }) {
             drawSparseReals(ctx, realList, minFont, maxFont);
           }
         }
-        if (stillCurrent() && !compactNow) setDesktopPainted(true);
       } catch (err) {
         logCloud('error', String(err && err.message));
         if (process.env.NODE_ENV === 'development') {
@@ -724,7 +731,7 @@ function BrainWordCloud({ items, extra, empty, seedKey = '' }) {
       }
     };
 
-    const compactStart = isCompactPresentViewport(window.innerWidth, window.innerHeight);
+    const compactStart = packingCompact;
     if (compactStart) {
       timer = window.setTimeout(run, 0);
     } else {
@@ -761,17 +768,13 @@ function BrainWordCloud({ items, extra, empty, seedKey = '' }) {
           style={{
             width: size.width ? `${size.width}px` : '100%',
             height: size.height ? `${size.height}px` : '100%',
+            transform: displayScale !== 1 ? `scale(${displayScale})` : undefined,
+            transformOrigin: 'center center',
           }}
         >
           <canvas
             ref={canvasRef}
-            className={`block bg-[#4A1F3D] ${
-              typeof window !== 'undefined' &&
-              !isCompactPresentViewport(window.innerWidth, window.innerHeight) &&
-              !desktopPainted
-                ? 'opacity-0'
-                : ''
-            }`}
+            className="block bg-[#4A1F3D]"
             role="img"
             aria-label="Word cloud"
             onMouseMove={(event) => {
@@ -845,27 +848,12 @@ export function ExitTicketWordCloudPresent({
   const rootRef = useRef(null);
   const usedFsRef = useRef(false);
   const showChips = !isChoiceType(question?.type);
-  const [desktopStageReady, setDesktopStageReady] = useState(() =>
-    typeof window === 'undefined'
-      ? true
-      : isCompactPresentViewport(window.innerWidth, window.innerHeight)
-  );
 
   useEffect(() => {
     if (!open) {
-      setDesktopStageReady(
-        typeof window !== 'undefined' &&
-          isCompactPresentViewport(window.innerWidth, window.innerHeight)
-      );
       return undefined;
     }
     usedFsRef.current = false;
-    const compact = isCompactPresentViewport(window.innerWidth, window.innerHeight);
-    if (compact) {
-      setDesktopStageReady(true);
-    } else {
-      setDesktopStageReady(false);
-    }
     let cancelled = false;
     const start = async () => {
       const el = rootRef.current;
@@ -877,10 +865,6 @@ export function ExitTicketWordCloudPresent({
       } catch {
         // iPhone / denied Fullscreen API: fixed inset overlay still covers the viewport
       }
-      if (compact || cancelled) return;
-      await nextAnimationFrame();
-      await nextAnimationFrame();
-      if (!cancelled) setDesktopStageReady(true);
     };
     start();
     const onFs = () => {
@@ -951,14 +935,12 @@ export function ExitTicketWordCloudPresent({
         </div>
       ) : null}
       <div className="flex-1 flex items-center justify-center min-h-0 w-full h-full">
-        {desktopStageReady ? (
-          <BrainWordCloud
-            items={items}
-            extra={extra}
-            empty={!items.length}
-            seedKey={`${question?.id || ''}:${questionIndex}`}
-          />
-        ) : null}
+        <BrainWordCloud
+          items={items}
+          extra={extra}
+          empty={!items.length}
+          seedKey={`${question?.id || ''}:${questionIndex}`}
+        />
       </div>
       {questionCount > 1 ? (
         <div className="flex items-center justify-center gap-4 pb-2">
