@@ -299,7 +299,8 @@ export const paintBulbOccupancyMask = paintBrainOccupancyMask;
 export const clipCanvasToBulb = clipCanvasToBrain;
 
 /** Total placed items cap on compact Present brains (reals + filler). */
-export const PHONE_CLOUD_CAP = 120;
+export const PHONE_CLOUD_CAP = 220;
+export const PHONE_FILL_TARGET = 0.85;
 
 export function fillerCountForArea(width, height, realCount, { compact } = {}) {
   const n = Math.max(0, realCount);
@@ -370,7 +371,7 @@ export function presentFontRangeCss(brainCssWidth, { compact } = {}) {
   const w = Math.max(1, brainCssWidth);
   if (compact) {
     const max = Math.round(Math.min(44, Math.max(40, w * 0.118)));
-    return { min: 11, max };
+    return { min: 10, max };
   }
   return {
     min: 14,
@@ -485,7 +486,7 @@ export function buildBulbCloudLists(
   const fillerList = [];
   for (let i = 0; i < copies; i += 1) {
     const item = real[i % real.length];
-    const weight = compact ? 25 + (i % 6) : 22 + (i % 6) * 2;
+    const weight = compact ? 22 + (i % 11) : 22 + (i % 6) * 2;
     fillerList.push([item.label, weight, { real: false, color: fillerTint(i) }]);
   }
   return { realList, fillerList, realCount: real.length };
@@ -498,6 +499,155 @@ export function toWordCloudList(items) {
     row[2].count,
     row[2].color,
   ]);
+}
+
+export function extraFillerList(items, startIndex, count) {
+  const real = sortCloudItems(items);
+  if (!real.length || count <= 0) return [];
+  const list = [];
+  for (let i = 0; i < count; i += 1) {
+    const item = real[i % real.length];
+    const n = startIndex + i;
+    const weight = 16 + (n % 10);
+    list.push([item.label, weight, { real: false, color: fillerTint(n) }]);
+  }
+  return list;
+}
+
+export function wrapCloudText(text, maxWidth, measureWidth) {
+  const raw = sanitizeCloudText(text);
+  if (!raw) return [];
+  const widthOf = (value) => Number(measureWidth(value)) || 0;
+  if (widthOf(raw) <= maxWidth) return [raw];
+  const words = raw.split(/\s+/).filter(Boolean);
+  if (words.length <= 1) return [raw];
+  const pack = (maxLines) => {
+    const lines = [];
+    let i = 0;
+    while (i < words.length && lines.length < maxLines) {
+      const lastLine = lines.length === maxLines - 1;
+      let take = 1;
+      let line = words[i];
+      while (i + take < words.length) {
+        const next = `${line} ${words[i + take]}`;
+        if (!lastLine && widthOf(next) > maxWidth) break;
+        line = next;
+        take += 1;
+      }
+      lines.push(line);
+      i += take;
+    }
+    if (i < words.length) {
+      lines[lines.length - 1] = `${lines[lines.length - 1]} ${words.slice(i).join(' ')}`;
+    }
+    return lines;
+  };
+  for (const n of [2, 3]) {
+    const lines = pack(n);
+    if (lines.every((line) => widthOf(line) <= maxWidth * 1.02) && lines.length <= n) {
+      return lines;
+    }
+  }
+  return pack(3);
+}
+
+function regionMostlyEmpty(ctx, left, top, right, bottom) {
+  const x = Math.max(0, Math.floor(left));
+  const y = Math.max(0, Math.floor(top));
+  const w = Math.max(1, Math.min(ctx.canvas.width - x, Math.ceil(right) - x));
+  const h = Math.max(1, Math.min(ctx.canvas.height - y, Math.ceil(bottom) - y));
+  if (w < 1 || h < 1) return false;
+  const data = ctx.getImageData(x, y, w, h).data;
+  const step = 16;
+  for (let i = 0; i < data.length; i += step) {
+    if (data[i] + data[i + 1] + data[i + 2] > 24) return false;
+  }
+  return true;
+}
+
+/**
+ * Pixel occupancy of the black silhouette: words are brighter than the mask.
+ * Samples every few pixels; used only on compact Present fill-up passes.
+ */
+export function measureSilhouetteCoverage(ctx, width, height) {
+  if (!ctx || width < 8 || height < 8) return 0;
+  const step = Math.max(2, Math.round(Math.min(width, height) / 160));
+  let sil = 0;
+  let covered = 0;
+  const { data } = ctx.getImageData(0, 0, width, height);
+  for (let y = 0; y < height; y += step) {
+    for (let x = 0; x < width; x += step) {
+      if (!isPointInBrain(x, y, width, height)) continue;
+      sil += 1;
+      const i = (Math.floor(y) * width + Math.floor(x)) * 4;
+      if (data[i] + data[i + 1] + data[i + 2] > 18) covered += 1;
+    }
+  }
+  return sil ? covered / sil : 0;
+}
+
+export function placeGuaranteedReal(ctx, row, { width, height, minFont, maxFont, fontFamily }) {
+  if (!ctx || !row) return null;
+  const label = row[0];
+  const color = row[2]?.color || '#FFFFFF';
+  const count = row[2]?.count;
+  const m = brainMetrics(width, height);
+  const brainW = brainSilhouetteBounds().width * m.scale;
+  const maxWordW = brainW * 0.82;
+  const offsets = [
+    [0, 0],
+    [0, m.R * 0.28],
+    [0, -m.R * 0.28],
+    [m.R * 0.35, 0.08 * m.R],
+    [-m.R * 0.35, 0.08 * m.R],
+    [m.R * 0.22, m.R * 0.42],
+    [-m.R * 0.22, m.R * 0.42],
+  ];
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  const tryFont = (font, lines) => {
+    ctx.font = `700 ${font}px ${fontFamily}`;
+    const lineH = font * 1.16;
+    const blockH = lineH * lines.length;
+    const blockW = Math.max(...lines.map((line) => ctx.measureText(line).width));
+    if (blockW > maxWordW && lines.length === 1) return null;
+    for (let o = 0; o < offsets.length; o += 1) {
+      const cx = m.cx + offsets[o][0];
+      const cy = m.cy + offsets[o][1];
+      const box = {
+        text: label,
+        count,
+        left: cx - blockW / 2,
+        right: cx + blockW / 2,
+        top: cy - blockH / 2,
+        bottom: cy + blockH / 2,
+      };
+      if (!isRectInBrain(box.left, box.top, box.right, box.bottom, width, height)) continue;
+      if (!regionMostlyEmpty(ctx, box.left, box.top, box.right, box.bottom)) continue;
+      ctx.fillStyle = color;
+      lines.forEach((line, i) => {
+        ctx.fillText(line, cx, box.top + lineH * (i + 0.5));
+      });
+      return box;
+    }
+    return null;
+  };
+  for (let font = maxFont; font >= minFont; font -= 1) {
+    const single = tryFont(font, [label]);
+    if (single) return single;
+  }
+  const wrapStart = Math.max(minFont, Math.round(minFont * 1.15));
+  for (let font = wrapStart; font >= minFont; font -= 1) {
+    const lines = wrapCloudText(label, maxWordW, (t) => {
+      ctx.font = `700 ${font}px ${fontFamily}`;
+      return ctx.measureText(t).width;
+    });
+    if (lines.length > 1) {
+      const wrapped = tryFont(font, lines);
+      if (wrapped) return wrapped;
+    }
+  }
+  return null;
 }
 
 export function tooltipForCloudItem(item) {

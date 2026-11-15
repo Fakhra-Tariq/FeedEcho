@@ -4,6 +4,12 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Audience Home phone logo: img h-40 (10rem) clipped to header h-16 (4rem). */
+:root {
+  --logo-height-phone: 10rem;
+  --logo-clip-height-phone: 4rem;
+}
+
 * {
   margin: 0;
   padding: 0;

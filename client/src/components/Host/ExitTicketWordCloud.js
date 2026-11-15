@@ -13,16 +13,21 @@ import {
   WORD_CLOUD_BG,
   WORD_CLOUD_SHAPE_FILL,
   brainMetrics,
+  PHONE_CLOUD_CAP,
+  PHONE_FILL_TARGET,
   buildBulbCloudLists,
   clipCanvasToBrain,
   cloudListSeed,
   countGlyphsOutsideBrain,
+  extraFillerList,
   fitBrainBox,
   isRectInBrain,
   installSeededRandom,
   isCompactPresentViewport,
   layoutSparseBrainWords,
+  measureSilhouetteCoverage,
   paintBrainOccupancyMask,
+  placeGuaranteedReal,
   presentFontRangeCss,
 } from '../../utils/exitTicketBulbLayout';
 
@@ -320,9 +325,7 @@ function BrainWordCloud({ items, extra, empty, seedKey = '' }) {
             top: Math.min(...ys),
             bottom: Math.max(...ys),
           };
-          if (!isRectInBrain(box.left, box.top, box.right, box.bottom, cw, ch)) {
-            if (compact) return;
-          } else {
+          if (isRectInBrain(box.left, box.top, box.right, box.bottom, cw, ch)) {
             allHits.push(box);
             if (box.count != null) realHits.push(box);
           }
@@ -342,8 +345,8 @@ function BrainWordCloud({ items, extra, empty, seedKey = '' }) {
         return n;
       }
 
-      const realTimeout = compact ? 200 : 3000;
-      const fillerTimeout = compact ? 400 : 3000;
+      const realTimeout = compact ? 1500 : 3000;
+      const fillerTimeout = compact ? 2200 : 3000;
 
       let drawn = 0;
       let timedOut = false;
@@ -365,6 +368,25 @@ function BrainWordCloud({ items, extra, empty, seedKey = '' }) {
         drawn += reals.drawn;
         timedOut = timedOut || reals.timedOut;
         logCloud('reals-stop', { drawn, timedOut: reals.timedOut });
+        if (compact && stillCurrent()) {
+          const placedLabels = new Set(realHits.map((box) => box.text));
+          realList.forEach((row) => {
+            if (placedLabels.has(row[0])) return;
+            const box = placeGuaranteedReal(ctx, row, {
+              width: cw,
+              height: ch,
+              minFont: Math.max(10 * dpr, minSize),
+              maxFont,
+              fontFamily: CLOUD_FONT_STACK,
+            });
+            if (box) {
+              realHits.push(box);
+              allHits.push(box);
+              placedLabels.add(row[0]);
+              drawn += 1;
+            }
+          });
+        }
         if (compact && stillCurrent() && fillerList.length) {
           await new Promise((resolve) => {
             const ric = window.requestIdleCallback;
@@ -390,6 +412,55 @@ function BrainWordCloud({ items, extra, empty, seedKey = '' }) {
         drawn += fillers.drawn;
         timedOut = timedOut || fillers.timedOut;
         logCloud('filler-stop', { drawn, timedOut: fillers.timedOut });
+        if (compact && stillCurrent()) {
+          const idle = () =>
+            new Promise((resolve) => {
+              const ric = window.requestIdleCallback;
+              if (typeof ric === 'function') ric(() => resolve(), { timeout: 80 });
+              else window.setTimeout(resolve, 0);
+            });
+          let coverage = measureSilhouetteCoverage(ctx, cw, ch);
+          let extraStart = fillerList.length;
+          let totalPlacedCap = realCount + extraStart;
+          const now =
+            typeof performance !== 'undefined' && performance.now
+              ? () => performance.now()
+              : () => Date.now();
+          const budgetEnd = t0 + 380;
+          logCloud('coverage-0', { coverage, totalPlacedCap });
+          while (
+            stillCurrent() &&
+            coverage < PHONE_FILL_TARGET &&
+            totalPlacedCap < PHONE_CLOUD_CAP &&
+            now() < budgetEnd
+          ) {
+            await idle();
+            if (!stillCurrent()) break;
+            const want = Math.min(40, PHONE_CLOUD_CAP - totalPlacedCap);
+            const extra = extraFillerList(items, extraStart, want);
+            if (!extra.length) break;
+            extraStart += extra.length;
+            totalPlacedCap += extra.length;
+            const more = await runCloud(
+              WordCloud,
+              extra,
+              {
+                ...shared,
+                minSize: Math.max(10 * dpr, Math.round(0.22 * maxFont)),
+                fontWeight: '500',
+                shrinkToFit: false,
+                rotateRatio: reduceMotion ? 0 : 0.18,
+              },
+              700,
+              target
+            );
+            drawn += more.drawn;
+            coverage = measureSilhouetteCoverage(ctx, cw, ch);
+            logCloud('coverage-pass', { coverage, drawn: more.drawn, totalPlacedCap });
+            if (!more.drawn) break;
+          }
+          canvas._coverage = coverage;
+        }
       } finally {
         ctx.fillText = origFill;
         restoreRandom();

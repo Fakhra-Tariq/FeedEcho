@@ -4,6 +4,7 @@ import { User, LogOut, Menu, X } from 'lucide-react';
 import clsx from 'clsx';
 import { useAuth } from '../../contexts/AuthContext';
 import { useClickOutside } from '../../hooks/useClickOutside';
+import FeedEchoLogo from '../FeedEchoLogo';
 
 const navItems = [
   { label: 'Explore', to: '/host/explore' },
@@ -127,12 +128,8 @@ const HostLayout = () => {
                 <Menu className="w-6 h-6 text-neutral-600" />
               )}
             </button>
-            <div className="relative z-10 flex h-16 min-w-0 shrink items-center justify-start max-md:overflow-hidden max-md:mr-auto max-[480px]:pointer-events-none">
-              <img
-                src="/FeedEcho-logo.png.png"
-                alt="FeedEcho"
-                className="h-40 w-auto max-w-[min(11rem,calc(100vw-8rem))] object-contain object-left mix-blend-multiply"
-              />
+            <div className="relative z-10 max-md:mr-auto max-[480px]:pointer-events-none max-md:shrink-0 md:flex md:h-16 md:items-center">
+              <FeedEchoLogo desktopImgClassName="md:h-40 md:max-w-[min(11rem,calc(100vw-8rem))]" />
             </div>
 
             <nav className="hidden lg:flex flex-1 items-center justify-center min-w-0 gap-1.5 xl:gap-3">

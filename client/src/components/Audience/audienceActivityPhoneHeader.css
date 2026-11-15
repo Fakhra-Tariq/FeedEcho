@@ -1,0 +1,67 @@
+/* Phone-only activity header: equal 1fr side columns keep the title on the viewport midline. */
+
+.audience-activity-phone-header {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: center;
+  min-height: 3.5rem;
+  width: 100%;
+  column-gap: 0.5rem;
+}
+
+.audience-activity-phone-header__left {
+  justify-self: start;
+  min-width: 0;
+}
+
+.audience-activity-phone-header__left .feed-echo-logo-clip {
+  flex-shrink: 0;
+}
+
+.audience-activity-phone-header__center {
+  justify-self: center;
+  max-width: 46vw;
+  min-width: 0;
+  overflow: hidden;
+  text-align: center;
+}
+
+.audience-activity-phone-header__center h1 {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 100%;
+  margin: 0;
+}
+
+.audience-activity-phone-header__right {
+  justify-self: end;
+  min-width: 0;
+  max-width: 38vw;
+}
+
+.audience-activity-phone-header__right--addon {
+  max-width: none;
+}
+
+.audience-activity-phone-header__name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+  max-width: 38vw;
+}
+
+@media (max-width: 20rem) {
+  .audience-activity-phone-header__center {
+    min-width: 25vw;
+  }
+
+  .audience-activity-phone-header__right:not(.audience-activity-phone-header__right--addon) {
+    max-width: 30vw;
+  }
+
+  .audience-activity-phone-header__name {
+    max-width: 30vw;
+  }
+}

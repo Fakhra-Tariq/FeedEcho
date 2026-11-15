@@ -2,6 +2,7 @@ import React, { useCallback, useRef, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { Bot, ChevronDown, Home, LogOut, Menu, TrendingUp, User, X } from 'lucide-react';
 import AudienceAvatar from '../AudienceAvatar';
+import FeedEchoLogo from '../FeedEchoLogo';
 import { useClickOutside } from '../../hooks/useClickOutside';
 import { getStoredAudienceSession } from '../../utils/audienceSession';
 
@@ -31,12 +32,8 @@ export default function AudienceDashboardNavbar({
     <nav className="bg-white shadow-sm border-b border-gray-200 flex-shrink-0">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between items-center h-16 min-w-0 gap-2 max-[480px]:gap-1">
-          <div className="flex items-center space-x-3 min-w-0 shrink max-[480px]:order-2 max-[480px]:h-16 max-[480px]:overflow-hidden">
-            <img
-              src="/FeedEcho-logo.png.png"
-              alt="FeedEcho"
-              className="h-32 w-auto object-contain object-left mix-blend-multiply min-[481px]:max-md:h-12 min-[481px]:max-md:max-w-[min(8.5rem,calc(100vw-11rem))] max-[480px]:h-40 max-[480px]:max-w-[min(11rem,calc(100vw-12.5rem))]"
-            />
+          <div className="flex items-center max-[480px]:order-2 max-md:shrink-0">
+            <FeedEchoLogo desktopImgClassName="md:h-32" />
           </div>
 
           <div className="hidden md:flex items-center space-x-6">

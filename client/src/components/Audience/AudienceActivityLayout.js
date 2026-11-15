@@ -1,7 +1,9 @@
 import React from 'react';
-import { Users } from 'lucide-react';
+import { User, Users } from 'lucide-react';
 import AudienceAvatar from '../AudienceAvatar';
 import AudienceHeaderLogoutMenu from './AudienceHeaderLogoutMenu';
+import AudienceActivityPhoneHeaderRow from './AudienceActivityPhoneHeaderRow';
+import FeedEchoLogo from '../FeedEchoLogo';
 import { useAuth } from '../../contexts/AuthContext';
 import { getStoredAudienceSession } from '../../utils/audienceSession';
 
@@ -24,28 +26,30 @@ export function AudienceActivityHeader({
   trueCenterTitle = false,
   leftAlignMobileTitle = false,
 }) {
+  void showAvatar;
+  void trueCenterTitle;
+  void leftAlignMobileTitle;
   const { userProfile } = useAuth();
   const session = getStoredAudienceSession();
   const isLoggedInAudience = Boolean(
     (userProfile?.uid && userProfile?.email) || (session?.uid && session?.email)
   );
 
-  const logo = (
-    <img
-      src="/FeedEcho-logo.png.png"
-      alt="FeedEcho"
-      className={`h-40 w-auto object-contain object-left mix-blend-multiply ${
-        compactMobileZones
-          ? 'max-w-[min(11rem,calc(100vw-8rem))] max-md:max-w-[6.75rem]'
-          : 'max-w-[min(11rem,calc(100vw-8rem))] max-md:max-w-[min(9.5rem,calc(100vw-11rem))]'
-      }`}
+  const activityLogoDesktop =
+    'md:h-40 md:max-w-[min(11rem,calc(100vw-8rem))]';
+  const logoSlot = onLogoClick ? (
+    <FeedEchoLogo
+      onClick={onLogoClick}
+      ariaLabel="Leave"
+      buttonClassName="relative flex h-16 shrink-0 items-center overflow-hidden cursor-pointer"
+      wrapClassName="h-16 overflow-hidden"
+      desktopImgClassName={activityLogoDesktop}
     />
-  );
-
-  const logoShell = (
-    <div className="relative flex h-16 shrink-0 items-center overflow-hidden">
-      {logo}
-    </div>
+  ) : (
+    <FeedEchoLogo
+      wrapClassName="h-16 overflow-hidden"
+      desktopImgClassName={activityLogoDesktop}
+    />
   );
 
   const desktopIdentity = (
@@ -55,34 +59,47 @@ export function AudienceActivityHeader({
     </div>
   );
 
-  const mobileIdentity = isLoggedInAudience ? (
-    <div className="md:hidden flex items-center justify-end shrink-0">
-      <AudienceAvatar
-        name={participantName}
-        className="w-8 h-8"
-        textClassName="text-sm"
-      />
-    </div>
-  ) : (
-    <div className={`md:hidden flex items-center justify-end min-w-0 ${rightAddon ? 'max-w-[4.5rem]' : 'max-w-[6.5rem]'}`}>
-      <span className="text-xs text-text-light truncate text-right">{participantName}</span>
+  const phoneGuestName = (
+    <div className="flex items-center justify-end gap-1 min-w-0">
+      <User className="w-4 h-4 shrink-0" color="#5F5460" aria-hidden="true" />
+      <span
+        dir="auto"
+        className="audience-activity-phone-header__name text-xs text-text-light text-right"
+      >
+        {participantName}
+      </span>
     </div>
   );
 
-  const identity =
+  const phoneIdentity =
+    showLoggedInLogoutMenu && isLoggedInAudience ? (
+      <AudienceHeaderLogoutMenu displayName={participantName} />
+    ) : isLoggedInAudience ? (
+      <div className="flex items-center justify-end shrink-0">
+        <AudienceAvatar
+          name={participantName}
+          className="w-8 h-8"
+          textClassName="text-sm"
+        />
+      </div>
+    ) : (
+      phoneGuestName
+    );
+
+  const desktopIdentityBlock =
     showLoggedInLogoutMenu && isLoggedInAudience ? (
       <AudienceHeaderLogoutMenu displayName={participantName} />
     ) : (
-      <>
-        {mobileIdentity}
-        {desktopIdentity}
-      </>
+      desktopIdentity
     );
 
   const titleContent = (
     <>
       {titleIcon}
-      <h1 className="font-bold text-gray-900 text-center leading-tight truncate whitespace-nowrap text-sm sm:text-base">
+      <h1
+        dir="auto"
+        className="font-bold text-gray-900 text-center leading-tight truncate whitespace-nowrap text-sm sm:text-base"
+      >
         {title}
       </h1>
       {badge ? (
@@ -98,60 +115,41 @@ export function AudienceActivityHeader({
     </>
   );
 
-  const clusterTitleLeft = trueCenterTitle && leftAlignMobileTitle;
-  const logoSlot = (
-    <div className={`${trueCenterTitle && !clusterTitleLeft ? 'relative z-10 ' : ''}flex justify-start shrink-0`}>
-      {onLogoClick ? (
-        <button
-          type="button"
-          onClick={onLogoClick}
-          aria-label="Leave"
-          className="relative flex h-16 shrink-0 items-center overflow-hidden cursor-pointer"
-        >
-          {logo}
-        </button>
-      ) : (
-        logoShell
-      )}
+  const phoneRight = rightAddon ? (
+    <div className="flex items-center justify-end gap-2 min-w-0">
+      <div className="shrink-0">{rightAddon}</div>
+      {phoneIdentity}
     </div>
+  ) : (
+    phoneIdentity
   );
 
   return (
     <div className={`bg-white border-b border-neutral-200 ${className}`.trim()}>
       <div className={`${AUDIENCE_ACTIVITY_PAGE_WIDTH} ${compactMobileZones ? 'max-md:!px-3' : ''}`.trim()}>
-        <div
-          className={
-            clusterTitleLeft
-              ? 'flex items-center gap-x-1 h-16 min-h-16 py-0 md:grid md:grid-cols-3 md:gap-2'
-              : trueCenterTitle
-              ? 'relative flex items-center min-h-16 py-0 md:grid md:grid-cols-3 md:h-16 md:gap-2'
-              : 'grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-x-2 min-h-16 py-0 md:grid-cols-3 md:h-16 md:gap-2'
+        <AudienceActivityPhoneHeaderRow
+          left={logoSlot}
+          center={
+            <div className="min-w-0 flex items-center justify-center gap-x-1 overflow-hidden">
+              {titleContent}
+            </div>
           }
-        >
+          right={phoneRight}
+          rightHasAddon={Boolean(rightAddon)}
+        />
+        <div className="hidden md:grid md:grid-cols-3 md:h-16 md:gap-2 md:items-center">
           {logoSlot}
-          {clusterTitleLeft ? (
-            <div className="min-w-0 flex flex-1 items-center gap-x-1 overflow-hidden max-md:[&_h1]:text-left [&_h1]:min-w-0 md:justify-center md:gap-x-2">
-              {titleContent}
-            </div>
-          ) : trueCenterTitle ? (
-            <div className="pointer-events-none absolute inset-0 flex items-center justify-center min-w-0 md:pointer-events-auto md:static md:inset-auto md:flex md:items-center md:justify-center md:overflow-hidden">
-              <div className="pointer-events-auto min-w-0 max-w-[calc(100%-11rem)] flex items-center justify-center gap-x-1 overflow-hidden md:max-w-none md:gap-x-2">
-                {titleContent}
-              </div>
-            </div>
-          ) : (
-            <div className="min-w-0 flex items-center justify-center gap-x-1 overflow-hidden md:gap-x-2">
-              {titleContent}
-            </div>
-          )}
-          <div className={`flex justify-end items-center shrink-0 min-w-0 ${trueCenterTitle ? 'relative z-10 ml-auto md:ml-0' : ''}`}>
+          <div className="min-w-0 flex items-center justify-center gap-x-2 overflow-hidden">
+            {titleContent}
+          </div>
+          <div className="flex justify-end items-center shrink-0 min-w-0">
             {rightAddon ? (
-              <div className="flex items-center gap-2 min-[481px]:gap-4 min-w-0 max-md:gap-2 shrink-0">
+              <div className="flex items-center gap-2 min-[481px]:gap-4 min-w-0 shrink-0">
                 {rightAddon}
-                {identity}
+                {desktopIdentityBlock}
               </div>
             ) : (
-              identity
+              desktopIdentityBlock
             )}
           </div>
         </div>

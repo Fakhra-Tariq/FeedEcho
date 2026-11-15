@@ -38,9 +38,13 @@ describe('ExitTicketAttemptPhoneHeader', () => {
     );
     const logo = screen.getByAltText('FeedEcho');
     expect(logo).toBeTruthy();
-    expect(logo.closest('div').className).toMatch(/min-w-\[96px\]/);
-    expect(logo.closest('div').className).toMatch(/shrink-0/);
+    expect(logo.closest('.feed-echo-logo-clip')).toBeTruthy();
     expect(logo.className).toMatch(/object-contain/);
+    expect(logo.getAttribute('src')).toBe('/FeedEcho-logo.png.png');
+    expect(logo.closest('[data-audience-phone-header="true"]')).toBeTruthy();
+    expect(logo.closest('[data-audience-phone-header="true"]').className).toMatch(
+      /audience-activity-phone-header/
+    );
     expect(screen.getByRole('heading', { name: /Demo Feedback/ })).toBeTruthy();
     expect(screen.getByText(/Khansa/)).toBeTruthy();
     expect(screen.queryByText('Exit Ticket')).toBeNull();

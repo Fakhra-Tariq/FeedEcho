@@ -7,6 +7,9 @@ import {
   brainSilhouetteBounds,
   isRectInBrain,
   presentFontRangeCss,
+  wrapCloudText,
+  extraFillerList,
+  PHONE_CLOUD_CAP,
   buildBulbCloudLists,
   cloudListSeed,
   colorForCloudItem,
@@ -92,7 +95,7 @@ describe('buildBulbCloudLists', () => {
     expect(fillerCountForArea(800, 600, 40)).toBe(0);
   });
 
-  it('caps compact phones at 120 total items with smaller filler weights', () => {
+  it('caps compact phones at 220 total items with smaller filler weights', () => {
     const items = [
       { key: 'a', label: 'Nice project very impressive', count: 1 },
       { key: 'b', label: 'goood', count: 1 },
@@ -105,17 +108,18 @@ describe('buildBulbCloudLists', () => {
       compact: true,
     });
     expect(packed.realCount).toBe(4);
-    expect(packed.fillerList).toHaveLength(116);
-    expect(packed.realCount + packed.fillerList.length).toBe(120);
+    expect(packed.fillerList).toHaveLength(PHONE_CLOUD_CAP - 4);
+    expect(packed.realCount + packed.fillerList.length).toBe(PHONE_CLOUD_CAP);
     packed.fillerList.forEach((row) => {
-      expect(row[1]).toBeGreaterThanOrEqual(25);
-      expect(row[1]).toBeLessThanOrEqual(30);
+      expect(row[1]).toBeGreaterThanOrEqual(22);
+      expect(row[1]).toBeLessThanOrEqual(32);
       expect(row[2].real).toBe(false);
     });
+    expect(extraFillerList(items, 0, 10)).toHaveLength(10);
     const desk = buildBulbCloudLists(items, { width: 1392, height: 720, compact: false });
     expect(desk.fillerList.length).toBeGreaterThan(40);
     expect(desk.fillerList[0][1]).toBe(22);
-    expect(fillerCountForArea(374, 240, 4, { compact: true })).toBe(116);
+    expect(fillerCountForArea(374, 240, 4, { compact: true })).toBe(PHONE_CLOUD_CAP - 4);
     expect(fillerCountForArea(1392, 720, 4)).toBe(fillerCountForArea(1392, 720, 4, { compact: false }));
   });
 
@@ -136,6 +140,18 @@ describe('buildBulbCloudLists', () => {
     ]);
     expect(realList[0][0]).toBe('good');
     expect(fillerList.every((row) => row[0] === 'good')).toBe(true);
+  });
+});
+
+describe('wrapCloudText', () => {
+  it('keeps a short phrase on one line and wraps a long whole answer', () => {
+    const measure = (t) => t.length * 8;
+    expect(wrapCloudText('goood', 200, measure)).toEqual(['goood']);
+    const long = 'The overall session is very good and impressive';
+    const lines = wrapCloudText(long, 160, measure);
+    expect(lines.length).toBeGreaterThanOrEqual(2);
+    expect(lines.length).toBeLessThanOrEqual(3);
+    expect(lines.join(' ')).toBe(long);
   });
 });
 
@@ -275,9 +291,9 @@ describe('fitBrainBox', () => {
 });
 
 describe('presentFontRangeCss', () => {
-  it('uses 11–44px on compact phone brains and keeps desktop range', () => {
-    expect(presentFontRangeCss(370, { compact: true })).toEqual({ min: 11, max: 44 });
-    expect(presentFontRangeCss(304, { compact: true }).min).toBe(11);
+  it('uses 10–44px on compact phone brains and keeps desktop range', () => {
+    expect(presentFontRangeCss(370, { compact: true })).toEqual({ min: 10, max: 44 });
+    expect(presentFontRangeCss(304, { compact: true }).min).toBe(10);
     expect(presentFontRangeCss(304, { compact: true }).max).toBeGreaterThanOrEqual(40);
     const desk = presentFontRangeCss(1200, { compact: false });
     expect(desk.min).toBe(14);

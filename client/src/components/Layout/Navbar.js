@@ -13,6 +13,7 @@ import {
   ChevronDown,
   Mail,
 } from 'lucide-react';
+import FeedEchoLogo from '../FeedEchoLogo';
 
 const Navbar = () => {
   const { user, userProfile, activePortal, logout } = useAuth();
@@ -61,13 +62,10 @@ const Navbar = () => {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between items-center h-16 min-w-0 gap-2">
           {/* Logo — unchanged */}
-          <Link to="/" className="flex items-center space-x-2 min-w-0 shrink">
-            <img
-              src="/FeedEcho-logo.png.png"
-              alt="FeedEcho"
-              className="h-32 w-auto max-w-[min(11rem,calc(100vw-5.5rem))] object-contain object-left mix-blend-multiply"
-            />
-          </Link>
+          <FeedEchoLogo
+            to="/"
+            desktopImgClassName="md:h-32 md:max-w-[min(11rem,calc(100vw-5.5rem))]"
+          />
 
           {/* Desktop Navigation */}
           <div className="hidden md:flex items-center space-x-8">
