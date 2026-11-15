@@ -7,9 +7,8 @@ import { getStoredAudienceSession } from '../../utils/audienceSession';
 import { isJoinWindowExpired } from '../../utils/spaceRaceJoinWindow';
 import AudiencePostActivityHomeButton from '../Audience/AudiencePostActivityHomeButton';
 import SpaceRaceQuizClosedCard from './SpaceRaceQuizClosedCard';
-import GuestAlreadyAttemptedNotice from '../Audience/GuestAlreadyAttemptedNotice';
 import { getAudienceDeviceId } from '../../utils/audienceDeviceId';
-import { collectLegacyParticipantIds, goToGuestNameStep } from '../../utils/guestAttemptIdentity';
+import { collectLegacyParticipantIds } from '../../utils/guestAttemptIdentity';
 
 const TimerDisplay = ({ timerInfo, onTimeUp }) => {
   const [timeLeft, setTimeLeft] = useState(0);
@@ -623,11 +622,6 @@ export default function SpaceRaceGamePanel({
       </div>
       {showAlreadyAttempted && !window.location.pathname.includes('/quiz/') && (
         <div className="max-w-3xl mx-auto mt-4">
-          {guestBlockedOnDevice && !getStoredAudienceSession()?.uid ? (
-            <GuestAlreadyAttemptedNotice
-              onUseDifferentName={() => goToGuestNameStep(navigate)}
-            />
-          ) : null}
           <AudiencePostActivityHomeButton
             onClick={handleBackToHome}
             className="w-full px-6 py-3 bg-primary text-white rounded-xl hover:bg-primary/90 transition-colors text-center leading-snug"

@@ -1,11 +1,11 @@
-import { sessionsAPI, studentsAPI } from '../services/api';
+import { exitTicketsAPI, sessionsAPI, studentsAPI } from '../services/api';
 import { normalizeTeamId, saveSpaceRaceParticipant } from './spaceRaceSession';
 import { getStoredAudienceSession, getStudentQueryParams } from './audienceSession';
 import { persistQuizParticipantSession } from './quizParticipantSession';
 import { saveLocalQuizSubmission } from './audienceQuizAttempts';
 import { findLocalQuizSubmissionForJoin } from './quizLaunchAudienceSettings';
 import { getAudienceDeviceId } from './audienceDeviceId';
-import { collectLegacyParticipantIds, GUEST_ALREADY_ATTEMPTED_MESSAGE } from './guestAttemptIdentity';
+import { collectLegacyParticipantIds } from './guestAttemptIdentity';
 
 function isAlreadyCompletedQuizError(error) {
   if (error?.response?.data?.code === 'ALREADY_ATTEMPTED') return true;
@@ -15,6 +15,101 @@ function isAlreadyCompletedQuizError(error) {
     error?.message ||
     '';
   return /already completed this quiz|already been used on this device/i.test(String(message));
+}
+
+function joinErrorMessageForDisplay(error, { studentUid } = {}) {
+  const message =
+    error?.response?.data?.message ||
+    error?.response?.data?.error ||
+    error?.message ||
+    'Failed to join session. Please try again.';
+  if (/already been used on this device/i.test(String(message))) {
+    return studentUid
+      ? 'You have already completed this quiz'
+      : 'Failed to join session. Please try again.';
+  }
+  return message;
+}
+
+async function navigateAlreadyAttemptedActivity({
+  trimmedName,
+  trimmedCode,
+  studentUid,
+  studentEmail,
+  navigate,
+}) {
+  persistJoinIdentity(trimmedName, { studentUid, studentEmail });
+  sessionStorage.setItem('sessionCode', trimmedCode);
+
+  let payload = {};
+  try {
+    const lookup = await sessionsAPI.getByCode(trimmedCode);
+    payload = lookup.data || {};
+  } catch {
+    payload = {};
+  }
+
+  let type = payload.type || payload.data?.type;
+  if (type !== 'quiz' && type !== 'spaceRace' && type !== 'exitTicket') {
+    try {
+      const ticketRes = await exitTicketsAPI.getByCode(trimmedCode);
+      if (ticketRes.data?.success && ticketRes.data?.data) {
+        type = 'exitTicket';
+        payload = {
+          type: 'exitTicket',
+          joinCode: trimmedCode,
+          ticketId: ticketRes.data.data.id,
+          data: ticketRes.data.data,
+        };
+      }
+    } catch {
+      // Not an exit ticket (or inactive).
+    }
+  }
+
+  const quizId = String(payload.quizId || payload.data?.id || '').trim();
+  const raceId = String(payload.raceId || payload.data?.id || '').trim();
+  const ticketId = payload.ticketId || payload.data?.id;
+  const joinCode = String(payload.joinCode || trimmedCode).toUpperCase();
+
+  if (type === 'spaceRace' && raceId) {
+    navigate(`/audience/space-race/${raceId}`, {
+      state: { alreadyAttemptedOnDevice: true },
+    });
+    return { success: true, type: 'spaceRace', raceId, alreadyAttemptedOnDevice: true };
+  }
+
+  if (type === 'exitTicket') {
+    navigate(`/audience/exit-ticket/${joinCode}`, {
+      replace: true,
+      state: { alreadyAttemptedOnDevice: true },
+    });
+    return { success: true, type: 'exitTicket', ticketId, alreadyAttemptedOnDevice: true };
+  }
+
+  if (type === 'quiz' && quizId) {
+    if (studentUid) {
+      return openSavedQuizResult({
+        trimmedName,
+        trimmedCode,
+        studentUid,
+        studentEmail,
+        navigate,
+        localRow: findLocalQuizSubmissionForJoin({
+          sessionCode: trimmedCode,
+          studentUid,
+          studentEmail,
+          studentName: trimmedName,
+        }),
+      });
+    }
+    navigate(`/audience/quiz/${quizId}`, {
+      state: { alreadyAttemptedOnDevice: true, hideGuestScore: true },
+    });
+    return { success: true, type: 'quiz', quizId, alreadyAttemptedOnDevice: true };
+  }
+
+  throw new Error('Failed to open completed activity');
 }
 
 async function openSavedQuizResult({
@@ -347,63 +442,37 @@ export async function joinSessionByCode({
       : { success: true, ...result };
   } catch (error) {
     if (isAlreadyCompletedQuizError(error)) {
-      if (!studentUid) {
-        try {
-          const lookup = await sessionsAPI.getByCode(trimmedCode);
-          const payload = lookup.data || {};
-          const type = payload.type || payload.data?.type;
-          const quizId = String(payload.quizId || payload.data?.id || '').trim();
-          const raceId = String(payload.raceId || payload.data?.id || '').trim();
-          const ticketId = payload.ticketId;
-          persistJoinIdentity(trimmedName, { studentUid, studentEmail });
-          sessionStorage.setItem('sessionCode', trimmedCode);
-          if (type === 'spaceRace' && raceId) {
-            navigate(`/audience/space-race/${raceId}`, {
-              state: { alreadyAttemptedOnDevice: true },
-            });
-            return { success: true, type: 'spaceRace', raceId, alreadyAttemptedOnDevice: true };
-          }
-          if (type === 'exitTicket') {
-            const code = String(payload.joinCode || trimmedCode).toUpperCase();
-            navigate(`/audience/exit-ticket/${code}`, {
-              replace: true,
-              state: { alreadyAttemptedOnDevice: true },
-            });
-            return { success: true, type: 'exitTicket', ticketId, alreadyAttemptedOnDevice: true };
-          }
-          if (quizId) {
-            navigate(`/audience/quiz/${quizId}`, {
-              state: { alreadyAttemptedOnDevice: true, hideGuestScore: true },
-            });
-            return { success: true, type: 'quiz', quizId, alreadyAttemptedOnDevice: true };
-          }
-        } catch {
-          onError(GUEST_ALREADY_ATTEMPTED_MESSAGE);
-          return { success: false, error: GUEST_ALREADY_ATTEMPTED_MESSAGE, alreadyAttemptedOnDevice: true };
-        }
-      }
       try {
-        return await openSavedQuizResult({
+        return await navigateAlreadyAttemptedActivity({
           trimmedName,
           trimmedCode,
           studentUid,
           studentEmail,
           navigate,
-          localRow: findLocalQuizSubmissionForJoin({
-            sessionCode: trimmedCode,
-            studentUid,
-            studentEmail,
-            studentName: trimmedName,
-          }),
         });
       } catch {
-        // Fall through to the original error if the saved result cannot be loaded.
+        if (studentUid) {
+          try {
+            return await openSavedQuizResult({
+              trimmedName,
+              trimmedCode,
+              studentUid,
+              studentEmail,
+              navigate,
+              localRow: findLocalQuizSubmissionForJoin({
+                sessionCode: trimmedCode,
+                studentUid,
+                studentEmail,
+                studentName: trimmedName,
+              }),
+            });
+          } catch {
+            // Fall through to a display-safe error if the saved result cannot be loaded.
+          }
+        }
       }
     }
-    const message =
-      error.response?.data?.message ||
-      error.message ||
-      'Failed to join session. Please try again.';
+    const message = joinErrorMessageForDisplay(error, { studentUid });
     onError(message);
     return { success: false, error: message };
   }

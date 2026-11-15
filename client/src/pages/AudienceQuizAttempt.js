@@ -37,9 +37,8 @@ import {
 import { isJoinWindowExpired } from '../utils/spaceRaceJoinWindow';
 import './srStudentQuizComplete.css';
 import SpaceRaceQuizClosedCard from '../components/SpaceRace/SpaceRaceQuizClosedCard';
-import GuestAlreadyAttemptedNotice from '../components/Audience/GuestAlreadyAttemptedNotice';
 import { getAudienceDeviceId } from '../utils/audienceDeviceId';
-import { collectLegacyParticipantIds, goToGuestNameStep } from '../utils/guestAttemptIdentity';
+import { collectLegacyParticipantIds } from '../utils/guestAttemptIdentity';
 import {
   AudienceActivityHeader,
   AudienceActivityCard,
@@ -2302,11 +2301,6 @@ const AudienceQuizAttempt = ({
             <p className={`text-text-light ${isSpaceRace ? 'sr-student-complete-subtitle' : 'text-lg mb-6'}`}>
               Thank you for completing the quiz!
             </p>
-            {guestBlockedOnDevice ? (
-              <GuestAlreadyAttemptedNotice
-                onUseDifferentName={() => goToGuestNameStep(navigate, studentSession?.sessionCode)}
-              />
-            ) : null}
 
             {!guestBlockedOnDevice ? (
             <div className={isSpaceRace ? 'sr-student-complete-redirect' : 'mb-6'}>

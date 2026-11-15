@@ -67,7 +67,10 @@ const AudienceJoin = () => {
         studentName: trimmedName,
         navigate,
         teamId,
-        onError: (message) => setError(message),
+        onError: (message) => {
+          if (/already been used on this device/i.test(String(message || ''))) return;
+          setError(message);
+        },
         onTeamSelectionRequired: ({ sessionCode, studentName, raceData: race }) => {
           setRaceData(race);
           setPendingJoin({ trimmedName: studentName, trimmedCode: sessionCode });

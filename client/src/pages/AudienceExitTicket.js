@@ -7,9 +7,8 @@ import { auth } from '../firebase';
 import { exitTicketsAPI, studentsAPI } from '../services/api';
 import { getStoredAudienceSession, getStudentQueryParams } from '../utils/audienceSession';
 import GuestProgressLoginBanner from '../components/Audience/GuestProgressLoginBanner';
-import GuestAlreadyAttemptedNotice from '../components/Audience/GuestAlreadyAttemptedNotice';
 import { getAudienceDeviceId } from '../utils/audienceDeviceId';
-import { collectLegacyParticipantIds, goToGuestNameStep } from '../utils/guestAttemptIdentity';
+import { collectLegacyParticipantIds } from '../utils/guestAttemptIdentity';
 import ExitTicketAttemptPhoneHeader, {
   isLoggedInAudienceUser,
 } from '../components/Audience/ExitTicketAttemptPhoneHeader';
@@ -55,9 +54,11 @@ const AudienceExitTicket = () => {
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    setIsSubmitted(false);
+    const blocked = Boolean(location.state?.alreadyAttemptedOnDevice);
+    setIsSubmitted(blocked);
+    setGuestBlockedOnDevice(blocked);
     setIsLoading(true);
-  }, [joinCode]);
+  }, [joinCode, location.state?.alreadyAttemptedOnDevice]);
 
   useEffect(() => {
     if (!joinCode) return undefined;
@@ -386,13 +387,14 @@ const AudienceExitTicket = () => {
             <p className="text-gray-600 mb-6">
               Thank you for completing the exit ticket. Your response has been recorded.
             </p>
-            {guestBlockedOnDevice ? (
-              <GuestAlreadyAttemptedNotice
-                onUseDifferentName={() => goToGuestNameStep(navigate, joinCode)}
-              />
-            ) : null}
             <button
-              onClick={() => navigate('/')}
+              onClick={() =>
+                navigate(
+                  isLoggedInAudienceUser(userProfile, getStoredAudienceSession())
+                    ? '/audience/home'
+                    : '/'
+                )
+              }
               className="w-full min-h-11 flex items-center justify-center space-x-2 px-6 py-3 bg-gradient-to-r from-primary to-primary/80 text-white rounded-xl hover:from-primary/90 hover:to-primary/70 transition-all duration-300 font-semibold"
             >
               <ArrowLeft className="w-5 h-5" />
