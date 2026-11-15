@@ -2293,7 +2293,7 @@ const AudienceQuizAttempt = ({
     if (!showFinalScore) {
       return (
         <div className={isSpaceRace ? 'sr-student-complete-shell' : `${shellClass} flex items-center justify-center p-4 min-h-screen`}>
-          <div className={`bg-white rounded-3xl shadow-soft border border-primary/10 w-full text-center ${isSpaceRace ? 'sr-student-complete-card' : 'p-8 max-w-md'}`}>
+          <div className={`bg-white rounded-3xl shadow-soft border border-primary/10 text-center ${isSpaceRace ? 'sr-student-complete-card' : 'w-full p-8 max-w-md'}`}>
             <CheckCircle className={`${isSpaceRace ? 'sr-student-complete-icon' : 'w-20 h-20 mb-6'} text-primary mx-auto`} />
             <h1 className={`font-bold text-text ${isSpaceRace ? 'sr-student-complete-title' : 'text-3xl mb-4'}`}>
               {isSpaceRace ? (
@@ -2379,7 +2379,7 @@ const AudienceQuizAttempt = ({
 
     return (
       <div className={isSpaceRace ? 'sr-student-complete-shell' : `${shellClass} flex items-center justify-center p-4 min-h-screen`}>
-        <div className={`bg-white rounded-3xl shadow-soft border border-primary/10 w-full text-center ${isSpaceRace ? 'sr-student-complete-card' : 'p-8 max-w-md'}`}>
+        <div className={`bg-white rounded-3xl shadow-soft border border-primary/10 text-center ${isSpaceRace ? 'sr-student-complete-card' : 'w-full p-8 max-w-md'}`}>
           <div className={`${isSpaceRace ? 'sr-student-complete-icon' : 'w-20 h-20 mb-6'} rounded-full flex items-center justify-center mx-auto ${getScoreBgColor(displayPercentage)}`}>
             <CheckCircle className={`${isSpaceRace ? '' : 'w-10 h-10'} ${getScoreTextColor(displayPercentage)}`} />
           </div>
@@ -2434,7 +2434,7 @@ const AudienceQuizAttempt = ({
             </p>
             
             {/* Visual Score Bar */}
-            <div className={`w-full bg-neutral-200 rounded-full overflow-hidden ${isSpaceRace ? 'sr-student-complete-bar' : 'h-4'}`}>
+            <div className={`w-full bg-neutral-200 rounded-full ${isSpaceRace ? 'sr-student-complete-bar' : 'h-4 overflow-hidden'}`}>
               <div 
                 className={`${getScoreColor(displayPercentage)} rounded-full transition-all duration-500 ease-out ${isSpaceRace ? 'sr-student-complete-bar' : 'h-4'}`}
                 style={{ width: `${displayPercentage}%` }}

@@ -540,7 +540,7 @@ export default function AudienceSpaceRacePage() {
 
   return (
     <div className="flex flex-col md:flex-row h-[100dvh] max-h-[100dvh] overflow-hidden overflow-x-hidden bg-background">
-      <div className="w-full md:flex-1 flex flex-col min-w-0 min-h-0 overflow-hidden">
+      <div className="w-full flex-1 flex flex-col min-w-0 min-h-0 overflow-hidden">
         <div className="flex-shrink-0">
           <div className="h-16 overflow-hidden">
             <AudienceActivityHeader
