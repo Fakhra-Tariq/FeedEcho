@@ -682,21 +682,28 @@ export default function ExitTicketDashboard() {
                 </div>
               ) : null;
 
+            const pairBtn =
+              'max-md:flex-1 max-md:min-w-0 max-md:basis-0 max-md:justify-center max-md:rounded-xl max-md:px-2.5 max-md:text-[13px] max-md:font-medium max-md:whitespace-nowrap';
+            const pairRow =
+              'flex flex-wrap items-center gap-2 mt-3 max-md:flex-nowrap max-md:gap-2.5';
+
             return (
             <div key={ticket.id} className="bg-white rounded-lg border border-gray-200 p-4 sm:p-6 max-w-full min-w-0">
               <div className="flex items-center justify-between gap-2 mb-2">
-                <div className="flex items-center gap-2 min-w-0">
+                <div className="flex items-center gap-2 min-w-0 flex-1">
                   <h3 className="text-lg font-semibold text-text truncate">{ticket.title}</h3>
                   <span className={`px-2 py-1 text-xs font-medium rounded-full shrink-0 ${getStatusColor(ticket.status)}`}>
                     {getStatusLabel(ticket.status)}
                   </span>
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
-                  <div className="hidden min-[361px]:block">{renderCodeCopy()}</div>
+                  {renderCodeCopy()}
                   {(ticket.status === 'active' || ticket.status === 'paused') && (
                     <button
                       onClick={() => handleEndTicket(ticket.id)}
-                      className="min-h-11 p-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors text-sm inline-flex items-center shrink-0"
+                      className={`${
+                        ticket.status === 'active' ? 'hidden md:inline-flex' : 'inline-flex'
+                      } min-h-11 p-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors text-sm items-center shrink-0`}
                       title="End Exit Ticket"
                     >
                       <Square className="w-4 h-4 mr-1" />
@@ -705,9 +712,6 @@ export default function ExitTicketDashboard() {
                   )}
                 </div>
               </div>
-              {ticket.status === 'active' && ticket.joinCode && (
-                <div className="min-[361px]:hidden mb-2">{renderCodeCopy()}</div>
-              )}
               <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-sm text-text-light">
                 <div className="flex items-center space-x-1">
                   <FileText className="w-4 h-4" />
@@ -724,16 +728,26 @@ export default function ExitTicketDashboard() {
                 </div>
               </div>
 
-              <div className="flex flex-wrap items-center gap-2 mt-3">
+              <div className={ticket.status === 'draft' ? 'flex flex-wrap items-center gap-2 mt-3' : pairRow}>
                   {ticket.status === 'active' && (
+                    <>
+                    <button
+                      onClick={() => handleEndTicket(ticket.id)}
+                      className={`md:hidden min-h-11 p-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors text-sm inline-flex items-center ${pairBtn}`}
+                      title="End Exit Ticket"
+                    >
+                      <Square className="w-4 h-4 mr-1 shrink-0" />
+                      End
+                    </button>
                     <button
                       onClick={() => fetchResponses(ticket.id)}
-                      className="min-h-11 p-2 text-primary rounded-lg border border-primary/50 hover:bg-primary/10 transition-colors text-sm inline-flex items-center"
+                      className={`min-h-11 p-2 text-primary rounded-lg border border-primary/50 hover:bg-primary/10 transition-colors text-sm inline-flex items-center ${pairBtn}`}
                       title="View Responses"
                     >
-                      <Eye className="w-4 h-4 mr-1" />
+                      <Eye className="w-4 h-4 mr-1 shrink-0" />
                       View Responses
                     </button>
+                    </>
                   )}
 
                   {ticket.status === 'paused' && (
@@ -751,19 +765,19 @@ export default function ExitTicketDashboard() {
                     <>
                     <button
                       onClick={() => fetchResponses(ticket.id)}
-                      className="min-h-11 p-2 text-primary rounded-lg border border-primary/50 hover:bg-primary/10 transition-colors text-sm inline-flex items-center"
+                      className={`min-h-11 p-2 text-primary rounded-lg border border-primary/50 hover:bg-primary/10 transition-colors text-sm inline-flex items-center ${pairBtn}`}
                       title="View Responses"
                     >
-                      <Eye className="w-4 h-4 mr-1" />
+                      <Eye className="w-4 h-4 mr-1 shrink-0" />
                       View Responses
                     </button>
                     <button
                       type="button"
                       onClick={() => handleDeleteTicket(ticket.id)}
-                      className="min-h-11 p-2 text-red-600 rounded-lg border border-red-300 hover:bg-red-100 transition-colors text-sm inline-flex items-center"
+                      className={`min-h-11 p-2 text-red-600 rounded-lg border border-red-300 hover:bg-red-100 transition-colors text-sm inline-flex items-center ${pairBtn}`}
                       title="Delete Exit Ticket"
                     >
-                      <Trash2 className="w-4 h-4 mr-1" />
+                      <Trash2 className="w-4 h-4 mr-1 shrink-0" />
                       Delete
                     </button>
                     </>

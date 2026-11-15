@@ -251,6 +251,29 @@ export default function HostAnonymousChat() {
     el.scrollTop = savedMobileListScrollRef.current;
   }, [mobileShowConversation]);
 
+  useEffect(() => {
+    if (!mobileShowConversation || !isMobileChatLayout()) return undefined;
+    const root = document.documentElement;
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    const vv = window.visualViewport;
+    const apply = () => {
+      const h = vv?.height || window.innerHeight;
+      root.style.setProperty('--host-chat-vvh', `${Math.round(h)}px`);
+    };
+    apply();
+    vv?.addEventListener('resize', apply);
+    vv?.addEventListener('scroll', apply);
+    window.addEventListener('orientationchange', apply);
+    return () => {
+      document.body.style.overflow = prevOverflow;
+      root.style.removeProperty('--host-chat-vvh');
+      vv?.removeEventListener('resize', apply);
+      vv?.removeEventListener('scroll', apply);
+      window.removeEventListener('orientationchange', apply);
+    };
+  }, [mobileShowConversation]);
+
   const syncMobileConversationUrl = (chatId) => {
     const params = new URLSearchParams(location.search);
     const currentId = params.get(MOBILE_CHAT_QUERY) || '';
@@ -666,7 +689,13 @@ export default function HostAnonymousChat() {
   const selectedMessages = selectedChat?.messages || [];
 
   return (
-    <div className="host-anon-chat-page px-0 sm:px-2 lg:px-6 -mt-4 lg:-mt-5 pt-4 lg:pt-5 flex flex-col gap-3 overflow-hidden overflow-x-hidden max-w-full min-h-[450px] max-md:h-[calc(100dvh-8.75rem)] max-md:max-h-[calc(100dvh-8.75rem)]">
+    <div
+      className={clsx(
+        'host-anon-chat-page px-0 sm:px-2 lg:px-6 -mt-4 lg:-mt-5 pt-4 lg:pt-5 flex flex-col gap-3 overflow-hidden overflow-x-hidden max-w-full min-h-[450px] max-md:h-[calc(100dvh-8.75rem)] max-md:max-h-[calc(100dvh-8.75rem)]',
+        mobileShowConversation &&
+          'host-anon-chat-room-open max-md:!mt-0 max-md:!pt-0 max-md:!h-auto max-md:!max-h-none'
+      )}
+    >
       <div className={clsx('shrink-0', mobileShowConversation && 'max-md:hidden')}>
         <SessionLaunchBanner className="host-anon-chat-banner" />
       </div>
@@ -828,15 +857,17 @@ export default function HostAnonymousChat() {
               <div className="md:hidden px-3 pt-1 pb-2 border-b border-primary/10 shrink-0">
                 {isChatActive(selectedChat) ? (
                 <div className="min-w-0 space-y-2">
-                    <div className="flex flex-wrap items-center gap-x-2 gap-y-1 min-w-0">
-                      <h3 className="font-semibold text-text break-words min-w-0">{selectedChat.title}</h3>
-                      <span className="inline-flex items-center gap-1 text-sm text-text-light whitespace-nowrap">
-                        <Users className="w-4 h-4 shrink-0" />
-                        {selectedParticipantCount} participants
-                      </span>
-                      {selectedChat.status === 'active' && (
-                        <span className="inline-flex items-center gap-0.5 min-w-0">
-                          <span className="text-sm font-mono font-bold text-primary">
+                    <div className="flex items-center justify-between gap-2 min-w-0">
+                      <div className="flex items-center gap-2 min-w-0 flex-1">
+                        <h3 className="font-semibold text-text truncate min-w-0">{selectedChat.title}</h3>
+                        <span className="inline-flex items-center gap-1 text-sm text-text-light whitespace-nowrap shrink-0">
+                          <Users className="w-4 h-4 shrink-0" />
+                          {selectedParticipantCount} participants
+                        </span>
+                      </div>
+                      {selectedChat.status === 'active' && selectedChat.joinCode ? (
+                        <span className="inline-flex items-center shrink-0">
+                          <span className="text-sm font-mono font-bold text-primary tracking-wide">
                             {selectedChat.joinCode}
                           </span>
                           <button
@@ -852,7 +883,7 @@ export default function HostAnonymousChat() {
                             )}
                           </button>
                         </span>
-                      )}
+                      ) : null}
                     </div>
                     <div className="flex flex-col gap-2">
                       <div className="flex items-stretch gap-2">
