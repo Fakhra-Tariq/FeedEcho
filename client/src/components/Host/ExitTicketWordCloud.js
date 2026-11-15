@@ -127,11 +127,13 @@ function BrainWordCloud({ items, extra, empty, seedKey = '' }) {
   const layoutCacheRef = useRef(new Map());
   const [size, setSize] = useState({ width: 0, height: 0 });
   const [tooltip, setTooltip] = useState(null);
+  const [desktopPainted, setDesktopPainted] = useState(false);
 
   useEffect(() => {
     const el = wrapRef.current;
     if (!el) return undefined;
     let debounce = 0;
+    let raf = 0;
     const apply = () => {
       const pw = el.clientWidth || el.getBoundingClientRect().width;
       const ph = el.clientHeight || el.getBoundingClientRect().height;
@@ -149,11 +151,26 @@ function BrainWordCloud({ items, extra, empty, seedKey = '' }) {
       });
     };
     const schedule = () => {
-      window.clearTimeout(debounce);
       const compact = isCompactPresentViewport(window.innerWidth, window.innerHeight);
-      debounce = window.setTimeout(apply, compact ? 32 : 150);
+      if (compact) {
+        window.clearTimeout(debounce);
+        debounce = window.setTimeout(apply, 32);
+        return;
+      }
+      if (raf) cancelAnimationFrame(raf);
+      raf = requestAnimationFrame(() => {
+        raf = 0;
+        apply();
+      });
     };
     apply();
+    const compactMount = isCompactPresentViewport(window.innerWidth, window.innerHeight);
+    // Desktop: measure again after the Present flex stage has a real box. Phone path unchanged.
+    if (!compactMount) {
+      raf = requestAnimationFrame(() => {
+        requestAnimationFrame(apply);
+      });
+    }
     const ro = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(schedule) : null;
     ro?.observe(el);
     window.addEventListener('resize', schedule);
@@ -161,6 +178,7 @@ function BrainWordCloud({ items, extra, empty, seedKey = '' }) {
     document.addEventListener('fullscreenchange', schedule);
     return () => {
       window.clearTimeout(debounce);
+      if (raf) cancelAnimationFrame(raf);
       ro?.disconnect();
       window.removeEventListener('resize', schedule);
       window.removeEventListener('orientationchange', schedule);
@@ -631,6 +649,12 @@ function BrainWordCloud({ items, extra, empty, seedKey = '' }) {
             ]);
           } else {
             await document.fonts.ready;
+            if (typeof document.fonts.load === 'function') {
+              await Promise.all([
+                document.fonts.load('700 48px Inter'),
+                document.fonts.load('500 16px Inter'),
+              ]);
+            }
           }
         } catch {
           // system fonts
@@ -663,6 +687,7 @@ function BrainWordCloud({ items, extra, empty, seedKey = '' }) {
             drawSparseReals(ctx, realList, minFont, maxFont);
           }
         }
+        if (stillCurrent() && !compactNow) setDesktopPainted(true);
       } catch (err) {
         logCloud('error', String(err && err.message));
         if (process.env.NODE_ENV === 'development') {
@@ -672,7 +697,11 @@ function BrainWordCloud({ items, extra, empty, seedKey = '' }) {
     };
 
     const compactStart = isCompactPresentViewport(window.innerWidth, window.innerHeight);
-    timer = window.setTimeout(run, compactStart ? 0 : 300);
+    if (compactStart) {
+      timer = window.setTimeout(run, 0);
+    } else {
+      run();
+    }
     return () => {
       renderIdRef.current += 1;
       window.clearTimeout(timer);
@@ -708,7 +737,13 @@ function BrainWordCloud({ items, extra, empty, seedKey = '' }) {
         >
           <canvas
             ref={canvasRef}
-            className="block bg-[#4A1F3D]"
+            className={`block bg-[#4A1F3D] ${
+              typeof window !== 'undefined' &&
+              !isCompactPresentViewport(window.innerWidth, window.innerHeight) &&
+              !desktopPainted
+                ? 'opacity-0'
+                : ''
+            }`}
             role="img"
             aria-label="Word cloud"
             onMouseMove={(event) => {

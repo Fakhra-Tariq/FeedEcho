@@ -20,8 +20,9 @@ function asRows(val) {
 
 function matchesLaunch(row, currentLaunchId) {
   if (!currentLaunchId) return !row.launchId;
-  if (row.launchId && String(row.launchId) !== String(currentLaunchId)) return false;
-  return true;
+  // A new launch must not inherit submissions that have no launchId (older sessions).
+  if (!row.launchId) return false;
+  return String(row.launchId) === String(currentLaunchId);
 }
 
 function matchesIdentity(row, { studentUid, participantId, deviceId, normalizedName, legacyParticipantIds } = {}) {

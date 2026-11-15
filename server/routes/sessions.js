@@ -892,7 +892,9 @@ router.post('/join', async (req, res) => {
           (row) =>
             row.studentUid &&
             String(row.studentUid) === String(studentUid) &&
-            (!currentLaunchId || !row.launchId || String(row.launchId) === String(currentLaunchId))
+            (currentLaunchId
+              ? String(row.launchId || '') === String(currentLaunchId)
+              : !row.launchId)
         );
         if (uidRow) {
           participantId = uidRow.participantId || uidRow.id;

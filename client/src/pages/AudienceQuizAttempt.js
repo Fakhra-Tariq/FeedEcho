@@ -84,6 +84,7 @@ const AudienceQuizAttempt = ({
   const timerRef = useRef(null);
   const redirectTimerRef = useRef(null);
   const quizStartedAtRef = useRef(null);
+  const hadPositiveQuizTimeRef = useRef(false);
   const { alert } = useHybridAlert();
   const [isSpaceRace, setIsSpaceRace] = useState(
     Boolean(spaceRaceMode || spaceRaceId || raceIdProp)
@@ -275,6 +276,7 @@ const AudienceQuizAttempt = ({
 
   // Load student session and quiz data
   useEffect(() => {
+    hadPositiveQuizTimeRef.current = false;
     let cancelled = false;
 
     const finishLoading = () => {
@@ -773,6 +775,7 @@ const AudienceQuizAttempt = ({
               studentUid: session.studentUid,
               studentEmail: session.studentEmail,
               studentName: session.studentName,
+              sessionCode: session.sessionCode,
             })
           ) {
             let quizToUse = normalizeQuizForClient({ ...foundQuiz, launched: true });
@@ -1061,6 +1064,12 @@ const AudienceQuizAttempt = ({
     serverTimeOffset,
   ]);
 
+  useEffect(() => {
+    if (typeof timeLeft === 'number' && timeLeft > 0) {
+      hadPositiveQuizTimeRef.current = true;
+    }
+  }, [timeLeft]);
+
   // Auto-submit when quiz timer reaches 0 (Space Race: close only if team endTime has elapsed)
   useEffect(() => {
     if (timeLeft !== 0 || isSubmitted || !quiz) return;
@@ -1075,6 +1084,11 @@ const AudienceQuizAttempt = ({
       if (endIso && new Date(endIso).getTime() <= Date.now()) {
         setQuizTimeExpired(true);
       }
+      return;
+    }
+
+    if (!hadPositiveQuizTimeRef.current) {
+      setError('Your time for this quiz has expired.');
       return;
     }
 
@@ -1562,8 +1576,12 @@ const AudienceQuizAttempt = ({
         setTimeLeft(remaining);
         if (remaining <= 0) {
           clearInterval(timerRef.current);
-          console.log('⏰ Time expired! Auto-submitting quiz...');
-          handleSubmitQuiz();
+          if (hadPositiveQuizTimeRef.current) {
+            console.log('⏰ Time expired! Auto-submitting quiz...');
+            handleSubmitQuiz();
+          } else {
+            setError('Your time for this quiz has expired.');
+          }
         }
         return;
       }
@@ -1571,8 +1589,12 @@ const AudienceQuizAttempt = ({
       setTimeLeft((prev) => {
         if (prev === null || prev <= 1) {
           clearInterval(timerRef.current);
-          console.log('⏰ Time expired! Auto-submitting quiz...');
-          handleSubmitQuiz();
+          if (hadPositiveQuizTimeRef.current) {
+            console.log('⏰ Time expired! Auto-submitting quiz...');
+            handleSubmitQuiz();
+          } else {
+            setError('Your time for this quiz has expired.');
+          }
           return 0;
         }
         return prev - 1;
@@ -2553,7 +2575,6 @@ const AudienceQuizAttempt = ({
       {!embedded && (
       <AudienceActivityHeader
         title={quiz.title}
-        badge={quiz.type}
         participantName={studentSession?.studentName || 'Audience'}
         showLoggedInLogoutMenu
         phoneHeaderVariant="quiz"

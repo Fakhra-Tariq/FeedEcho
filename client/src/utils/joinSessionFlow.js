@@ -140,7 +140,14 @@ async function openSavedQuizResult({
         limit: 200,
       });
       const rows = Array.isArray(historyRes.data?.data) ? historyRes.data.data : [];
-      row = rows.find((item) => String(item.quizId) === String(quizId)) || null;
+      const code = String(trimmedCode || '').trim().toUpperCase();
+      row =
+        rows.find((item) => {
+          if (String(item.quizId) !== String(quizId)) return false;
+          if (!code) return true;
+          const itemCode = String(item.sessionCode || item.joinCode || '').trim().toUpperCase();
+          return itemCode === code;
+        }) || null;
     } catch {
       row = null;
     }

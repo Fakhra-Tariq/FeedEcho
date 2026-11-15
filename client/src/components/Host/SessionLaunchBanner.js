@@ -68,6 +68,7 @@ export default function SessionLaunchBanner({ className = '' }) {
       <div
         className={clsx(
           'flex items-center gap-2 px-3 py-2 rounded-lg text-sm border border-primary/20',
+          'max-md:gap-1.5 max-md:px-2 max-md:py-1.5 max-md:text-[13px]',
           GUEST_LOGIN_BANNER_BG_CLASS,
           'relative z-10 shrink-0 text-primary [&+*]:!mt-3',
           className
@@ -77,22 +78,30 @@ export default function SessionLaunchBanner({ className = '' }) {
         {isActive ? (
           <>
             <CheckCircle2 className="w-4 h-4 text-primary shrink-0" aria-hidden="true" />
-            <span>
-              Launching to session:{' '}
-              <span className="font-semibold tracking-wider">{sessionCode || '—'}</span>
-              {' · '}
-              {activeActivityLabel || 'No active activity'}
+            <span className="min-w-0 flex-1 max-md:flex max-md:items-center max-md:overflow-hidden">
+              <span className="max-md:shrink-0 max-md:whitespace-nowrap">
+                Launching to session:{' '}
+              </span>
+              <span className="font-semibold tracking-wider max-md:shrink-0">
+                {sessionCode || '—'}
+              </span>
+              <span className="max-md:min-w-0 max-md:truncate max-md:whitespace-nowrap">
+                {' · '}
+                {activeActivityLabel || 'No active activity'}
+              </span>
             </span>
           </>
         ) : (
           <>
             <AlertTriangle className="w-4 h-4 text-primary shrink-0" aria-hidden="true" />
-            <span className="flex-1 min-w-0">
-              You&apos;ll need an active session to launch this.{' '}
+            <span className="flex-1 min-w-0 max-md:flex max-md:items-center max-md:overflow-hidden">
+              <span className="max-md:min-w-0 max-md:truncate max-md:whitespace-nowrap">
+                You&apos;ll need an active session to launch this.{' '}
+              </span>
               <button
                 type="button"
                 onClick={() => setShowCreateModal(true)}
-                className="font-semibold text-[#6D415F] underline underline-offset-2 hover:text-[#5A344D] transition-colors"
+                className="font-semibold text-[#6D415F] underline underline-offset-2 hover:text-[#5A344D] transition-colors max-md:shrink-0 max-md:whitespace-nowrap"
               >
                 Create Session
               </button>

@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { X } from 'lucide-react';
+import clsx from 'clsx';
 import { getStoredAudienceSession } from '../../utils/audienceSession';
 
 const DISMISS_KEY = 'feedecho_guest_progress_login_banner_dismissed';
@@ -33,16 +34,19 @@ export default function GuestProgressLoginBanner({ contentClassName } = {}) {
   return (
     <div className={GUEST_LOGIN_BANNER_BG_CLASS}>
       <div
-        className={
+        className={clsx(
           contentClassName ||
-          'max-w-4xl mx-auto px-4 py-2 flex items-center justify-between gap-2 min-w-0'
-        }
+            'max-w-4xl mx-auto px-4 py-2 flex items-center justify-between gap-2 min-w-0',
+          'max-md:!px-3 max-md:gap-1.5'
+        )}
       >
-        <p className="text-sm text-text min-w-0 flex-1 leading-snug">
-          Log in to save this to your progress history.{' '}
+        <p className="text-sm text-text min-w-0 flex-1 leading-snug max-md:mb-0 max-md:flex max-md:items-center max-md:gap-1 max-md:text-[13px] max-md:leading-none">
+          <span className="max-md:min-w-0 max-md:truncate max-md:whitespace-nowrap">
+            Log in to save this to your progress history.{' '}
+          </span>
           <Link
             to="/join"
-            className="font-semibold text-[#6D415F] hover:text-[#5A344D] underline underline-offset-2 whitespace-nowrap"
+            className="font-semibold text-[#6D415F] hover:text-[#5A344D] underline underline-offset-2 whitespace-nowrap max-md:shrink-0"
           >
             Log in
           </Link>

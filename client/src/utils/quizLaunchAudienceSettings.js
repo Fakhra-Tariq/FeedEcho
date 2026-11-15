@@ -121,14 +121,16 @@ function rowMatchesLocalIdentity(row, { participantId, studentUid, studentEmail,
   return false;
 }
 
-export function hasLocalQuizSubmission(quizId, { participantId, studentUid, studentEmail, studentName } = {}) {
+export function hasLocalQuizSubmission(quizId, { participantId, studentUid, studentEmail, studentName, sessionCode } = {}) {
   try {
     const raw = localStorage.getItem('quizSubmissions') || '[]';
     const submissions = JSON.parse(raw);
     if (!Array.isArray(submissions)) return false;
+    const code = String(sessionCode || '').trim().toUpperCase();
 
     return submissions.some((row) => {
       if (String(row.quizId) !== String(quizId)) return false;
+      if (code && String(row.sessionCode || '').trim().toUpperCase() !== code) return false;
       return rowMatchesLocalIdentity(row, { participantId, studentUid, studentEmail, studentName });
     });
   } catch {
