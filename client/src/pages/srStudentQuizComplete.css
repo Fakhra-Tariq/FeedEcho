@@ -50,6 +50,12 @@
   overflow: visible;
 }
 
+/* Score-hidden variant only: vertically center the short card without clipping. */
+.sr-student-complete-shell--noscore .sr-student-complete-card {
+  margin-block: auto;
+  margin-inline: auto;
+}
+
 .sr-student-complete-icon {
   display: flex;
   align-items: center;

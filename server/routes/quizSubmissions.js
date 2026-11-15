@@ -342,6 +342,8 @@ router.post('/:quizId/submit', async (req, res) => {
             quizType: quiz.type || '',
             timeTaken: submission.timeTaken ?? null,
             studentUid,
+            sessionCode: sessionCode || null,
+            ...(launchId ? { launchId } : {}),
           })
           .catch((indexError) => {
             console.warn('[quiz-submit] student activity index write failed', indexError?.message);

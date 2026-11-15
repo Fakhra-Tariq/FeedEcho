@@ -7,6 +7,19 @@ import { findLocalQuizSubmissionForJoin } from './quizLaunchAudienceSettings';
 import { getAudienceDeviceId } from './audienceDeviceId';
 import { collectLegacyParticipantIds } from './guestAttemptIdentity';
 
+function liveQuizJoinTarget(payload = {}) {
+  const quiz = payload.data && typeof payload.data === 'object' ? payload.data : {};
+  const quizId = String(payload.quizId || quiz.id || '').trim();
+  const launchId = quiz.currentLaunchId || payload.currentLaunchId || null;
+  return { quiz, quizId, launchId };
+}
+
+function completedAttemptFromJoinError(error) {
+  const attempt = error?.response?.data?.attempt;
+  if (!attempt || typeof attempt !== 'object') return null;
+  return attempt;
+}
+
 function isAlreadyCompletedQuizError(error) {
   if (error?.response?.data?.code === 'ALREADY_ATTEMPTED') return true;
   const message =
@@ -37,6 +50,7 @@ async function navigateAlreadyAttemptedActivity({
   studentUid,
   studentEmail,
   navigate,
+  completedAttempt = null,
 }) {
   persistJoinIdentity(trimmedName, { studentUid, studentEmail });
   sessionStorage.setItem('sessionCode', trimmedCode);
@@ -67,7 +81,7 @@ async function navigateAlreadyAttemptedActivity({
     }
   }
 
-  const quizId = String(payload.quizId || payload.data?.id || '').trim();
+  const { quizId, launchId } = liveQuizJoinTarget(payload);
   const raceId = String(payload.raceId || payload.data?.id || '').trim();
   const ticketId = payload.ticketId || payload.data?.id;
   const joinCode = String(payload.joinCode || trimmedCode).toUpperCase();
@@ -88,19 +102,26 @@ async function navigateAlreadyAttemptedActivity({
   }
 
   if (type === 'quiz' && quizId) {
-    if (studentUid) {
+    const localRow =
+      findLocalQuizSubmissionForJoin({
+        sessionCode: trimmedCode,
+        quizId,
+        launchId,
+        studentUid,
+        studentEmail,
+        studentName: trimmedName,
+      }) || completedAttempt;
+    if (localRow || studentUid) {
       return openSavedQuizResult({
         trimmedName,
         trimmedCode,
         studentUid,
         studentEmail,
         navigate,
-        localRow: findLocalQuizSubmissionForJoin({
-          sessionCode: trimmedCode,
-          studentUid,
-          studentEmail,
-          studentName: trimmedName,
-        }),
+        localRow,
+        resultState: studentUid
+          ? { showCompletedResult: true }
+          : { showCompletedResult: true, alreadyAttemptedOnDevice: true, hideGuestScore: true },
       });
     }
     navigate(`/audience/quiz/${quizId}`, {
@@ -119,16 +140,28 @@ async function openSavedQuizResult({
   studentEmail,
   navigate,
   localRow = null,
+  resultState = { showCompletedResult: true },
 }) {
   const lookup = await sessionsAPI.getByCode(trimmedCode);
   const payload = lookup.data || {};
-  const quiz = payload.data;
-  const quizId = String(payload.quizId || quiz?.id || localRow?.quizId || '').trim();
+  const { quiz, quizId, launchId } = liveQuizJoinTarget(payload);
   if (payload.type !== 'quiz' || !quizId || !quiz) {
     throw new Error('Failed to load quiz result');
   }
 
-  let row = localRow || null;
+  const rowMatchesLiveLaunch = (item) => {
+    if (!item || String(item.quizId) !== String(quizId)) return false;
+    if (launchId) {
+      if (!item.launchId) return false;
+      return String(item.launchId) === String(launchId);
+    }
+    const code = String(trimmedCode || '').trim().toUpperCase();
+    if (!code) return true;
+    const itemCode = String(item.sessionCode || item.joinCode || '').trim().toUpperCase();
+    return !itemCode || itemCode === code;
+  };
+
+  let row = rowMatchesLiveLaunch(localRow) ? localRow : null;
   if (!row && studentUid) {
     try {
       const historyRes = await studentsAPI.getQuizHistory({
@@ -140,14 +173,7 @@ async function openSavedQuizResult({
         limit: 200,
       });
       const rows = Array.isArray(historyRes.data?.data) ? historyRes.data.data : [];
-      const code = String(trimmedCode || '').trim().toUpperCase();
-      row =
-        rows.find((item) => {
-          if (String(item.quizId) !== String(quizId)) return false;
-          if (!code) return true;
-          const itemCode = String(item.sessionCode || item.joinCode || '').trim().toUpperCase();
-          return itemCode === code;
-        }) || null;
+      row = rows.find((item) => rowMatchesLiveLaunch(item)) || null;
     } catch {
       row = null;
     }
@@ -190,10 +216,11 @@ async function openSavedQuizResult({
       points: row.points ?? row.correctAnswers ?? 0,
       submittedAt: row.submittedAt || new Date().toISOString(),
       source: 'server',
+      ...(launchId || row.launchId ? { launchId: launchId || row.launchId } : {}),
     });
   }
 
-  navigate(`/audience/quiz/${quizId}`, { state: { showCompletedResult: true } });
+  navigate(`/audience/quiz/${quizId}`, { state: resultState });
   return { success: true, type: 'quiz', quizId, alreadySubmitted: true };
 }
 
@@ -227,6 +254,7 @@ function persistJoinIdentity(trimmedName, { studentUid, studentEmail }) {
 }
 
 function buildQuizSessionPayload(trimmedName, trimmedCode, quizId, participantId, data, ctx) {
+  const launchId = data?.currentLaunchId || ctx.launchId || null;
   const payload = {
     studentName: trimmedName,
     sessionCode: trimmedCode,
@@ -238,6 +266,7 @@ function buildQuizSessionPayload(trimmedName, trimmedCode, quizId, participantId
     joinedAt: new Date().toISOString(),
     isLocked: true,
     lockTimestamp: new Date().toISOString(),
+    ...(launchId ? { launchId } : {}),
   };
 
   if (ctx.studentUid) payload.studentUid = ctx.studentUid;
@@ -361,6 +390,7 @@ export async function proceedWithSessionJoin({
       joinedAt: new Date().toISOString(),
       studentUid: ctx.studentUid,
       studentEmail: ctx.studentEmail,
+      launchId: data?.currentLaunchId || null,
     });
     navigate(`/audience/quiz/${quizId}`);
     return { success: true, type: 'quiz', quizId };
@@ -404,10 +434,27 @@ export async function joinSessionByCode({
 
   const ctx = buildJoinContext(studentName, loggedInAudience);
   const { trimmedName, studentUid, studentEmail } = ctx;
+  let liveQuizId = '';
+  let liveLaunchId = null;
 
   try {
+    try {
+      const lookup = await sessionsAPI.getByCode(trimmedCode);
+      const payload = lookup.data || {};
+      if (payload.type === 'quiz') {
+        const target = liveQuizJoinTarget(payload);
+        liveQuizId = target.quizId;
+        liveLaunchId = target.launchId;
+      }
+    } catch {
+      liveQuizId = '';
+      liveLaunchId = null;
+    }
+
     const localCompleted = findLocalQuizSubmissionForJoin({
       sessionCode: trimmedCode,
+      quizId: liveQuizId,
+      launchId: liveLaunchId,
       studentUid,
       studentEmail,
       studentName: trimmedName,
@@ -423,7 +470,7 @@ export async function joinSessionByCode({
       });
     }
     if (localCompleted && !studentUid) {
-      const quizId = String(localCompleted.quizId || '').trim();
+      const quizId = String(localCompleted.quizId || liveQuizId || '').trim();
       if (quizId) {
         persistJoinIdentity(trimmedName, { studentUid, studentEmail });
         sessionStorage.setItem('sessionCode', trimmedCode);
@@ -449,6 +496,7 @@ export async function joinSessionByCode({
       : { success: true, ...result };
   } catch (error) {
     if (isAlreadyCompletedQuizError(error)) {
+      const completedAttempt = completedAttemptFromJoinError(error);
       try {
         return await navigateAlreadyAttemptedActivity({
           trimmedName,
@@ -456,6 +504,7 @@ export async function joinSessionByCode({
           studentUid,
           studentEmail,
           navigate,
+          completedAttempt,
         });
       } catch {
         if (studentUid) {
@@ -466,12 +515,15 @@ export async function joinSessionByCode({
               studentUid,
               studentEmail,
               navigate,
-              localRow: findLocalQuizSubmissionForJoin({
-                sessionCode: trimmedCode,
-                studentUid,
-                studentEmail,
-                studentName: trimmedName,
-              }),
+              localRow:
+                findLocalQuizSubmissionForJoin({
+                  sessionCode: trimmedCode,
+                  quizId: liveQuizId,
+                  launchId: liveLaunchId,
+                  studentUid,
+                  studentEmail,
+                  studentName: trimmedName,
+                }) || completedAttempt,
             });
           } catch {
             // Fall through to a display-safe error if the saved result cannot be loaded.

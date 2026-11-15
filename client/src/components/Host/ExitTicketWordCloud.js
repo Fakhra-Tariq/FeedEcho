@@ -134,9 +134,15 @@ function BrainWordCloud({ items, extra, empty, seedKey = '' }) {
     if (!el) return undefined;
     let debounce = 0;
     let raf = 0;
+    let lastPw = -1;
+    let lastPh = -1;
+    let stableMatches = 0;
+    const readBox = () => ({
+      pw: el.clientWidth || el.getBoundingClientRect().width,
+      ph: el.clientHeight || el.getBoundingClientRect().height,
+    });
     const apply = () => {
-      const pw = el.clientWidth || el.getBoundingClientRect().width;
-      const ph = el.clientHeight || el.getBoundingClientRect().height;
+      const { pw, ph } = readBox();
       if (pw < 40 || ph < 40) return;
       const next = fitBrainBox(pw, ph, {
         viewportW: window.innerWidth,
@@ -150,6 +156,29 @@ function BrainWordCloud({ items, extra, empty, seedKey = '' }) {
         return { width: next.width, height: next.height };
       });
     };
+    const applyDesktopWhenStable = () => {
+      raf = 0;
+      const { pw, ph } = readBox();
+      if (pw < 40 || ph < 40) {
+        lastPw = -1;
+        lastPh = -1;
+        stableMatches = 0;
+        raf = requestAnimationFrame(applyDesktopWhenStable);
+        return;
+      }
+      if (Math.abs(pw - lastPw) < 2 && Math.abs(ph - lastPh) < 2) {
+        stableMatches += 1;
+      } else {
+        lastPw = pw;
+        lastPh = ph;
+        stableMatches = 0;
+      }
+      if (stableMatches < 1) {
+        raf = requestAnimationFrame(applyDesktopWhenStable);
+        return;
+      }
+      apply();
+    };
     const schedule = () => {
       const compact = isCompactPresentViewport(window.innerWidth, window.innerHeight);
       if (compact) {
@@ -158,21 +187,20 @@ function BrainWordCloud({ items, extra, empty, seedKey = '' }) {
         return;
       }
       if (raf) cancelAnimationFrame(raf);
-      raf = requestAnimationFrame(() => {
-        raf = 0;
-        apply();
-      });
+      lastPw = -1;
+      lastPh = -1;
+      stableMatches = 0;
+      raf = requestAnimationFrame(applyDesktopWhenStable);
     };
-    apply();
     const compactMount = isCompactPresentViewport(window.innerWidth, window.innerHeight);
-    // Desktop: measure again after the Present flex stage has a real box. Phone path unchanged.
-    if (!compactMount) {
-      raf = requestAnimationFrame(() => {
-        requestAnimationFrame(apply);
-      });
+    if (compactMount) {
+      apply();
+    } else {
+      schedule();
     }
     const ro = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(schedule) : null;
     ro?.observe(el);
+    if (!compactMount && el.parentElement) ro?.observe(el.parentElement);
     window.addEventListener('resize', schedule);
     window.addEventListener('orientationchange', schedule);
     document.addEventListener('fullscreenchange', schedule);
@@ -817,21 +845,42 @@ export function ExitTicketWordCloudPresent({
   const rootRef = useRef(null);
   const usedFsRef = useRef(false);
   const showChips = !isChoiceType(question?.type);
+  const [desktopStageReady, setDesktopStageReady] = useState(() =>
+    typeof window === 'undefined'
+      ? true
+      : isCompactPresentViewport(window.innerWidth, window.innerHeight)
+  );
 
   useEffect(() => {
-    if (!open) return undefined;
+    if (!open) {
+      setDesktopStageReady(
+        typeof window !== 'undefined' &&
+          isCompactPresentViewport(window.innerWidth, window.innerHeight)
+      );
+      return undefined;
+    }
     usedFsRef.current = false;
+    const compact = isCompactPresentViewport(window.innerWidth, window.innerHeight);
+    if (compact) {
+      setDesktopStageReady(true);
+    } else {
+      setDesktopStageReady(false);
+    }
+    let cancelled = false;
     const start = async () => {
       const el = rootRef.current;
       try {
         if (el?.requestFullscreen) {
           await el.requestFullscreen();
           usedFsRef.current = true;
-          return;
         }
       } catch {
         // iPhone / denied Fullscreen API: fixed inset overlay still covers the viewport
       }
+      if (compact || cancelled) return;
+      await nextAnimationFrame();
+      await nextAnimationFrame();
+      if (!cancelled) setDesktopStageReady(true);
     };
     start();
     const onFs = () => {
@@ -850,6 +899,7 @@ export function ExitTicketWordCloudPresent({
     document.addEventListener('fullscreenchange', onFs);
     document.addEventListener('keydown', onKey);
     return () => {
+      cancelled = true;
       document.removeEventListener('fullscreenchange', onFs);
       document.removeEventListener('keydown', onKey);
     };
@@ -901,12 +951,14 @@ export function ExitTicketWordCloudPresent({
         </div>
       ) : null}
       <div className="flex-1 flex items-center justify-center min-h-0 w-full h-full">
-        <BrainWordCloud
-          items={items}
-          extra={extra}
-          empty={!items.length}
-          seedKey={`${question?.id || ''}:${questionIndex}`}
-        />
+        {desktopStageReady ? (
+          <BrainWordCloud
+            items={items}
+            extra={extra}
+            empty={!items.length}
+            seedKey={`${question?.id || ''}:${questionIndex}`}
+          />
+        ) : null}
       </div>
       {questionCount > 1 ? (
         <div className="flex items-center justify-center gap-4 pb-2">

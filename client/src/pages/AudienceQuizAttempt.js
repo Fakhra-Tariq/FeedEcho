@@ -277,6 +277,9 @@ const AudienceQuizAttempt = ({
   // Load student session and quiz data
   useEffect(() => {
     hadPositiveQuizTimeRef.current = false;
+    setIsSubmitted(false);
+    setGuestBlockedOnDevice(false);
+    setIsLoading(true);
     let cancelled = false;
 
     const finishLoading = () => {
@@ -750,6 +753,7 @@ const AudienceQuizAttempt = ({
             joinedAt: session.joinedAt,
             studentUid: session.studentUid,
             studentEmail: session.studentEmail,
+            launchId: session.launchId || session.quiz?.currentLaunchId || null,
           });
         }
 
@@ -762,22 +766,22 @@ const AudienceQuizAttempt = ({
             return;
           }
 
-          if (location.state?.alreadyAttemptedOnDevice) {
+          const liveLaunchId =
+            foundQuiz.currentLaunchId || session.launchId || session.quiz?.currentLaunchId || null;
+          const completedThisLaunch = hasLocalQuizSubmission(paramQuizId, {
+            participantId: session.participantId,
+            studentUid: session.studentUid,
+            studentEmail: session.studentEmail,
+            studentName: session.studentName,
+            sessionCode: session.sessionCode,
+            launchId: liveLaunchId,
+          });
+
+          if (location.state?.alreadyAttemptedOnDevice && completedThisLaunch) {
             setGuestBlockedOnDevice(true);
-            setIsSubmitted(true);
           }
 
-          if (
-            location.state?.showCompletedResult ||
-            location.state?.alreadyAttemptedOnDevice ||
-            hasLocalQuizSubmission(paramQuizId, {
-              participantId: session.participantId,
-              studentUid: session.studentUid,
-              studentEmail: session.studentEmail,
-              studentName: session.studentName,
-              sessionCode: session.sessionCode,
-            })
-          ) {
+          if (completedThisLaunch) {
             let quizToUse = normalizeQuizForClient({ ...foundQuiz, launched: true });
             quizToUse = applyQuizShuffleSettings(quizToUse, session.participantId);
             setQuiz(quizToUse);
@@ -850,6 +854,7 @@ const AudienceQuizAttempt = ({
     navigate,
     isSpaceRaceRoute,
     location.state?.showCompletedResult,
+    location.state?.alreadyAttemptedOnDevice,
   ]);
 
   useEffect(() => {
@@ -1992,6 +1997,9 @@ const AudienceQuizAttempt = ({
         serverSynced: false,
         ...(effectiveStudentUid ? { studentUid: effectiveStudentUid } : {}),
         ...(effectiveStudentEmail ? { studentEmail: effectiveStudentEmail } : {}),
+        ...(quiz.currentLaunchId || quizSession?.launchId
+          ? { launchId: quiz.currentLaunchId || quizSession?.launchId }
+          : {}),
       };
 
       const submissionData = {
@@ -2285,10 +2293,16 @@ const AudienceQuizAttempt = ({
 
   if (isSubmitted) {
     const submissions = JSON.parse(localStorage.getItem('quizSubmissions') || '[]');
+    const liveLaunchId = quiz?.currentLaunchId || studentSession?.launchId || null;
     const currentSubmission =
       (quiz?.id
         ? [...submissions]
-            .filter((s) => String(s.quizId) === String(quiz.id))
+            .filter((s) => {
+              if (String(s.quizId) !== String(quiz.id)) return false;
+              if (liveLaunchId && s.launchId) return String(s.launchId) === String(liveLaunchId);
+              if (liveLaunchId && !s.launchId) return false;
+              return true;
+            })
             .sort(
               (a, b) =>
                 new Date(b.submittedAt || 0).getTime() - new Date(a.submittedAt || 0).getTime()
@@ -2314,7 +2328,7 @@ const AudienceQuizAttempt = ({
     // If showFinalScore is false, show a simple completion message without score
     if (!showFinalScore) {
       return (
-        <div className={isSpaceRace ? 'sr-student-complete-shell' : `${shellClass} flex items-center justify-center p-4 min-h-screen`}>
+        <div className={isSpaceRace ? 'sr-student-complete-shell sr-student-complete-shell--noscore' : `${shellClass} flex items-center justify-center p-4 min-h-screen`}>
           <div className={`bg-white rounded-3xl shadow-soft border border-primary/10 text-center ${isSpaceRace ? 'sr-student-complete-card' : 'w-full p-8 max-w-md'}`}>
             <CheckCircle className={`${isSpaceRace ? 'sr-student-complete-icon' : 'w-20 h-20 mb-6'} text-primary mx-auto`} />
             <h1 className={`font-bold text-text ${isSpaceRace ? 'sr-student-complete-title' : 'text-3xl mb-4'}`}>

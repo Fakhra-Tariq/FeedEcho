@@ -121,43 +121,77 @@ function rowMatchesLocalIdentity(row, { participantId, studentUid, studentEmail,
   return false;
 }
 
-export function hasLocalQuizSubmission(quizId, { participantId, studentUid, studentEmail, studentName, sessionCode } = {}) {
+function readLocalQuizSubmissions() {
   try {
     const raw = localStorage.getItem('quizSubmissions') || '[]';
     const submissions = JSON.parse(raw);
-    if (!Array.isArray(submissions)) return false;
-    const code = String(sessionCode || '').trim().toUpperCase();
-
-    return submissions.some((row) => {
-      if (String(row.quizId) !== String(quizId)) return false;
-      if (code && String(row.sessionCode || '').trim().toUpperCase() !== code) return false;
-      return rowMatchesLocalIdentity(row, { participantId, studentUid, studentEmail, studentName });
-    });
+    return Array.isArray(submissions) ? submissions : [];
   } catch {
-    return false;
+    return [];
   }
 }
 
-/** Device-local completed attempt for this join code (same browser / same name or uid). */
-export function findLocalQuizSubmissionForJoin({
+/**
+ * One completed attempt is owned by quiz + this live launch + this person.
+ * Stale rows without launchId must not count against a new launchId.
+ */
+export function localQuizAttemptMatchesLiveLaunch(row, {
+  quizId,
+  launchId,
   sessionCode,
+  participantId,
   studentUid,
   studentEmail,
   studentName,
 } = {}) {
-  try {
-    const raw = localStorage.getItem('quizSubmissions') || '[]';
-    const submissions = JSON.parse(raw);
-    if (!Array.isArray(submissions)) return null;
-    const code = String(sessionCode || '').trim().toUpperCase();
-    if (!code) return null;
-    return (
-      submissions.find((row) => {
-        if (String(row.sessionCode || '').trim().toUpperCase() !== code) return false;
-        return rowMatchesLocalIdentity(row, { studentUid, studentEmail, studentName });
-      }) || null
-    );
-  } catch {
-    return null;
+  if (!row || !quizId) return false;
+  if (String(row.quizId) !== String(quizId)) return false;
+
+  const liveLaunchId = launchId != null && String(launchId).trim() !== '' ? String(launchId) : '';
+  if (liveLaunchId) {
+    if (!row.launchId) return false;
+    if (String(row.launchId) !== liveLaunchId) return false;
   }
+
+  const code = String(sessionCode || '').trim().toUpperCase();
+  if (code) {
+    const rowCode = String(row.sessionCode || '').trim().toUpperCase();
+    if (rowCode && rowCode !== code) return false;
+  }
+
+  return rowMatchesLocalIdentity(row, { participantId, studentUid, studentEmail, studentName });
+}
+
+export function hasLocalQuizSubmission(quizId, identity = {}) {
+  if (!quizId) return false;
+  return readLocalQuizSubmissions().some((row) =>
+    localQuizAttemptMatchesLiveLaunch(row, { quizId, ...identity })
+  );
+}
+
+/** Device-local completed attempt for this live quiz launch (same browser / same person). */
+export function findLocalQuizSubmissionForJoin({
+  quizId,
+  launchId,
+  sessionCode,
+  studentUid,
+  studentEmail,
+  studentName,
+  participantId,
+} = {}) {
+  const liveQuizId = quizId != null ? String(quizId).trim() : '';
+  if (!liveQuizId) return null;
+  return (
+    readLocalQuizSubmissions().find((row) =>
+      localQuizAttemptMatchesLiveLaunch(row, {
+        quizId: liveQuizId,
+        launchId,
+        sessionCode,
+        participantId,
+        studentUid,
+        studentEmail,
+        studentName,
+      })
+    ) || null
+  );
 }

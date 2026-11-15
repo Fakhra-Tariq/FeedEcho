@@ -407,6 +407,7 @@ const toQuizHistoryRow = (quizId, participantId, sub) => {
     answers: sub.answers || {},
     questions: normalizeQuestionsArray(sub.questions),
     source: 'server',
+    launchId: sub.launchId || null,
   };
 };
 

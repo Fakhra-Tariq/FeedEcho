@@ -252,6 +252,13 @@ describe('fitBrainBox', () => {
     expect(box.width / box.height).toBeCloseTo(700 / 440);
   });
 
+  it('maps a short pre-fullscreen stage to ~500px and the settled stage to ~800px', () => {
+    const first = fitBrainBox(1248, 340, { viewportW: 1280, viewportH: 720 });
+    const settled = fitBrainBox(1248, 560, { viewportW: 1280, viewportH: 720 });
+    expect(first.width).toBeCloseTo(498, 0);
+    expect(settled.width).toBeCloseTo(820, 0);
+  });
+
   it('fits landscape phone height without overflowing', () => {
     const sil = brainSilhouetteBounds();
     const box = fitBrainBox(796, 220, { viewportW: 844, viewportH: 390 });

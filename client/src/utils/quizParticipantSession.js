@@ -28,6 +28,7 @@ export const persistQuizParticipantSession = (quizId, payload = {}) => {
     joinedAt: payload.joinedAt || new Date().toISOString(),
     studentUid: payload.studentUid || null,
     studentEmail: payload.studentEmail || null,
+    launchId: payload.launchId || null,
   };
   writeMap(map);
   sessionStorage.setItem(`quizParticipantId:${quizId}`, String(payload.participantId));

@@ -878,7 +878,24 @@ router.post('/join', async (req, res) => {
         studentUid ? { studentUid } : guestIdentity
       );
       if (completedAttempt) {
-        return res.status(409).json(studentUid ? ALREADY_ATTEMPTED_BODY : GUEST_ALREADY_ATTEMPTED_BODY);
+        return res.status(409).json({
+          ...(studentUid ? ALREADY_ATTEMPTED_BODY : GUEST_ALREADY_ATTEMPTED_BODY),
+          quizId: effectiveSession.sessionId,
+          launchId: currentLaunchId,
+          attempt: {
+            quizId: effectiveSession.sessionId,
+            participantId: completedAttempt.participantId,
+            launchId: completedAttempt.launchId || currentLaunchId || null,
+            sessionCode: completedAttempt.sessionCode || launchSettings.accessCode || null,
+            quizTitle: completedAttempt.quizTitle || quiz.title || '',
+            score: completedAttempt.correctAnswers ?? completedAttempt.score ?? 0,
+            correctAnswers: completedAttempt.correctAnswers ?? completedAttempt.score ?? 0,
+            totalQuestions: completedAttempt.totalQuestions ?? 0,
+            percentage: completedAttempt.percentage ?? 0,
+            points: completedAttempt.points ?? completedAttempt.score ?? 0,
+            submittedAt: completedAttempt.submittedAt || null,
+          },
+        });
       }
 
       const participantsSnap = await quizParticipantsRef(effectiveSession.sessionId).get();
@@ -977,6 +994,7 @@ router.post('/join', async (req, res) => {
         launchSettings: quiz.launchSettings || null,
         status: quizStatus,
         launched: true,
+        currentLaunchId,
       });
 
       return res.json({
