@@ -6,6 +6,7 @@ const {
   writeLaunchSubmission,
   loadLaunchBundles,
 } = require('../utils/quizLaunches');
+const { ALREADY_ATTEMPTED_BODY, findCompletedQuizAttempt } = require('../utils/quizOneAttempt');
 
 const normalizeQuestionsArray = (questions) => {
   if (Array.isArray(questions)) return questions;
@@ -122,17 +123,30 @@ router.post('/:quizId/submit', async (req, res) => {
     const participantData = participantJoined ? participantSnap.val() || {} : {};
     const launchId = currentLaunchId || participantData.launchId || null;
 
-    if (launchSettings.oneAttempt && participantJoined) {
-      const existingSubmissionSnap = launchId
-        ? await db.ref(`quiz_launch_submissions/${quizId}/${launchId}/${participantId}`).get()
-        : await quizSubmissionsRef(quizId).child(participantId).get();
-      if (existingSubmissionSnap.exists()) {
-        console.warn('[quiz-submit] rejected duplicate attempt', logContext);
-        return res.status(400).json({
-          success: false,
-          error: 'You have already completed this quiz',
+    const completedAttempt = await findCompletedQuizAttempt(quizId, launchId, {
+      studentUid,
+      participantId,
+    });
+    if (completedAttempt) {
+      const sameParticipant =
+        String(completedAttempt.participantId) === String(participantId);
+      if (sameParticipant) {
+        console.log('[quiz-submit] idempotent resubmit', logContext);
+        return res.json({
+          success: true,
+          data: {
+            score: completedAttempt.score,
+            correctAnswers: completedAttempt.correctAnswers,
+            totalQuestions: completedAttempt.totalQuestions,
+            percentage: completedAttempt.percentage,
+            points: completedAttempt.score,
+            submittedAt: completedAttempt.submittedAt,
+          },
+          message: 'Quiz submitted successfully!',
         });
       }
+      console.warn('[quiz-submit] rejected duplicate attempt', logContext);
+      return res.status(400).json(ALREADY_ATTEMPTED_BODY);
     }
 
     if (participantJoined && launchSettings.timePerStudentMinutes > 0) {

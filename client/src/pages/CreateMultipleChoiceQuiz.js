@@ -1,50 +1,67 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Trash2, Save, Rocket } from 'lucide-react';
+import { Plus, Trash2 } from 'lucide-react';
 import { useHybridAlert } from '../contexts/HybridAlertContext';
 import LaunchQuizModal from '../components/LaunchQuizModal';
-import NoActiveSessionLaunchModal, {
-  LaunchRequiresSessionHint,
-} from '../components/Host/NoActiveSessionLaunchModal';
+import QuizEditorHeaderActions from '../components/QuizEditorHeaderActions';
+import NoActiveSessionLaunchModal from '../components/Host/NoActiveSessionLaunchModal';
 import { TEACHER_PAGE_GUTTER_MD } from '../components/Host/HostLayout';
 import { quizzesAPI, handleAPIError } from '../services/api';
+import { useAuth } from '../contexts/AuthContext';
 import { useHostData } from '../contexts/HostDataContext';
 import { AI_GENERATED_QUIZ_SOURCE } from '../utils/aiGeneratedQuiz';
-import { loadEditingQuizFromStorage, normalizeQuizTypeLabel } from '../utils/quizQuestionNormalization';
 import {
   NO_ACTIVE_SESSION_MESSAGE,
   getActiveTeacherSession,
-  requireActiveHostSession,
 } from '../utils/requireActiveHostSession';
 import { persistLaunchedQuizInLocalStorage } from '../utils/quizLaunchSettings';
 import useQuizCreateBackToLibrary from '../hooks/useQuizCreateBackToLibrary';
+import useQuizEditorDirty from '../hooks/useQuizEditorDirty';
+import { openHostQuizLaunch } from '../utils/openHostQuizLaunch';
+import {
+  peekEditingQuizForType,
+  serializeQuizEditorSnapshot,
+} from '../utils/quizEditorSnapshot';
+
+const QUIZ_TYPE = 'Multiple Choice';
 
 const CreateMultipleChoiceQuiz = () => {
   useQuizCreateBackToLibrary();
   const { alert } = useHybridAlert();
+  const { user, userProfile } = useAuth();
+  const teacherUid = userProfile?.uid || user?.uid;
   const { data: teacherData } = useHostData();
-  const [quizTitle, setQuizTitle] = useState('');
-  const [questions, setQuestions] = useState([]);
-  const [isQuizSaved, setIsQuizSaved] = useState(false);
-  const [isEditMode, setIsEditMode] = useState(false);
-  const [editingQuizId, setEditingQuizId] = useState(null);
+  const [initialEdit] = useState(() => peekEditingQuizForType(QUIZ_TYPE));
+  const [quizTitle, setQuizTitle] = useState(initialEdit?.quiz.title || '');
+  const [questions, setQuestions] = useState(initialEdit?.quiz.questions || []);
+  const [isEditMode, setIsEditMode] = useState(Boolean(initialEdit?.isSavedEdit));
+  const [editingQuizId, setEditingQuizId] = useState(initialEdit?.quiz.id || null);
   const [showLaunchModal, setShowLaunchModal] = useState(false);
+  const [launchAccessCode, setLaunchAccessCode] = useState('');
   const [showNoSessionModal, setShowNoSessionModal] = useState(false);
-  const [savedQuizId, setSavedQuizId] = useState(null);
-  const [quizSource, setQuizSource] = useState(null);
+  const [savedQuizId, setSavedQuizId] = useState(initialEdit?.isSavedEdit ? initialEdit.quiz.id : null);
+  const [quizSource, setQuizSource] = useState(initialEdit?.quiz.source || null);
+  const [saving, setSaving] = useState(false);
+  const [snapshot, setSnapshot] = useState(() =>
+    initialEdit?.isSavedEdit
+      ? serializeQuizEditorSnapshot({
+          title: initialEdit.quiz.title,
+          questions: initialEdit.quiz.questions,
+          quizType: QUIZ_TYPE,
+        })
+      : null
+  );
+  const persistedId = savedQuizId || (isEditMode ? editingQuizId : null);
+  const { mode } = useQuizEditorDirty({
+    title: quizTitle,
+    questions,
+    quizType: QUIZ_TYPE,
+    persistedId,
+    snapshot,
+  });
 
-  // Load saved quizzes from localStorage on mount
   useEffect(() => {
-    const quiz = loadEditingQuizFromStorage();
-
-    if (quiz && normalizeQuizTypeLabel(quiz.type) === 'Multiple Choice') {
-      setQuizTitle(quiz.title);
-      setQuestions(quiz.questions);
-      setIsEditMode(!quiz.isFromPaste);
-      setEditingQuizId(quiz.id);
-      setQuizSource(quiz.source || null);
-      localStorage.removeItem('editingQuiz');
-    }
-  }, []);
+    if (initialEdit) localStorage.removeItem('editingQuiz');
+  }, [initialEdit]);
 
   const addQuestion = () => {
     const newQuestion = {
@@ -129,6 +146,7 @@ const CreateMultipleChoiceQuiz = () => {
     }
     if (isActuallyEditMode) payload.id = editingQuizId;
 
+    setSaving(true);
     try {
       const res = isActuallyEditMode
         ? await quizzesAPI.update(editingQuizId, payload)
@@ -136,8 +154,9 @@ const CreateMultipleChoiceQuiz = () => {
       if (res.data.success && res.data.data) {
         const saved = res.data.data;
         setSavedQuizId(saved.id);
-        setIsQuizSaved(true);
-        // Keep localStorage in sync for edit flow and student join until fully migrated
+        setEditingQuizId(saved.id);
+        setIsEditMode(true);
+        setSnapshot(serializeQuizEditorSnapshot({ title: quizTitle, questions, quizType: QUIZ_TYPE }));
         const updatedList = isActuallyEditMode
           ? savedQuizzes.map(q => (q.id === editingQuizId ? { ...saved, createdDate: saved.createdAt || q.createdDate } : q))
           : [...savedQuizzes, { ...saved, createdDate: saved.createdAt }];
@@ -147,7 +166,6 @@ const CreateMultipleChoiceQuiz = () => {
     } catch (err) {
       const apiErr = handleAPIError(err);
       alert.toast.error(apiErr.message || 'Failed to save quiz. Are you logged in as a host?');
-      // Fallback: save to localStorage only so user doesn't lose work
       const quiz = {
         id: isActuallyEditMode ? editingQuizId : Date.now(),
         ...payload,
@@ -160,20 +178,27 @@ const CreateMultipleChoiceQuiz = () => {
         savedQuizzes.push(quiz);
       }
       localStorage.setItem('savedQuizzes', JSON.stringify(savedQuizzes));
-      setSavedQuizId(quiz.id);
-      setIsQuizSaved(true);
+    } finally {
+      setSaving(false);
     }
   };
 
-  const launchQuiz = () => {
-    const sessionCheck = requireActiveHostSession(teacherData.activeSession);
-    if (!sessionCheck.ok) {
-      setShowNoSessionModal(true);
+  const launchQuiz = async () => {
+    const result = await openHostQuizLaunch({
+      activeSession: teacherData.activeSession,
+      teacherUid,
+      quiz: {
+        id: persistedId,
+        title: quizTitle,
+        type: QUIZ_TYPE,
+        questions,
+      },
+    });
+    if (!result.ok) {
+      if (result.reason === 'no-session') setShowNoSessionModal(true);
       return;
     }
-
-    // Single source of truth: the server validates against sessions/{id}.currentActivity
-    // (fresh on every request, auto-clears stale flags) when the launch request is submitted.
+    setLaunchAccessCode(result.joinCode);
     setShowLaunchModal(true);
   };
 
@@ -192,7 +217,7 @@ const CreateMultipleChoiceQuiz = () => {
       <div className={`w-full max-w-full py-2 sm:py-3 lg:py-4 max-md:px-4 max-md:pt-8 max-md:pb-4 ${TEACHER_PAGE_GUTTER_MD}`}>
         {/* Page Header with Navigation */}
         <div className="mb-2 sm:mb-3 lg:mb-4 max-md:mb-5">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between md:gap-3">
             <div className="min-w-0">
               <h1 className="text-[clamp(1.375rem,5vw,2.25rem)] font-bold text-gray-900 mb-1 sm:mb-2 break-words max-md:text-xl">
                 Create Multiple Choice Quiz
@@ -201,44 +226,12 @@ const CreateMultipleChoiceQuiz = () => {
                 Add your quiz title and start creating questions
               </p>
             </div>
-            <div className="flex flex-wrap items-stretch gap-2 w-full sm:w-auto sm:justify-end max-md:flex-col md:items-center md:gap-3">
-              {/* Save Quiz Button */}
-              <button
-                onClick={saveQuiz}
-                disabled={isQuizSaved}
-                className={`flex items-center justify-center space-x-2 min-h-11 px-4 sm:px-6 py-2 sm:py-3 rounded-xl font-medium text-sm sm:text-base shadow-sm hover:shadow-md transition-all flex-1 sm:flex-none max-md:flex-none max-md:w-full min-w-0 ${
-                  isQuizSaved
-                    ? 'bg-purple-100 text-purple-700 border border-purple-300 cursor-not-allowed'
-                    : 'bg-[#6D415F] text-white hover:bg-[#5A344D]'
-                }`}
-              >
-                {isQuizSaved ? (
-                  <>
-                    <span className="w-4 h-4 sm:w-5 sm:h-5">✓</span>
-                    <span>Saved</span>
-                  </>
-                ) : (
-                  <>
-                    <Save className="w-4 h-4 sm:w-5 sm:h-5" />
-                    <span>Save Quiz</span>
-                  </>
-                )}
-              </button>
-
-              {/* Launch Quiz Button - Secondary, appears after saving */}
-              {isQuizSaved && (
-                <div className="flex flex-col items-stretch flex-1 sm:flex-none max-md:w-full">
-                  <button
-                    onClick={launchQuiz}
-                    className="flex items-center justify-center space-x-2 min-h-11 px-4 sm:px-6 py-2 sm:py-3 bg-[#6D415F] text-white rounded-xl hover:bg-[#5A344D] transition-colors font-medium text-sm sm:text-base shadow-sm hover:shadow-md w-full"
-                  >
-                    <Rocket className="w-4 h-4 sm:w-5 sm:h-5" />
-                    <span>Launch Quiz</span>
-                  </button>
-                  <LaunchRequiresSessionHint className="md:hidden" />
-                </div>
-              )}
-            </div>
+            <QuizEditorHeaderActions
+              mode={mode}
+              saving={saving}
+              onSave={saveQuiz}
+              onLaunch={launchQuiz}
+            />
           </div>
         </div>
 
@@ -385,14 +378,14 @@ const CreateMultipleChoiceQuiz = () => {
           type: 'Multiple Choice',
           questions: questions
         }}
-        existingAccessCode={getActiveTeacherSession(teacherData.activeSession)?.joinCode || ''}
+        existingAccessCode={launchAccessCode || getActiveTeacherSession(teacherData.activeSession)?.joinCode || ''}
       />
 
       <NoActiveSessionLaunchModal
         isOpen={showNoSessionModal}
         onClose={() => setShowNoSessionModal(false)}
         onSaveAsDraft={async () => {
-          if (!isQuizSaved) {
+          if (mode !== 'saved') {
             await saveQuiz();
           } else {
             alert.toast.success('Quiz is already saved as a draft');

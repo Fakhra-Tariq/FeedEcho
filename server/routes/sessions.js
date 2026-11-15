@@ -16,6 +16,7 @@ const {
   reconcileSessionCurrentActivity,
 } = require('../utils/teacherSessionGuard');
 const { writeLaunchParticipant, closeActiveQuizLaunch } = require('../utils/quizLaunches');
+const { ALREADY_ATTEMPTED_BODY, findCompletedQuizAttempt } = require('../utils/quizOneAttempt');
 const { getSharedTeamScoreState } = require('../utils/spaceRaceTeamScore');
 const router = express.Router();
 
@@ -790,38 +791,13 @@ router.post('/join', async (req, res) => {
 
       const trimmedName = name.trim();
 
-      if (launchSettings.oneAttempt) {
-        const launchScoped = currentLaunchId
-          ? await db.ref(`quiz_launch_submissions/${effectiveSession.sessionId}/${currentLaunchId}`).get()
-          : null;
-        const subsSnap =
-          launchScoped && launchScoped.exists()
-            ? launchScoped
-            : await db.ref(`quiz_submissions/${effectiveSession.sessionId}`).get();
-        if (subsSnap.exists()) {
-          const subs = subsSnap.val() || {};
-          const alreadySubmitted = Object.values(subs).some((row) => {
-            if (!row || typeof row !== 'object') return false;
-            if (!currentLaunchId && row.launchId) return false;
-            if (currentLaunchId && row.launchId && String(row.launchId) !== String(currentLaunchId)) {
-              return false;
-            }
-            if (studentUid && row.studentUid && String(row.studentUid) === String(studentUid)) {
-              return true;
-            }
-            if (studentEmail && row.studentEmail && String(row.studentEmail) === String(studentEmail)) {
-              return true;
-            }
-            return row.studentName && String(row.studentName).trim() === trimmedName;
-          });
-          if (alreadySubmitted) {
-            return res.status(400).json({
-              success: false,
-              error: 'You have already completed this quiz',
-              message: 'You have already completed this quiz.',
-            });
-          }
-        }
+      const completedAttempt = await findCompletedQuizAttempt(
+        effectiveSession.sessionId,
+        currentLaunchId,
+        { studentUid }
+      );
+      if (completedAttempt) {
+        return res.status(400).json(ALREADY_ATTEMPTED_BODY);
       }
 
       // Create participant document

@@ -28,7 +28,6 @@ export function buildQuizLaunchApiPayload(settings = {}) {
         : settings.showScore !== undefined
         ? Boolean(settings.showScore)
         : true,
-    oneAttempt: Boolean(settings.oneAttempt),
     launchedAt: settings.launchedAt,
   };
 }

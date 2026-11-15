@@ -383,7 +383,6 @@ router.post('/:id/launch', async (req, res) => {
       shuffleQuestions,
       shuffleAnswers,
       showFinalScore,
-      oneAttempt,
     } = req.body;
     const joinCode = launchPrep.sessionCode;
     const now = new Date().toISOString();
@@ -401,7 +400,6 @@ router.post('/:id/launch', async (req, res) => {
       shuffleQuestions: Boolean(shuffleQuestions),
       shuffleAnswers: Boolean(shuffleAnswers),
       showFinalScore: showFinalScore !== false,
-      oneAttempt: Boolean(oneAttempt),
       launchedAt: now,
     };
     

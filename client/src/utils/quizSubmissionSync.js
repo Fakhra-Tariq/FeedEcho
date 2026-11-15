@@ -90,9 +90,14 @@ export const submitQuizWithRetry = async (quizId, submissionData, { maxRetries =
     lastError?.message ||
     'Submission failed';
 
+  const alreadyAttempted =
+    lastError?.response?.data?.code === 'ALREADY_ATTEMPTED' ||
+    /already completed this quiz/i.test(String(serverMsg));
+
   return {
     success: false,
-    error: serverMsg,
+    alreadyAttempted,
+    error: alreadyAttempted ? 'You have already completed this quiz' : serverMsg,
     status: lastError?.response?.status ?? null,
     responseData: lastError?.response?.data ?? null,
     isNetworkError: !lastError?.response && Boolean(lastError?.request),

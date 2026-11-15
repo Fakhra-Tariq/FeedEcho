@@ -3,8 +3,10 @@ import { normalizeTeamId, saveSpaceRaceParticipant } from './spaceRaceSession';
 import { getStoredAudienceSession, getStudentQueryParams } from './audienceSession';
 import { persistQuizParticipantSession } from './quizParticipantSession';
 import { saveLocalQuizSubmission } from './audienceQuizAttempts';
+import { findLocalQuizSubmissionForJoin } from './quizLaunchAudienceSettings';
 
 function isAlreadyCompletedQuizError(error) {
+  if (error?.response?.data?.code === 'ALREADY_ATTEMPTED') return true;
   const message =
     error?.response?.data?.message ||
     error?.response?.data?.error ||
@@ -19,29 +21,32 @@ async function openSavedQuizResult({
   studentUid,
   studentEmail,
   navigate,
+  localRow = null,
 }) {
   const lookup = await sessionsAPI.getByCode(trimmedCode);
   const payload = lookup.data || {};
   const quiz = payload.data;
-  const quizId = String(payload.quizId || quiz?.id || '').trim();
+  const quizId = String(payload.quizId || quiz?.id || localRow?.quizId || '').trim();
   if (payload.type !== 'quiz' || !quizId || !quiz) {
     throw new Error('Failed to load quiz result');
   }
 
-  let row = null;
-  try {
-    const historyRes = await studentsAPI.getQuizHistory({
-      ...getStudentQueryParams({
-        uid: studentUid,
-        email: studentEmail,
-        name: trimmedName,
-      }),
-      limit: 200,
-    });
-    const rows = Array.isArray(historyRes.data?.data) ? historyRes.data.data : [];
-    row = rows.find((item) => String(item.quizId) === String(quizId)) || null;
-  } catch {
-    row = null;
+  let row = localRow || null;
+  if (!row && studentUid) {
+    try {
+      const historyRes = await studentsAPI.getQuizHistory({
+        ...getStudentQueryParams({
+          uid: studentUid,
+          email: studentEmail,
+          name: trimmedName,
+        }),
+        limit: 200,
+      });
+      const rows = Array.isArray(historyRes.data?.data) ? historyRes.data.data : [];
+      row = rows.find((item) => String(item.quizId) === String(quizId)) || null;
+    } catch {
+      row = null;
+    }
   }
 
   if (!row) {
@@ -295,6 +300,23 @@ export async function joinSessionByCode({
   const { trimmedName, studentUid, studentEmail } = ctx;
 
   try {
+    const localCompleted = findLocalQuizSubmissionForJoin({
+      sessionCode: trimmedCode,
+      studentUid,
+      studentEmail,
+      studentName: trimmedName,
+    });
+    if (localCompleted) {
+      return await openSavedQuizResult({
+        trimmedName,
+        trimmedCode,
+        studentUid,
+        studentEmail,
+        navigate,
+        localRow: localCompleted,
+      });
+    }
+
     const result = await proceedWithSessionJoin({
       trimmedName,
       trimmedCode,
@@ -309,7 +331,7 @@ export async function joinSessionByCode({
       ? result
       : { success: true, ...result };
   } catch (error) {
-    if (studentUid && isAlreadyCompletedQuizError(error)) {
+    if (isAlreadyCompletedQuizError(error)) {
       try {
         return await openSavedQuizResult({
           trimmedName,
@@ -317,6 +339,12 @@ export async function joinSessionByCode({
           studentUid,
           studentEmail,
           navigate,
+          localRow: findLocalQuizSubmissionForJoin({
+            sessionCode: trimmedCode,
+            studentUid,
+            studentEmail,
+            studentName: trimmedName,
+          }),
         });
       } catch {
         // Fall through to the original error if the saved result cannot be loaded.

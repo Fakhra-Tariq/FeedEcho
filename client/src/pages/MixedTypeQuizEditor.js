@@ -1,47 +1,78 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { Trash2, Save, Rocket, Sparkles } from 'lucide-react';
+import { Trash2, Sparkles } from 'lucide-react';
 import clsx from 'clsx';
 import { useHybridAlert } from '../contexts/HybridAlertContext';
 import LaunchQuizModal from '../components/LaunchQuizModal';
-import NoActiveSessionLaunchModal, {
-  LaunchRequiresSessionHint,
-} from '../components/Host/NoActiveSessionLaunchModal';
+import QuizEditorHeaderActions from '../components/QuizEditorHeaderActions';
+import NoActiveSessionLaunchModal from '../components/Host/NoActiveSessionLaunchModal';
 import { TEACHER_PAGE_GUTTER_MD } from '../components/Host/HostLayout';
 import QuestionTypeDropdown from '../components/QuestionTypeDropdown';
 import AiQuizGeneratorPanel from '../components/AiQuizGeneratorPanel';
 import { quizzesAPI, handleAPIError } from '../services/api';
+import { useAuth } from '../contexts/AuthContext';
 import { useHostData } from '../contexts/HostDataContext';
 import { AI_GENERATED_QUIZ_SOURCE } from '../utils/aiGeneratedQuiz';
-import { loadEditingQuizFromStorage, normalizeQuizTypeLabel, normalizeQuestionsForEditor } from '../utils/quizQuestionNormalization';
+import { normalizeQuizTypeLabel, normalizeQuestionsForEditor } from '../utils/quizQuestionNormalization';
 import {
   NO_ACTIVE_SESSION_MESSAGE,
   getActiveTeacherSession,
-  requireActiveHostSession,
 } from '../utils/requireActiveHostSession';
 import { persistLaunchedQuizInLocalStorage } from '../utils/quizLaunchSettings';
 import useQuizCreateBackToLibrary from '../hooks/useQuizCreateBackToLibrary';
+import useQuizEditorDirty from '../hooks/useQuizEditorDirty';
+import { openHostQuizLaunch } from '../utils/openHostQuizLaunch';
+import {
+  peekEditingQuizForType,
+  serializeQuizEditorSnapshot,
+} from '../utils/quizEditorSnapshot';
+
+const QUIZ_TYPE = 'Mixed Type';
 
 const MixedTypeQuizEditor = () => {
   const navigate = useNavigate();
   const location = useLocation();
   useQuizCreateBackToLibrary();
   const { alert } = useHybridAlert();
+  const { user, userProfile } = useAuth();
+  const teacherUid = userProfile?.uid || user?.uid;
   const { data: teacherData } = useHostData();
-  const [quizTitle, setQuizTitle] = useState('');
-  const [questions, setQuestions] = useState([]);
-  const [isQuizSaved, setIsQuizSaved] = useState(false);
-  const [isEditMode, setIsEditMode] = useState(false);
-  const [editingQuizId, setEditingQuizId] = useState(null);
+  const [initialEdit] = useState(() =>
+    peekEditingQuizForType(QUIZ_TYPE, { acceptAnyWithQuestions: true })
+  );
+  const [quizTitle, setQuizTitle] = useState(initialEdit?.quiz.title || '');
+  const [questions, setQuestions] = useState(initialEdit?.quiz.questions || []);
+  const [isQuizSaved, setIsQuizSaved] = useState(Boolean(initialEdit?.isSavedEdit));
+  const [isEditMode, setIsEditMode] = useState(Boolean(initialEdit?.isSavedEdit));
+  const [editingQuizId, setEditingQuizId] = useState(initialEdit?.quiz.id || null);
   const [showLaunchModal, setShowLaunchModal] = useState(false);
+  const [launchAccessCode, setLaunchAccessCode] = useState('');
   const [showNoSessionModal, setShowNoSessionModal] = useState(false);
-  const [savedQuizId, setSavedQuizId] = useState(null);
+  const [savedQuizId, setSavedQuizId] = useState(initialEdit?.isSavedEdit ? initialEdit.quiz.id : null);
   const [showAiPanel, setShowAiPanel] = useState(() => {
     if (typeof window === 'undefined') return false;
     return new URLSearchParams(window.location.search).get('ai') === '1';
   });
-  const [quizSource, setQuizSource] = useState(null);
+  const [quizSource, setQuizSource] = useState(initialEdit?.quiz.source || null);
   const [isQuizLaunched, setIsQuizLaunched] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [snapshot, setSnapshot] = useState(() =>
+    initialEdit?.isSavedEdit
+      ? serializeQuizEditorSnapshot({
+          title: initialEdit.quiz.title,
+          questions: initialEdit.quiz.questions,
+          quizType: QUIZ_TYPE,
+        })
+      : null
+  );
+  const persistedId = savedQuizId || (isEditMode ? editingQuizId : null);
+  const { mode } = useQuizEditorDirty({
+    title: quizTitle,
+    questions,
+    quizType: QUIZ_TYPE,
+    persistedId,
+    snapshot,
+  });
 
   useEffect(() => {
     if (location.state?.openAiPanel) {
@@ -50,19 +81,9 @@ const MixedTypeQuizEditor = () => {
     }
   }, [location.pathname, location.state, navigate]);
 
-  // Load editing quiz if exists
   useEffect(() => {
-    const quiz = loadEditingQuizFromStorage();
-
-    if (quiz && (normalizeQuizTypeLabel(quiz.type) === 'Mixed Type' || quiz.questions?.length)) {
-      setQuizTitle(quiz.title);
-      setQuestions(quiz.questions);
-      setIsEditMode(!quiz.isFromPaste);
-      setEditingQuizId(quiz.id);
-      setQuizSource(quiz.source || null);
-      localStorage.removeItem('editingQuiz');
-    }
-  }, []);
+    if (initialEdit) localStorage.removeItem('editingQuiz');
+  }, [initialEdit]);
 
   useEffect(() => {
     const quizId = savedQuizId || editingQuizId;
@@ -115,6 +136,7 @@ const MixedTypeQuizEditor = () => {
     setEditingQuizId(null);
     setIsQuizSaved(false);
     setSavedQuizId(null);
+    setSnapshot(null);
     setQuizSource(quiz.source || null);
   };
 
@@ -156,6 +178,7 @@ const MixedTypeQuizEditor = () => {
         }
         if (isActuallyEditMode) payload.id = editingQuizId;
 
+        setSaving(true);
         try {
           const res = isActuallyEditMode
             ? await quizzesAPI.update(editingQuizId, payload)
@@ -165,7 +188,9 @@ const MixedTypeQuizEditor = () => {
             const saved = res.data.data;
             setSavedQuizId(saved.id);
             setIsQuizSaved(true);
+            setIsEditMode(true);
             setEditingQuizId(saved.id);
+            setSnapshot(serializeQuizEditorSnapshot({ title: quizTitle, questions, quizType: QUIZ_TYPE }));
 
             const updatedList = isActuallyEditMode
               ? savedQuizzes.map((q) =>
@@ -193,8 +218,8 @@ const MixedTypeQuizEditor = () => {
           }
 
           localStorage.setItem('savedQuizzes', JSON.stringify(savedQuizzes));
-          setSavedQuizId(quiz.id);
-          setIsQuizSaved(true);
+        } finally {
+          setSaving(false);
         }
       } else {
         alert.toast.error('Please complete all questions with required information.');
@@ -204,17 +229,22 @@ const MixedTypeQuizEditor = () => {
     }
   };
 
-  const launchQuiz = () => {
-    if (isQuizLaunched) return;
-
-    const sessionCheck = requireActiveHostSession(teacherData.activeSession);
-    if (!sessionCheck.ok) {
-      setShowNoSessionModal(true);
+  const launchQuiz = async () => {
+    const result = await openHostQuizLaunch({
+      activeSession: teacherData.activeSession,
+      teacherUid,
+      quiz: {
+        id: persistedId,
+        title: quizTitle,
+        type: QUIZ_TYPE,
+        questions,
+      },
+    });
+    if (!result.ok) {
+      if (result.reason === 'no-session') setShowNoSessionModal(true);
       return;
     }
-
-    // Single source of truth: the server validates against sessions/{id}.currentActivity
-    // (fresh on every request, auto-clears stale flags) when the launch request is submitted.
+    setLaunchAccessCode(result.joinCode);
     setShowLaunchModal(true);
   };
 
@@ -428,7 +458,7 @@ const MixedTypeQuizEditor = () => {
       <div className={`w-full max-w-full py-4 sm:py-6 lg:py-8 max-md:px-4 max-md:pt-8 max-md:pb-6 ${TEACHER_PAGE_GUTTER_MD}`}>
         {/* Page Header with Navigation */}
         <div className="mb-6 sm:mb-8 lg:mb-10">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between md:gap-3">
             <div className="min-w-0">
               <h1 className="text-[clamp(1.375rem,5vw,2.25rem)] font-bold text-gray-900 mb-2 sm:mb-4 break-words max-md:text-xl">
                 Create Mixed Type Quiz
@@ -437,64 +467,27 @@ const MixedTypeQuizEditor = () => {
                 Add your quiz title and start creating questions with different types
               </p>
             </div>
-            <div className="flex flex-wrap items-stretch gap-2 w-full sm:w-auto sm:justify-end max-md:flex-col md:items-center md:gap-3">
-              <button
-                type="button"
-                onClick={() => setShowAiPanel(true)}
-                className={clsx(
-                  'flex items-center justify-center space-x-2 min-h-11 px-4 sm:px-5 py-2 sm:py-3 rounded-xl font-medium text-sm sm:text-base shadow-sm hover:shadow-md transition-all flex-1 sm:flex-none max-md:flex-none max-md:w-full min-w-0',
-                  showAiPanel
-                    ? 'bg-primary/10 text-primary border border-primary/20'
-                    : 'bg-white text-primary border border-primary/20 hover:bg-primary/5'
-                )}
-              >
-                <Sparkles className="w-4 h-4 sm:w-5 sm:h-5" />
-                <span>AI Generator</span>
-              </button>
-
-              {/* Save Quiz Button */}
-              <button
-                onClick={saveQuiz}
-                disabled={isQuizSaved}
-                className={`flex items-center justify-center space-x-2 min-h-11 px-4 sm:px-6 py-2 sm:py-3 rounded-xl font-medium text-sm sm:text-base shadow-sm hover:shadow-md transition-all flex-1 sm:flex-none max-md:flex-none max-md:w-full min-w-0 ${
-                  isQuizSaved 
-                    ? 'bg-purple-100 text-purple-700 border border-purple-300 cursor-not-allowed' 
-                    : 'bg-[#6D415F] text-white hover:bg-[#5A344D]'
-                }`}
-              >
-                {isQuizSaved ? (
-                  <>
-                    <span className="w-4 h-4 sm:w-5 sm:h-5">✓</span>
-                    <span>Saved</span>
-                  </>
-                ) : (
-                  <>
-                    <Save className="w-4 h-4 sm:w-5 sm:h-5" />
-                    <span>Save Quiz</span>
-                  </>
-                )}
-              </button>
-
-              {/* Launch Quiz Button - Secondary, appears after saving */}
-              {isQuizSaved && (
-                <div className="flex flex-col items-stretch flex-1 sm:flex-none min-w-[10rem] max-md:min-w-0 max-md:w-full">
-                  <button
-                    onClick={launchQuiz}
-                    disabled={isQuizLaunched}
-                    className={clsx(
-                      'flex items-center justify-center space-x-2 min-h-11 px-4 sm:px-6 py-2 sm:py-3 rounded-xl font-medium text-sm sm:text-base shadow-sm transition-all w-full',
-                      isQuizLaunched
-                        ? 'bg-purple-100 text-purple-700 border border-purple-300 cursor-not-allowed'
-                        : 'bg-[#6D415F] text-white hover:bg-[#5A344D] hover:shadow-md'
-                    )}
-                  >
-                    <Rocket className="w-4 h-4 sm:w-5 sm:h-5" />
-                    <span>{isQuizLaunched ? 'Launched' : 'Launch Quiz'}</span>
-                  </button>
-                  {!isQuizLaunched && <LaunchRequiresSessionHint className="md:hidden" />}
-                </div>
-              )}
-            </div>
+            <QuizEditorHeaderActions
+              mode={mode}
+              saving={saving}
+              onSave={saveQuiz}
+              onLaunch={launchQuiz}
+              extra={
+                <button
+                  type="button"
+                  onClick={() => setShowAiPanel(true)}
+                  className={clsx(
+                    'flex items-center justify-center space-x-2 min-h-11 h-11 px-4 sm:px-5 rounded-xl font-medium text-sm sm:text-base shadow-sm hover:shadow-md transition-all w-full md:w-auto',
+                    showAiPanel
+                      ? 'bg-primary/10 text-primary border border-primary/20'
+                      : 'bg-white text-primary border border-primary/20 hover:bg-primary/5'
+                  )}
+                >
+                  <Sparkles className="w-4 h-4 sm:w-5 sm:h-5" />
+                  <span>AI Generator</span>
+                </button>
+              }
+            />
           </div>
         </div>
 
@@ -563,14 +556,14 @@ const MixedTypeQuizEditor = () => {
           type: 'Mixed Type',
           questions: questions
         }}
-        existingAccessCode={getActiveTeacherSession(teacherData.activeSession)?.joinCode || ''}
+        existingAccessCode={launchAccessCode || getActiveTeacherSession(teacherData.activeSession)?.joinCode || ''}
       />
 
       <NoActiveSessionLaunchModal
         isOpen={showNoSessionModal}
         onClose={() => setShowNoSessionModal(false)}
         onSaveAsDraft={async () => {
-          if (!isQuizSaved) {
+          if (mode !== 'saved') {
             await saveQuiz();
           } else {
             alert.toast.success('Quiz is already saved as a draft');

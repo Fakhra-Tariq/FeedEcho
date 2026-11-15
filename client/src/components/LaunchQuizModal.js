@@ -21,7 +21,6 @@ const LaunchQuizModal = ({ isOpen, onClose, onLaunch, quiz, existingAccessCode }
   const [shuffleQuestions, setShuffleQuestions] = useState(false);
   const [shuffleAnswers, setShuffleAnswers] = useState(false);
   const [showFinalScore, setShowFinalScore] = useState(true);
-  const [oneAttempt, setOneAttempt] = useState(false);
   const [showLaunchedModal, setShowLaunchedModal] = useState(false);
   const [accessCode, setAccessCode] = useState('');
   const [launching, setLaunching] = useState(false);
@@ -66,7 +65,6 @@ const LaunchQuizModal = ({ isOpen, onClose, onLaunch, quiz, existingAccessCode }
       shuffleQuestions,
       shuffleAnswers,
       showFinalScore,
-      oneAttempt,
       accessCode: existingAccessCode,
     };
 
@@ -158,12 +156,6 @@ const LaunchQuizModal = ({ isOpen, onClose, onLaunch, quiz, existingAccessCode }
                 label="Show final score"
                 enabled={showFinalScore}
                 onToggle={() => setShowFinalScore((prev) => !prev)}
-              />
-              <ToggleRow
-                label="One attempt only"
-                badge="PRO"
-                enabled={oneAttempt}
-                onToggle={() => setOneAttempt((prev) => !prev)}
               />
             </div>
           </div>

@@ -111,6 +111,16 @@ export function getStudentAttemptSecondsRemaining(launchSettings, joinedAtIso) {
   return remaining;
 }
 
+function rowMatchesLocalIdentity(row, { participantId, studentUid, studentEmail, studentName } = {}) {
+  if (participantId && String(row.participantId) === String(participantId)) return true;
+  if (studentUid && row.studentUid && String(row.studentUid) === String(studentUid)) return true;
+  if (studentEmail && row.studentEmail && String(row.studentEmail) === String(studentEmail)) return true;
+  if (studentName && row.studentName && String(row.studentName).trim() === String(studentName).trim()) {
+    return true;
+  }
+  return false;
+}
+
 export function hasLocalQuizSubmission(quizId, { participantId, studentUid, studentEmail, studentName } = {}) {
   try {
     const raw = localStorage.getItem('quizSubmissions') || '[]';
@@ -119,15 +129,33 @@ export function hasLocalQuizSubmission(quizId, { participantId, studentUid, stud
 
     return submissions.some((row) => {
       if (String(row.quizId) !== String(quizId)) return false;
-      if (participantId && String(row.participantId) === String(participantId)) return true;
-      if (studentUid && row.studentUid && String(row.studentUid) === String(studentUid)) return true;
-      if (studentEmail && row.studentEmail && String(row.studentEmail) === String(studentEmail)) return true;
-      if (studentName && row.studentName && String(row.studentName).trim() === String(studentName).trim()) {
-        return true;
-      }
-      return false;
+      return rowMatchesLocalIdentity(row, { participantId, studentUid, studentEmail, studentName });
     });
   } catch {
     return false;
+  }
+}
+
+/** Device-local completed attempt for this join code (same browser / same name or uid). */
+export function findLocalQuizSubmissionForJoin({
+  sessionCode,
+  studentUid,
+  studentEmail,
+  studentName,
+} = {}) {
+  try {
+    const raw = localStorage.getItem('quizSubmissions') || '[]';
+    const submissions = JSON.parse(raw);
+    if (!Array.isArray(submissions)) return null;
+    const code = String(sessionCode || '').trim().toUpperCase();
+    if (!code) return null;
+    return (
+      submissions.find((row) => {
+        if (String(row.sessionCode || '').trim().toUpperCase() !== code) return false;
+        return rowMatchesLocalIdentity(row, { studentUid, studentEmail, studentName });
+      }) || null
+    );
+  } catch {
+    return null;
   }
 }

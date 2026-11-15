@@ -6,7 +6,6 @@ import LaunchQuizModal from '../components/LaunchQuizModal';
 import { quizzesAPI, handleAPIError } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
 import { useHostData } from '../contexts/HostDataContext';
-import { resolveActiveTeacherSession } from '../utils/requireActiveHostSession';
 import NoActiveSessionLaunchModal, {
   LaunchRequiresSessionHint,
 } from '../components/Host/NoActiveSessionLaunchModal';
@@ -15,6 +14,7 @@ import HeaderCardStats from '../components/Host/HeaderCardStats';
 import ListFilterBar from '../components/Host/ListFilterBar';
 import SessionLaunchBanner from '../components/Host/SessionLaunchBanner';
 import { persistLaunchedQuizInLocalStorage } from '../utils/quizLaunchSettings';
+import { openHostQuizLaunch } from '../utils/openHostQuizLaunch';
 import {
   getEditorRouteForQuizType,
   normalizeQuestionsForEditor,
@@ -223,21 +223,19 @@ const QuizLibrary = () => {
   };
 
   const launchQuiz = async (quizId) => {
-    const sessionCheck = await resolveActiveTeacherSession(teacherData.activeSession, teacherUid);
-    if (!sessionCheck.ok) {
-      setShowNoSessionModal(true);
+    const quiz = savedQuizzes.find((q) => q.id === quizId);
+    const result = await openHostQuizLaunch({
+      activeSession: teacherData.activeSession,
+      teacherUid,
+      quiz,
+    });
+    if (!result.ok) {
+      if (result.reason === 'no-session') setShowNoSessionModal(true);
       return;
     }
-
-    // Single source of truth: the server validates against sessions/{id}.currentActivity
-    // (fresh on every request, auto-clears stale flags) — no separate client-side pre-check here.
-    const quiz = savedQuizzes.find(q => q.id === quizId);
-
-    if (quiz) {
-      setSelectedQuiz(quiz);
-      setAccessCode(sessionCheck.joinCode);
-      setShowLaunchModal(true);
-    }
+    setSelectedQuiz(result.quiz);
+    setAccessCode(result.joinCode);
+    setShowLaunchModal(true);
   };
 
   const handleLaunchQuiz = async (quizId, settings, launchedData) => {

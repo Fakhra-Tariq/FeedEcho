@@ -719,13 +719,12 @@ const AudienceQuizAttempt = ({
 
           if (
             location.state?.showCompletedResult ||
-            (foundQuiz.launchSettings?.oneAttempt &&
             hasLocalQuizSubmission(paramQuizId, {
               participantId: session.participantId,
               studentUid: session.studentUid,
               studentEmail: session.studentEmail,
               studentName: session.studentName,
-            }))
+            })
           ) {
             let quizToUse = normalizeQuizForClient({ ...foundQuiz, launched: true });
             quizToUse = applyQuizShuffleSettings(quizToUse, session.participantId);
@@ -1943,6 +1942,15 @@ const AudienceQuizAttempt = ({
           percentage = serverPercentage;
 
           // Never overwrite the canonical team score from a personal quiz-submit payload
+        } else if (syncResult.alreadyAttempted) {
+          serverSubmitSucceeded = true;
+          setSubmissionSyncFailed(false);
+          setSubmissionSyncError('');
+          saveLocalQuizSubmission({
+            ...baseLocalSubmission,
+            serverSynced: true,
+            syncError: null,
+          });
         } else {
           const syncError =
             syncResult.error ||

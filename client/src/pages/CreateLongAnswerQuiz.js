@@ -1,50 +1,65 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Trash2, Save, Rocket } from 'lucide-react';
+import { Plus, Trash2 } from 'lucide-react';
 import { useHybridAlert } from '../contexts/HybridAlertContext';
 import LaunchQuizModal from '../components/LaunchQuizModal';
-import NoActiveSessionLaunchModal, {
-  LaunchRequiresSessionHint,
-} from '../components/Host/NoActiveSessionLaunchModal';
+import QuizEditorHeaderActions from '../components/QuizEditorHeaderActions';
+import NoActiveSessionLaunchModal from '../components/Host/NoActiveSessionLaunchModal';
 import { TEACHER_PAGE_GUTTER_MD } from '../components/Host/HostLayout';
 import { quizzesAPI, handleAPIError } from '../services/api';
+import { useAuth } from '../contexts/AuthContext';
 import { useHostData } from '../contexts/HostDataContext';
 import {
   NO_ACTIVE_SESSION_MESSAGE,
   getActiveTeacherSession,
-  requireActiveHostSession,
 } from '../utils/requireActiveHostSession';
 import { persistLaunchedQuizInLocalStorage } from '../utils/quizLaunchSettings';
 import useQuizCreateBackToLibrary from '../hooks/useQuizCreateBackToLibrary';
+import useQuizEditorDirty from '../hooks/useQuizEditorDirty';
+import { openHostQuizLaunch } from '../utils/openHostQuizLaunch';
+import {
+  peekEditingQuizForType,
+  serializeQuizEditorSnapshot,
+} from '../utils/quizEditorSnapshot';
+
+const QUIZ_TYPE = 'Long Answer';
 
 const CreateLongAnswerQuiz = () => {
   useQuizCreateBackToLibrary();
   const { alert } = useHybridAlert();
+  const { user, userProfile } = useAuth();
+  const teacherUid = userProfile?.uid || user?.uid;
   const { data: teacherData } = useHostData();
-  const [quizTitle, setQuizTitle] = useState('');
-  const [questions, setQuestions] = useState([]);
-  const [isQuizSaved, setIsQuizSaved] = useState(false);
-  const [isEditMode, setIsEditMode] = useState(false);
-  const [editingQuizId, setEditingQuizId] = useState(null);
+  const [initialEdit] = useState(() => peekEditingQuizForType(QUIZ_TYPE));
+  const [quizTitle, setQuizTitle] = useState(initialEdit?.quiz.title || '');
+  const [questions, setQuestions] = useState(initialEdit?.quiz.questions || []);
+  const [isEditMode, setIsEditMode] = useState(Boolean(initialEdit?.isSavedEdit));
+  const [editingQuizId, setEditingQuizId] = useState(initialEdit?.quiz.id || null);
   const [showLaunchModal, setShowLaunchModal] = useState(false);
+  const [launchAccessCode, setLaunchAccessCode] = useState('');
   const [showNoSessionModal, setShowNoSessionModal] = useState(false);
-  const [savedQuizId, setSavedQuizId] = useState(null);
+  const [savedQuizId, setSavedQuizId] = useState(initialEdit?.isSavedEdit ? initialEdit.quiz.id : null);
+  const [saving, setSaving] = useState(false);
+  const [snapshot, setSnapshot] = useState(() =>
+    initialEdit?.isSavedEdit
+      ? serializeQuizEditorSnapshot({
+          title: initialEdit.quiz.title,
+          questions: initialEdit.quiz.questions,
+          quizType: QUIZ_TYPE,
+        })
+      : null
+  );
+  const persistedId = savedQuizId || (isEditMode ? editingQuizId : null);
+  const { mode } = useQuizEditorDirty({
+    title: quizTitle,
+    questions,
+    quizType: QUIZ_TYPE,
+    persistedId,
+    snapshot,
+  });
 
-  // Load editing quiz if exists
   useEffect(() => {
-    const editingQuiz = localStorage.getItem('editingQuiz');
-    
-    if (editingQuiz) {
-      const quiz = JSON.parse(editingQuiz);
-      if (quiz.type === 'Long Answer') {
-        setQuizTitle(quiz.title);
-        setQuestions(quiz.questions);
-        // Only set edit mode if this is not a newly pasted quiz
-        setIsEditMode(!quiz.isFromPaste);
-        setEditingQuizId(quiz.id);
-        localStorage.removeItem('editingQuiz');
-      }
-    }
-  }, []);
+    if (initialEdit) localStorage.removeItem('editingQuiz');
+  }, [initialEdit]);
 
   const addQuestion = () => {
     const newQuestion = {
@@ -108,6 +123,7 @@ const CreateLongAnswerQuiz = () => {
       launched: false,
     };
     if (isActuallyEditMode) payload.id = editingQuizId;
+    setSaving(true);
     try {
       const res = isActuallyEditMode
         ? await quizzesAPI.update(editingQuizId, payload)
@@ -115,7 +131,9 @@ const CreateLongAnswerQuiz = () => {
       if (res.data.success && res.data.data) {
         const saved = res.data.data;
         setSavedQuizId(saved.id);
-        setIsQuizSaved(true);
+        setEditingQuizId(saved.id);
+        setIsEditMode(true);
+        setSnapshot(serializeQuizEditorSnapshot({ title: quizTitle, questions, quizType: QUIZ_TYPE }));
         const updatedList = isActuallyEditMode
           ? savedQuizzes.map(q => (q.id === editingQuizId ? { ...saved, createdDate: saved.createdAt || q.createdDate } : q))
           : [...savedQuizzes, { ...saved, createdDate: saved.createdAt }];
@@ -128,20 +146,27 @@ const CreateLongAnswerQuiz = () => {
       const quiz = { id: isActuallyEditMode ? editingQuizId : Date.now(), ...payload, createdDate: existingQuiz?.createdDate || new Date().toISOString() };
       if (isActuallyEditMode) { const idx = savedQuizzes.findIndex(q => q.id === editingQuizId); if (idx !== -1) savedQuizzes[idx] = quiz; } else savedQuizzes.push(quiz);
       localStorage.setItem('savedQuizzes', JSON.stringify(savedQuizzes));
-      setSavedQuizId(quiz.id);
-      setIsQuizSaved(true);
+    } finally {
+      setSaving(false);
     }
   };
 
-  const launchQuiz = () => {
-    const sessionCheck = requireActiveHostSession(teacherData.activeSession);
-    if (!sessionCheck.ok) {
-      setShowNoSessionModal(true);
+  const launchQuiz = async () => {
+    const result = await openHostQuizLaunch({
+      activeSession: teacherData.activeSession,
+      teacherUid,
+      quiz: {
+        id: persistedId,
+        title: quizTitle,
+        type: QUIZ_TYPE,
+        questions,
+      },
+    });
+    if (!result.ok) {
+      if (result.reason === 'no-session') setShowNoSessionModal(true);
       return;
     }
-
-    // Single source of truth: the server validates against sessions/{id}.currentActivity
-    // (fresh on every request, auto-clears stale flags) when the launch request is submitted.
+    setLaunchAccessCode(result.joinCode);
     setShowLaunchModal(true);
   };
 
@@ -160,53 +185,22 @@ const CreateLongAnswerQuiz = () => {
       <div className={`container mx-auto px-3 sm:px-4 py-4 sm:py-6 lg:py-8 max-md:px-4 max-md:pt-8 ${TEACHER_PAGE_GUTTER_MD}`}>
         {/* Page Header with Navigation */}
         <div className="mb-6 sm:mb-8 lg:mb-10">
-          <div className="flex items-center justify-end max-md:justify-stretch">
-            <div className="flex items-center space-x-3 max-md:flex-col max-md:items-stretch max-md:space-x-0 max-md:gap-2 max-md:w-full md:gap-3 md:space-x-0">
-              {/* Save Quiz Button */}
-              <button
-                onClick={saveQuiz}
-                disabled={isQuizSaved}
-                className={`flex items-center space-x-2 px-4 sm:px-6 py-2 sm:py-3 rounded-xl font-medium text-sm sm:text-base shadow-sm hover:shadow-md transition-all max-md:w-full max-md:min-h-11 max-md:justify-center ${
-                  isQuizSaved 
-                    ? 'bg-purple-100 text-purple-700 border border-purple-300 cursor-not-allowed' 
-                    : 'bg-[#6D415F] text-white hover:bg-[#5A344D]'
-                }`}
-              >
-                {isQuizSaved ? (
-                  <>
-                    <span className="w-4 h-4 sm:w-5 sm:h-5">✓</span>
-                    <span>Saved</span>
-                  </>
-                ) : (
-                  <>
-                    <Save className="w-4 h-4 sm:w-5 sm:h-5" />
-                    <span>Save Quiz</span>
-                  </>
-                )}
-              </button>
-
-              {/* Launch Quiz Button - Secondary, appears after saving */}
-              {isQuizSaved && (
-                <div className="flex flex-col items-end max-md:items-stretch max-md:w-full">
-                  <button
-                    onClick={launchQuiz}
-                    className="flex items-center space-x-2 px-4 sm:px-6 py-2 sm:py-3 bg-[#6D415F] text-white rounded-xl hover:bg-[#5A344D] transition-colors font-medium text-sm sm:text-base shadow-sm hover:shadow-md max-md:w-full max-md:min-h-11 max-md:justify-center"
-                  >
-                    <Rocket className="w-4 h-4 sm:w-5 sm:h-5" />
-                    <span>Launch Quiz</span>
-                  </button>
-                  <LaunchRequiresSessionHint className="md:hidden" />
-                </div>
-              )}
+          <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between md:gap-3">
+            <div className="min-w-0">
+              <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-gray-900 mb-1 sm:mb-2 max-md:text-xl">
+                Create Long Answer Quiz
+              </h1>
+              <p className="text-sm sm:text-base lg:text-lg text-gray-600 max-w-2xl">
+                Add your quiz title and start creating questions
+              </p>
             </div>
+            <QuizEditorHeaderActions
+              mode={mode}
+              saving={saving}
+              onSave={saveQuiz}
+              onLaunch={launchQuiz}
+            />
           </div>
-          
-          <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-gray-900 mb-3 sm:mb-4 mt-1 max-md:text-xl">
-            Create Long Answer Quiz
-          </h1>
-          <p className="text-sm sm:text-base lg:text-lg text-gray-600 max-w-2xl">
-            Add your quiz title and start creating questions
-          </p>
         </div>
 
         {/* Quiz Title Section */}
@@ -354,14 +348,14 @@ const CreateLongAnswerQuiz = () => {
           type: 'Long Answer',
           questions: questions
         }}
-        existingAccessCode={getActiveTeacherSession(teacherData.activeSession)?.joinCode || ''}
+        existingAccessCode={launchAccessCode || getActiveTeacherSession(teacherData.activeSession)?.joinCode || ''}
       />
 
       <NoActiveSessionLaunchModal
         isOpen={showNoSessionModal}
         onClose={() => setShowNoSessionModal(false)}
         onSaveAsDraft={async () => {
-          if (!isQuizSaved) {
+          if (mode !== 'saved') {
             await saveQuiz();
           } else {
             alert.toast.success('Quiz is already saved as a draft');
