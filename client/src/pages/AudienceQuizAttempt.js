@@ -2296,7 +2296,14 @@ const AudienceQuizAttempt = ({
           <div className={`bg-white rounded-3xl shadow-soft border border-primary/10 w-full text-center ${isSpaceRace ? 'sr-student-complete-card' : 'p-8 max-w-md'}`}>
             <CheckCircle className={`${isSpaceRace ? 'sr-student-complete-icon' : 'w-20 h-20 mb-6'} text-primary mx-auto`} />
             <h1 className={`font-bold text-text ${isSpaceRace ? 'sr-student-complete-title' : 'text-3xl mb-4'}`}>
-              {isSpaceRace ? 'Space Race Quiz Completed!' : 'Quiz Completed!'}
+              {isSpaceRace ? (
+                <>
+                  <span className="sr-student-complete-title-line">Space Race Quiz</span>
+                  <span className="sr-student-complete-title-line">Completed!</span>
+                </>
+              ) : (
+                'Quiz Completed!'
+              )}
             </h1>
             <p className={`text-text-light ${isSpaceRace ? 'sr-student-complete-subtitle' : 'text-lg mb-6'}`}>
               Thank you for completing the quiz!
@@ -2378,7 +2385,14 @@ const AudienceQuizAttempt = ({
           </div>
           
           <h1 className={`font-bold text-text ${isSpaceRace ? 'sr-student-complete-title' : 'text-3xl mb-4'}`}>
-            {isSpaceRace ? 'Space Race Quiz Completed!' : 'Quiz Completed!'}
+            {isSpaceRace ? (
+              <>
+                <span className="sr-student-complete-title-line">Space Race Quiz</span>
+                <span className="sr-student-complete-title-line">Completed!</span>
+              </>
+            ) : (
+              'Quiz Completed!'
+            )}
           </h1>
           
           <p className={`text-text-light ${isSpaceRace ? 'sr-student-complete-subtitle' : 'text-lg mb-6'}`}>

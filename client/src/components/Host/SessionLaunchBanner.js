@@ -1,12 +1,13 @@
 import React, { useState } from 'react';
 import { createPortal } from 'react-dom';
-import { AlertTriangle, CheckCircle2, Copy, X } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, X } from 'lucide-react';
 import clsx from 'clsx';
 import { useHostData } from '../../contexts/HostDataContext';
 import { useHybridAlert } from '../../contexts/HybridAlertContext';
 import { copyToClipboard } from '../../utils/copyToClipboard';
 import { getSessionActivityLabel } from '../../utils/sessionActivityLabel';
 import { GUEST_LOGIN_BANNER_BG_CLASS } from '../Audience/GuestProgressLoginBanner';
+import SessionCreatedPopup from './SessionCreatedPopup';
 
 /**
  * Compact session-status strip for content-creation pages.
@@ -158,42 +159,14 @@ export default function SessionLaunchBanner({ className = '' }) {
           document.body
         )}
 
-      {showCreatedPopup &&
-        createdSessionData &&
-        createPortal(
-          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[9999] p-4">
-            <div className="bg-white rounded-2xl p-6 w-full max-w-md shadow-2xl text-center">
-              <div className="w-14 h-14 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-3">
-                <CheckCircle2 className="w-7 h-7 text-green-500" />
-              </div>
-              <h2 className="text-xl font-bold text-[#2E1F2A] mb-1">Session Created!</h2>
-              <p className="text-sm text-[#5A4A55] mb-4">
-                Code:{' '}
-                <span className="font-bold text-[#6D415F] tracking-wider">
-                  {createdSessionData.sessionCode}
-                </span>
-              </p>
-              <div className="flex gap-3">
-                <button
-                  type="button"
-                  onClick={(e) => handleCopyCode(createdSessionData.sessionCode, e)}
-                  className="flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-[#6D415F] text-white font-semibold hover:bg-[#6D415F]/90 transition-colors"
-                >
-                  <Copy className="w-4 h-4" />
-                  Copy Code
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setShowCreatedPopup(false)}
-                  className="flex-1 px-4 py-3 rounded-xl border border-gray-300 text-[#2E1F2A] font-semibold hover:bg-gray-50 transition-colors"
-                >
-                  Done
-                </button>
-              </div>
-            </div>
-          </div>,
-          document.body
-        )}
+      {showCreatedPopup && createdSessionData ? (
+        <SessionCreatedPopup
+          sessionName={createdSessionData.sessionName}
+          sessionCode={createdSessionData.sessionCode}
+          onCopy={handleCopyCode}
+          onDone={() => setShowCreatedPopup(false)}
+        />
+      ) : null}
     </>
   );
 }
