@@ -4,7 +4,9 @@ import { Rocket, Trophy, Clock, Users, Star, Zap, Flame, Flag } from 'lucide-rea
 import { useRtdbList, useRtdbValue } from '../../hooks/useRtdb';
 import { spaceRacesAPI } from '../../services/api';
 import { getStoredAudienceSession } from '../../utils/audienceSession';
+import { isJoinWindowExpired } from '../../utils/spaceRaceJoinWindow';
 import AudiencePostActivityHomeButton from '../Audience/AudiencePostActivityHomeButton';
+import SpaceRaceQuizClosedCard from './SpaceRaceQuizClosedCard';
 
 const TimerDisplay = ({ timerInfo, onTimeUp }) => {
   const [timeLeft, setTimeLeft] = useState(0);
@@ -57,7 +59,7 @@ const TimerDisplay = ({ timerInfo, onTimeUp }) => {
 };
 
 // Join duration timer component
-const JoinDurationTimer = ({ raceData, className = '' }) => {
+const JoinDurationTimer = ({ raceData, serverTimeOffset = 0, className = '' }) => {
   const [timeLeft, setTimeLeft] = useState('--:--');
   const [progress, setProgress] = useState(1);
 
@@ -78,7 +80,7 @@ const JoinDurationTimer = ({ raceData, className = '' }) => {
           return;
         }
 
-        const now = new Date().getTime();
+        const now = Date.now() + (Number(serverTimeOffset) || 0);
         const start = new Date(raceData.startedAt).getTime();
         const joinDurationMinutes = raceData.settings?.joinDuration || 30;
         const joinDurationMs = joinDurationMinutes * 60 * 1000;
@@ -107,7 +109,7 @@ const JoinDurationTimer = ({ raceData, className = '' }) => {
     const timer = setInterval(calculateTimeLeft, 1000);
 
     return () => clearInterval(timer);
-  }, [raceData]);
+  }, [raceData, serverTimeOffset]);
 
   return (
     <span className={className}>
@@ -163,9 +165,14 @@ export default function SpaceRaceGamePanel({
   compact = false,
 }) {
   const navigate = useNavigate();
-  const { value: raceData } = useRtdbValue(raceId ? `spaceRaces/${raceId}` : null, {
+  const { value: raceData, loading: raceLoading } = useRtdbValue(raceId ? `spaceRaces/${raceId}` : null, {
     enabled: Boolean(raceId),
   });
+  const { value: serverTimeOffsetRaw } = useRtdbValue('.info/serverTimeOffset', {
+    enabled: Boolean(raceId),
+  });
+  const serverTimeOffset = Number(serverTimeOffsetRaw) || 0;
+  const [clockTick, setClockTick] = useState(() => Date.now());
 
   // Listen to team-specific timer
   const { value: teamTimer } = useRtdbValue(
@@ -174,6 +181,16 @@ export default function SpaceRaceGamePanel({
   );
 
   const [quizTimeExpired, setQuizTimeExpired] = useState(false);
+  const [joinBlockedByApi, setJoinBlockedByApi] = useState(false);
+
+  useEffect(() => {
+    const interval = setInterval(() => setClockTick(Date.now()), 1000);
+    return () => clearInterval(interval);
+  }, []);
+
+  const joinWindowExpired =
+    joinBlockedByApi ||
+    (!raceLoading && isJoinWindowExpired(raceData, clockTick + serverTimeOffset));
 
   useEffect(() => {
     if (!teamTimer?.endTime) {
@@ -323,6 +340,10 @@ export default function SpaceRaceGamePanel({
   const handleStartQuiz = async () => {
     const qId = quizId || raceData?.quizId;
     if (qId && raceId && participant?.teamId != null) {
+      if (isJoinWindowExpired(raceData, Date.now() + serverTimeOffset)) {
+        setJoinBlockedByApi(true);
+        return;
+      }
       if (teamTimer?.endTime && new Date(teamTimer.endTime).getTime() <= Date.now()) {
         setQuizTimeExpired(true);
         return;
@@ -341,7 +362,8 @@ export default function SpaceRaceGamePanel({
         });
 
         if (response.data?.expired) {
-          setQuizTimeExpired(true);
+          if (response.data?.joinWindowExpired) setJoinBlockedByApi(true);
+          else setQuizTimeExpired(true);
           return;
         }
 
@@ -354,7 +376,8 @@ export default function SpaceRaceGamePanel({
         }
       } catch (error) {
         if (error?.response?.data?.expired) {
-          setQuizTimeExpired(true);
+          if (error.response.data.joinWindowExpired) setJoinBlockedByApi(true);
+          else setQuizTimeExpired(true);
           return;
         }
         console.error('Failed to start quiz timer:', error);
@@ -482,7 +505,7 @@ export default function SpaceRaceGamePanel({
           {!window.location.pathname.includes('/quiz/') && (
             <div className="flex items-baseline gap-2 shrink-0">
               <span className="text-text/60 text-xs">Time left</span>
-              <JoinDurationTimer raceData={raceData} className="text-lg font-semibold text-primary" />
+              <JoinDurationTimer raceData={raceData} serverTimeOffset={serverTimeOffset} className="text-lg font-semibold text-primary" />
             </div>
           )}
           {window.location.pathname.includes('/quiz/') && teamTimer?.endTime && (
@@ -511,7 +534,7 @@ export default function SpaceRaceGamePanel({
           {!window.location.pathname.includes('/quiz/') && (
             <div className="flex flex-col items-end shrink-0">
               <span className="text-text/60 text-xs">Time left</span>
-              <JoinDurationTimer raceData={raceData} className="text-base font-semibold text-primary tabular-nums" />
+              <JoinDurationTimer raceData={raceData} serverTimeOffset={serverTimeOffset} className="text-base font-semibold text-primary tabular-nums" />
             </div>
           )}
           {window.location.pathname.includes('/quiz/') && teamTimer?.endTime && (
@@ -522,7 +545,24 @@ export default function SpaceRaceGamePanel({
           )}
         </div>
 
-        {hasQuiz && !window.location.pathname.includes('/quiz/') && !hasAttemptedQuiz && !quizTimeExpired && (
+        {hasQuiz &&
+          !window.location.pathname.includes('/quiz/') &&
+          !hasAttemptedQuiz &&
+          !raceLoading &&
+          joinWindowExpired && (
+          <div className="mt-6 flex justify-center">
+            <SpaceRaceQuizClosedCard
+              onBack={() => navigate(`/audience/space-race/${raceId}`, { replace: true })}
+            />
+          </div>
+        )}
+
+        {hasQuiz &&
+          !window.location.pathname.includes('/quiz/') &&
+          !hasAttemptedQuiz &&
+          !raceLoading &&
+          !joinWindowExpired &&
+          !quizTimeExpired && (
           <div className="mt-6 flex flex-col items-center gap-3">
             <p className="text-text text-sm w-full max-md:text-center">
               The quiz is ready — start it whenever you&apos;re set, and coordinate with your teammates along the way.
@@ -537,7 +577,12 @@ export default function SpaceRaceGamePanel({
           </div>
         )}
 
-        {hasQuiz && !window.location.pathname.includes('/quiz/') && !hasAttemptedQuiz && quizTimeExpired && (
+        {hasQuiz &&
+          !window.location.pathname.includes('/quiz/') &&
+          !hasAttemptedQuiz &&
+          !raceLoading &&
+          !joinWindowExpired &&
+          quizTimeExpired && (
           <div className="mt-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
             <p className="text-text text-sm">Time&apos;s up — this quiz is closed and can no longer be opened or attempted.</p>
             <div className="px-5 py-2 bg-neutral-300 text-neutral-600 rounded-lg font-semibold whitespace-nowrap">

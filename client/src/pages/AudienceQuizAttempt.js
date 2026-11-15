@@ -34,6 +34,8 @@ import {
   remainingSecondsUntil,
   isQuizDurationLimited,
 } from '../utils/spaceRaceQuestionTimer';
+import { isJoinWindowExpired } from '../utils/spaceRaceJoinWindow';
+import SpaceRaceQuizClosedCard from '../components/SpaceRace/SpaceRaceQuizClosedCard';
 import {
   AudienceActivityHeader,
   AudienceActivityCard,
@@ -573,6 +575,37 @@ const AudienceQuizAttempt = ({
 
       const teamIdForTimer = normalizeTeamId(participantData?.teamId);
 
+      const raceForJoin = raceData || raceDataStored;
+      let closeForJoinWindow = false;
+      if (raceForJoin) {
+        setRaceData((prev) => ({ ...(prev || {}), ...raceForJoin }));
+        let offsetMs = 0;
+        try {
+          const offsetSnap = await get(dbRef(db, '.info/serverTimeOffset'));
+          offsetMs = Number(offsetSnap.val()) || 0;
+        } catch {
+          offsetMs = 0;
+        }
+        if (isJoinWindowExpired(raceForJoin, Date.now() + offsetMs)) {
+          let teamStarted = false;
+          if (teamIdForTimer != null) {
+            try {
+              const timerSnap = await get(
+                dbRef(db, `space_race_team_timers/${raceIdResolved}/team_${teamIdForTimer}`)
+              );
+              teamStarted = Boolean(timerSnap.exists() && timerSnap.val()?.quizStartedAt);
+            } catch {
+              teamStarted = false;
+            }
+          }
+          if (!teamStarted) {
+            setQuizTimeExpired(true);
+            return true;
+          }
+          closeForJoinWindow = true;
+        }
+      }
+
       // If we have race data with quiz, use it (always fresh)
       if (raceData?.quiz) {
         const quizCountdown = resolveQuizDurationSeconds(
@@ -602,6 +635,7 @@ const AudienceQuizAttempt = ({
           await startQuizTimer(raceIdResolved, fromApi, teamIdForTimer, raceData.settings);
           // Re-apply timer after startQuizTimer to ensure synchronized endTime is used
           applyQuizTimer(fromApi, null, { forceSpaceRace: true });
+          if (closeForJoinWindow) setQuizTimeExpired(true);
           return true;
         }
       }
@@ -625,6 +659,7 @@ const AudienceQuizAttempt = ({
               await startQuizTimer(raceIdResolved, normalized, teamIdForTimer, raceDataStored?.settings || raceData?.settings);
               // Re-apply timer after startQuizTimer to ensure synchronized endTime is used
               applyQuizTimer(normalized, null, { forceSpaceRace: true });
+              if (closeForJoinWindow) setQuizTimeExpired(true);
               return true;
             }
           } else {
@@ -650,6 +685,7 @@ const AudienceQuizAttempt = ({
               await startQuizTimer(raceIdResolved, normalized, teamIdForTimer, raceDataStored?.settings || raceData?.settings);
               // Re-apply timer after startQuizTimer to ensure synchronized endTime is used
               applyQuizTimer(normalized, null, { forceSpaceRace: true });
+              if (closeForJoinWindow) setQuizTimeExpired(true);
               return true;
             }
           }
@@ -670,6 +706,7 @@ const AudienceQuizAttempt = ({
           await startQuizTimer(raceIdResolved, fromRace, teamIdForTimer);
           // Re-apply timer after startQuizTimer to ensure synchronized endTime is used
           applyQuizTimer(fromRace, null, { forceSpaceRace: true });
+          if (closeForJoinWindow) setQuizTimeExpired(true);
           return true;
         }
       }
@@ -926,6 +963,40 @@ const AudienceQuizAttempt = ({
       }
     };
   }, [isSpaceRace, raceId, teamId]);
+
+  useEffect(() => {
+    if (!isSpaceRace || !raceId) return undefined;
+    const raceLiveRef = dbRef(db, `spaceRaces/${raceId}`);
+    const unsub = onValue(raceLiveRef, (snap) => {
+      if (!snap.exists()) return;
+      const live = snap.val() || {};
+      setRaceData((prev) => ({
+        ...(prev || {}),
+        startedAt: live.startedAt,
+        status: live.status,
+        settings: { ...(prev?.settings || {}), ...(live.settings || {}) },
+      }));
+    });
+    return () => {
+      try {
+        unsub();
+      } catch {
+        off(raceLiveRef);
+      }
+    };
+  }, [isSpaceRace, raceId]);
+
+  useEffect(() => {
+    if (!isSpaceRace || isSubmitted) return undefined;
+    const tick = () => {
+      if (isJoinWindowExpired(raceData, Date.now() + serverTimeOffset)) {
+        setQuizTimeExpired(true);
+      }
+    };
+    tick();
+    const timer = setInterval(tick, 1000);
+    return () => clearInterval(timer);
+  }, [isSpaceRace, isSubmitted, raceData, serverTimeOffset]);
 
   const spaceRaceQuizDurationLimited = isQuizDurationLimited(
     raceData?.settings?.countdown ??
@@ -1552,6 +1623,10 @@ const AudienceQuizAttempt = ({
   const handleSubmitTeamAnswer = async () => {
     if (!isSpaceRace || !quiz || !raceId || !participantId || isCurrentQuestionSubmitted) return;
     if (quizTimeExpired) return;
+    if (isJoinWindowExpired(raceData, Date.now() + serverTimeOffset)) {
+      setQuizTimeExpired(true);
+      return;
+    }
     if (teamQuizEndTime) {
       const remaining = remainingSecondsUntil(teamQuizEndTime, Date.now() + serverTimeOffset);
       if (remaining != null && remaining <= 0) {
@@ -2155,21 +2230,11 @@ const AudienceQuizAttempt = ({
   if (isSpaceRace && quizTimeExpired && !isSubmitted) {
     return (
       <div className={`${shellClass} flex items-center justify-center p-4 min-h-full h-full`}>
-        <div className="bg-white rounded-3xl shadow-soft border border-primary/10 p-8 max-w-md w-full text-center">
-          <Clock className="w-16 h-16 text-error-500 mx-auto mb-4" />
-          <h1 className="text-2xl font-bold text-text mb-4">Time&apos;s Up</h1>
-          <p className="text-text-light mb-6">
-            This quiz is closed. Your team&apos;s time has ended, so it can no longer be opened or attempted.
-          </p>
-          <button
-            onClick={() =>
-              navigate(raceId ? `/audience/space-race/${raceId}` : '/audience/home', { replace: true })
-            }
-            className="px-6 py-3 bg-primary text-white rounded-xl hover:bg-primary/90 transition-colors"
-          >
-            Back to Race
-          </button>
-        </div>
+        <SpaceRaceQuizClosedCard
+          onBack={() =>
+            navigate(raceId ? `/audience/space-race/${raceId}` : '/audience/home', { replace: true })
+          }
+        />
       </div>
     );
   }
@@ -2203,24 +2268,24 @@ const AudienceQuizAttempt = ({
     // If showFinalScore is false, show a simple completion message without score
     if (!showFinalScore) {
       return (
-        <div className={`${shellClass} flex items-center justify-center p-4 ${isSpaceRace ? 'min-h-full h-full' : 'min-h-screen'}`}>
-          <div className={`bg-white rounded-3xl shadow-soft border border-primary/10 max-w-md w-full text-center ${isSpaceRace ? 'p-5' : 'p-8'}`}>
-            <CheckCircle className={`w-20 h-20 text-primary mx-auto ${isSpaceRace ? 'mb-3' : 'mb-6'}`} />
-            <h1 className={`text-3xl font-bold text-text ${isSpaceRace ? 'mb-2' : 'mb-4'}`}>
+        <div className={`${shellClass} flex items-center justify-center ${isSpaceRace ? 'min-h-0 h-full overflow-y-auto px-3 py-2 md:py-3' : 'p-4 min-h-screen'}`}>
+          <div className={`bg-white rounded-3xl shadow-soft border border-primary/10 w-full text-center ${isSpaceRace ? 'p-5 md:p-[clamp(0.75rem,1.8vh,1.25rem)] max-w-md md:max-w-[720px] my-auto' : 'p-8 max-w-md'}`}>
+            <CheckCircle className={`${isSpaceRace ? 'w-16 h-16 md:w-[clamp(3.5rem,7vh,4.5rem)] md:h-[clamp(3.5rem,7vh,4.5rem)] mb-3 md:mb-[clamp(0.25rem,1vh,0.5rem)]' : 'w-20 h-20 mb-6'} text-primary mx-auto`} />
+            <h1 className={`font-bold text-text ${isSpaceRace ? 'text-3xl md:text-[clamp(1.625rem,3vh,2rem)] mb-2 md:mb-[clamp(0.25rem,0.8vh,0.5rem)] md:whitespace-nowrap' : 'text-3xl mb-4'}`}>
               {isSpaceRace ? 'Space Race Quiz Completed!' : 'Quiz Completed!'}
             </h1>
-            <p className={`text-lg text-text-light ${isSpaceRace ? 'mb-3' : 'mb-6'}`}>
+            <p className={`text-text-light ${isSpaceRace ? 'text-lg md:text-[clamp(1rem,2.2vh,1.125rem)] mb-3 md:mb-[clamp(0.5rem,1.2vh,0.75rem)]' : 'text-lg mb-6'}`}>
               Thank you for completing the quiz!
             </p>
 
-            <div className={isSpaceRace ? 'mb-3' : 'mb-6'}>
-              <p className={`text-sm text-text-light ${isSpaceRace ? 'mb-1.5' : 'mb-2'}`}>
+            <div className={isSpaceRace ? 'mb-3 md:mb-[clamp(0.5rem,1.2vh,0.75rem)]' : 'mb-6'}>
+              <p className={`text-sm text-text-light ${isSpaceRace ? 'mb-1.5 md:text-[clamp(0.8125rem,1.8vh,0.875rem)] md:mb-1' : 'mb-2'}`}>
                 Redirecting {isSpaceRace ? 'back to Space Race' : 'to homepage'} in{' '}
                 <span className="font-semibold text-primary">{redirectCountdown}</span> seconds...
               </p>
-              <div className="w-full bg-neutral-200 rounded-full h-2">
+              <div className={`w-full bg-neutral-200 rounded-full ${isSpaceRace ? 'h-2 md:h-1.5' : 'h-2'}`}>
                 <div
-                  className="bg-primary h-2 rounded-full transition-all duration-1000 ease-linear"
+                  className={`bg-primary rounded-full transition-all duration-1000 ease-linear ${isSpaceRace ? 'h-2 md:h-1.5' : 'h-2'}`}
                   style={{ width: `${(redirectCountdown / 10) * 100}%` }}
                 />
               </div>
@@ -2230,7 +2295,7 @@ const AudienceQuizAttempt = ({
               <button
                 type="button"
                 onClick={navigateHome}
-                className="w-full px-6 py-3 bg-primary text-white rounded-xl hover:bg-primary/90 transition-colors"
+                className="w-full px-6 py-3 md:py-2.5 md:min-h-11 md:text-base bg-primary text-white rounded-xl hover:bg-primary/90 transition-colors"
               >
                 Back to Space Race
               </button>
@@ -2280,22 +2345,22 @@ const AudienceQuizAttempt = ({
     };
 
     return (
-      <div className={`${shellClass} flex items-center justify-center p-4 ${isSpaceRace ? 'min-h-full h-full' : 'min-h-screen'}`}>
-        <div className={`bg-white rounded-3xl shadow-soft border border-primary/10 max-w-md w-full text-center ${isSpaceRace ? 'p-5' : 'p-8'}`}>
-          <div className={`w-20 h-20 rounded-full flex items-center justify-center mx-auto ${isSpaceRace ? 'mb-3' : 'mb-6'} ${getScoreBgColor(displayPercentage)}`}>
-            <CheckCircle className={`w-10 h-10 ${getScoreTextColor(displayPercentage)}`} />
+      <div className={`${shellClass} flex items-center justify-center ${isSpaceRace ? 'min-h-0 h-full overflow-y-auto px-3 py-2 md:py-3' : 'p-4 min-h-screen'}`}>
+        <div className={`bg-white rounded-3xl shadow-soft border border-primary/10 w-full text-center ${isSpaceRace ? 'p-5 md:p-[clamp(0.75rem,1.8vh,1.25rem)] max-w-md md:max-w-[720px] my-auto' : 'p-8 max-w-md'}`}>
+          <div className={`${isSpaceRace ? 'w-16 h-16 md:w-[clamp(3.5rem,7vh,4.5rem)] md:h-[clamp(3.5rem,7vh,4.5rem)] mb-3 md:mb-[clamp(0.25rem,1vh,0.5rem)]' : 'w-20 h-20 mb-6'} rounded-full flex items-center justify-center mx-auto ${getScoreBgColor(displayPercentage)}`}>
+            <CheckCircle className={`${isSpaceRace ? 'w-8 h-8 md:w-[clamp(1.5rem,3.5vh,2.25rem)] md:h-[clamp(1.5rem,3.5vh,2.25rem)]' : 'w-10 h-10'} ${getScoreTextColor(displayPercentage)}`} />
           </div>
           
-          <h1 className={`text-3xl font-bold text-text ${isSpaceRace ? 'mb-2' : 'mb-4'}`}>
+          <h1 className={`font-bold text-text ${isSpaceRace ? 'text-3xl md:text-[clamp(1.625rem,3vh,2rem)] mb-2 md:mb-[clamp(0.25rem,0.8vh,0.5rem)] md:whitespace-nowrap' : 'text-3xl mb-4'}`}>
             {isSpaceRace ? 'Space Race Quiz Completed!' : 'Quiz Completed!'}
           </h1>
           
-          <p className={`text-lg text-text-light ${isSpaceRace ? 'mb-3' : 'mb-6'}`}>
+          <p className={`text-text-light ${isSpaceRace ? 'text-lg md:text-[clamp(1rem,2.2vh,1.125rem)] mb-3 md:mb-[clamp(0.375rem,1vh,0.75rem)]' : 'text-lg mb-6'}`}>
             {getPerformanceComment(displayPercentage)}
           </p>
 
           {submissionSyncFailed && (
-            <div className={`${isSpaceRace ? 'mb-3' : 'mb-6'} rounded-xl border border-amber-200 bg-amber-50 p-4 text-left`}>
+            <div className={`rounded-xl border border-amber-200 bg-amber-50 text-left ${isSpaceRace ? 'mb-3 md:mb-2 p-4 md:p-3' : 'mb-6 p-4'}`}>
               <div className="flex items-start gap-2">
                 <AlertCircle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
                 <div className="min-w-0">
@@ -2318,48 +2383,48 @@ const AudienceQuizAttempt = ({
           )}
           
           {/* Score Card with Visual Representation */}
-          <div className={`bg-gradient-to-r from-primary/5 to-primary/10 rounded-2xl ${isSpaceRace ? 'p-4 mb-3' : 'p-6 mb-6'}`}>
-            <div className={`text-5xl font-bold text-primary ${isSpaceRace ? 'mb-1' : 'mb-2'}`}>
+          <div className={`bg-gradient-to-r from-primary/5 to-primary/10 rounded-2xl ${isSpaceRace ? 'p-4 md:p-[clamp(0.5rem,1.4vh,1rem)] mb-3 md:mb-[clamp(0.5rem,1.2vh,0.75rem)]' : 'p-6 mb-6'}`}>
+            <div className={`font-bold text-primary ${isSpaceRace ? 'text-5xl md:text-[clamp(2.75rem,6.5vh,3.5rem)] mb-1 md:mb-0.5' : 'text-5xl mb-2'}`}>
               {displayPercentage}%
             </div>
-            <p className={`text-text-light ${isSpaceRace ? 'mb-2' : 'mb-4'}`}>
+            <p className={`text-text-light ${isSpaceRace ? 'mb-2 md:text-[clamp(0.9375rem,2vh,1rem)] md:mb-1.5' : 'mb-4'}`}>
               {isSpaceRace
                 ? `Your team scored ${displayPercentage}% (${displayScore} of ${displayTotal} correct)`
                 : `You got ${displayScore} out of ${displayTotal} questions correct`}
             </p>
             
             {/* Visual Score Bar */}
-            <div className="w-full bg-neutral-200 rounded-full h-4 overflow-hidden">
+            <div className={`w-full bg-neutral-200 rounded-full overflow-hidden ${isSpaceRace ? 'h-4 md:h-[clamp(0.625rem,1.5vh,0.75rem)]' : 'h-4'}`}>
               <div 
-                className={`${getScoreColor(displayPercentage)} h-4 rounded-full transition-all duration-500 ease-out`}
+                className={`${getScoreColor(displayPercentage)} rounded-full transition-all duration-500 ease-out ${isSpaceRace ? 'h-4 md:h-[clamp(0.625rem,1.5vh,0.75rem)]' : 'h-4'}`}
                 style={{ width: `${displayPercentage}%` }}
               ></div>
             </div>
             
             {/* Score Breakdown */}
-            <div className={`${isSpaceRace ? 'mt-3' : 'mt-4'} grid grid-cols-3 gap-2 text-center`}>
-              <div className="bg-white/50 rounded-lg p-2">
-                <div className="text-2xl font-bold text-text">{displayScore}</div>
-                <div className="text-xs text-text-light">Correct</div>
+            <div className={`${isSpaceRace ? 'mt-3 md:mt-[clamp(0.375rem,1vh,0.75rem)]' : 'mt-4'} grid grid-cols-3 gap-2 text-center`}>
+              <div className={`bg-white/50 rounded-lg ${isSpaceRace ? 'p-2 md:py-1.5 md:px-1' : 'p-2'}`}>
+                <div className={`font-bold text-text ${isSpaceRace ? 'text-2xl md:text-[clamp(1.375rem,3vh,1.625rem)]' : 'text-2xl'}`}>{displayScore}</div>
+                <div className={`text-text-light ${isSpaceRace ? 'text-xs md:text-[13px]' : 'text-xs'}`}>Correct</div>
               </div>
-              <div className="bg-white/50 rounded-lg p-2">
-                <div className="text-2xl font-bold text-text">{displayTotal - displayScore}</div>
-                <div className="text-xs text-text-light">Incorrect</div>
+              <div className={`bg-white/50 rounded-lg ${isSpaceRace ? 'p-2 md:py-1.5 md:px-1' : 'p-2'}`}>
+                <div className={`font-bold text-text ${isSpaceRace ? 'text-2xl md:text-[clamp(1.375rem,3vh,1.625rem)]' : 'text-2xl'}`}>{displayTotal - displayScore}</div>
+                <div className={`text-text-light ${isSpaceRace ? 'text-xs md:text-[13px]' : 'text-xs'}`}>Incorrect</div>
               </div>
-              <div className="bg-white/50 rounded-lg p-2">
-                <div className="text-2xl font-bold text-text">{displayTotal}</div>
-                <div className="text-xs text-text-light">Total</div>
+              <div className={`bg-white/50 rounded-lg ${isSpaceRace ? 'p-2 md:py-1.5 md:px-1' : 'p-2'}`}>
+                <div className={`font-bold text-text ${isSpaceRace ? 'text-2xl md:text-[clamp(1.375rem,3vh,1.625rem)]' : 'text-2xl'}`}>{displayTotal}</div>
+                <div className={`text-text-light ${isSpaceRace ? 'text-xs md:text-[13px]' : 'text-xs'}`}>Total</div>
               </div>
             </div>
           </div>
           
-          <div className={isSpaceRace ? 'mb-3' : 'mb-6'}>
-            <p className={`text-sm text-text-light ${isSpaceRace ? 'mb-1.5' : 'mb-2'}`}>
+          <div className={isSpaceRace ? 'mb-3 md:mb-[clamp(0.5rem,1.2vh,0.75rem)]' : 'mb-6'}>
+            <p className={`text-sm text-text-light ${isSpaceRace ? 'mb-1.5 md:text-[clamp(0.8125rem,1.8vh,0.875rem)] md:mb-1' : 'mb-2'}`}>
               Redirecting {isSpaceRace ? 'back to Space Race' : 'to homepage'} in <span className="font-semibold text-primary">{redirectCountdown}</span> seconds...
             </p>
-            <div className="w-full bg-neutral-200 rounded-full h-2">
+            <div className={`w-full bg-neutral-200 rounded-full ${isSpaceRace ? 'h-2 md:h-1.5' : 'h-2'}`}>
               <div 
-                className="bg-primary h-2 rounded-full transition-all duration-1000 ease-linear"
+                className={`bg-primary rounded-full transition-all duration-1000 ease-linear ${isSpaceRace ? 'h-2 md:h-1.5' : 'h-2'}`}
                 style={{ width: `${(redirectCountdown / 10) * 100}%` }}
               ></div>
             </div>
@@ -2374,7 +2439,7 @@ const AudienceQuizAttempt = ({
                   navigate('/audience/home', { replace: true });
                 }
               }}
-              className="w-full px-6 py-3 bg-primary text-white rounded-xl hover:bg-primary/90 transition-colors"
+              className="w-full px-6 py-3 md:py-2.5 md:min-h-11 md:text-base bg-primary text-white rounded-xl hover:bg-primary/90 transition-colors"
             >
               Back to Space Race
             </button>
@@ -2428,8 +2493,22 @@ const AudienceQuizAttempt = ({
   }).length;
   const progress = (answeredQuestions / quiz.questions.length) * 100;
 
+  const showTimedQuizBanner = Boolean(
+    !isSpaceRace &&
+      quiz.launchSettings &&
+      (quiz.launchSettings.timePerStudentMinutes ||
+        quiz.launchSettings.quizAvailabilityMinutes ||
+        quiz.launchSettings.timeLimit ||
+        quiz.launchSettings.countdown)
+  );
+  const countdownToneClass = isSpaceRace
+    ? timeLeft < 60
+      ? 'text-error-600'
+      : 'text-success-600'
+    : 'text-primary';
+
   return (
-    <div className={shellClass}>
+    <div className={`${shellClass} max-md:bg-background max-md:bg-none`}>
       {/* Quiz Info Header */}
       {!embedded && (
       <AudienceActivityHeader
@@ -2439,9 +2518,9 @@ const AudienceQuizAttempt = ({
         showLoggedInLogoutMenu
         phoneHeaderVariant="quiz"
       >
-          {/* Duration notice + single live countdown (header shows Duration label only) */}
-          {(!isSpaceRace && (quiz.launchSettings && (quiz.launchSettings.timePerStudentMinutes || quiz.launchSettings.quizAvailabilityMinutes || quiz.launchSettings.timeLimit || quiz.launchSettings.countdown))) && (
-            <div className="mt-2 px-3 py-2 rounded-lg border bg-primary/10 border-primary/20">
+          {/* Desktop/wide: duration sentence + countdown. Hidden below md. */}
+          {showTimedQuizBanner && (
+            <div className="hidden md:block mt-2 px-3 py-2 rounded-lg border bg-primary/10 border-primary/20">
               <div className="flex items-center justify-between">
                 <div className="flex items-center space-x-2 text-primary">
                   <Clock className="w-4 h-4" />
@@ -2461,11 +2540,7 @@ const AudienceQuizAttempt = ({
                   </span>
                 </div>
                 {timeLeft !== null && (
-                  <div className={`text-sm font-medium ${
-                    isSpaceRace
-                      ? (timeLeft < 60 ? 'text-error-600' : 'text-success-600')
-                      : 'text-primary'
-                  }`}>
+                  <div className={`text-sm font-medium ${countdownToneClass}`}>
                     Time remaining: {formatTime(timeLeft)}
                   </div>
                 )}
@@ -2483,7 +2558,17 @@ const AudienceQuizAttempt = ({
 
       {/* Quiz Content — single card: progress, question, options, and nav are siblings */}
       <div className={`${quizPageWidthClass} py-4`}>
-        <AudienceActivityCard
+        {showTimedQuizBanner && timeLeft !== null && (
+          <div
+            className={`md:hidden mb-4 flex items-center gap-2 rounded-2xl bg-[#F1E5EB] px-4 py-[14px] ${countdownToneClass}`}
+          >
+            <Clock className="w-5 h-5 shrink-0" aria-hidden="true" />
+            <span className="min-w-0 text-base font-bold whitespace-nowrap tabular-nums">
+              Time remaining: {formatTime(timeLeft)}
+            </span>
+          </div>
+        )}
+        <AudienceActivityCard>
           key={currentQuestionId || `q-${currentQuestion}`}
         >
           <div className="flex items-center justify-between shrink-0">

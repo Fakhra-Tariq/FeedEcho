@@ -28,6 +28,10 @@ const {
   buildSharedTeamScoreUpdates,
   isTeamQuizTimerExpired,
 } = require('../utils/spaceRaceTeamScore');
+const {
+  isJoinWindowExpired,
+  JOIN_WINDOW_EXPIRED_PAYLOAD,
+} = require('../utils/spaceRaceJoinWindow');
 const router = express.Router();
 
 // ERD-aligned RTDB paths
@@ -1323,6 +1327,10 @@ router.post('/:id/submit-answer', async (req, res) => {
       return res.status(400).json({ success: false, error: 'Participant is not assigned to a team' });
     }
 
+    if (isJoinWindowExpired(race)) {
+      return res.status(403).json(JOIN_WINDOW_EXPIRED_PAYLOAD);
+    }
+
     const timerState = await isTeamQuizTimerExpired(id, teamId);
     if (timerState.expired) {
       return res.status(403).json({
@@ -1542,19 +1550,25 @@ router.post('/:id/start-quiz', async (req, res) => {
     }
     
     const race = raceSnap.val();
+
+    // Store timer per team instead of globally
+    const teamTimerPath = `space_race_team_timers/${id}/team_${teamId}`;
+    const teamTimerSnap = await db.ref(teamTimerPath).get();
+    const existingTimer = teamTimerSnap.exists() ? teamTimerSnap.val() || {} : null;
+    const teamAlreadyStarted = Boolean(existingTimer?.quizStartedAt);
+
+    if (isJoinWindowExpired(race) && !teamAlreadyStarted) {
+      return res.status(403).json(JOIN_WINDOW_EXPIRED_PAYLOAD);
+    }
     
     // Calculate quiz end time using quiz duration (countdown) — never join-phase timerSeconds
     const quizDurationSeconds = timerSeconds || race.settings?.countdown || 600;
     const quizStartedAt = new Date().toISOString();
     const endTime = new Date(Date.now() + quizDurationSeconds * 1000).toISOString();
-    
-    // Store timer per team instead of globally
-    const teamTimerPath = `space_race_team_timers/${id}/team_${teamId}`;
-    const teamTimerSnap = await db.ref(teamTimerPath).get();
+
     
     // Only set if not already set for this team
-    if (teamTimerSnap.exists() && teamTimerSnap.val().quizStartedAt) {
-      const existingTimer = teamTimerSnap.val();
+    if (teamAlreadyStarted) {
       const existingEndMs = existingTimer.endTime ? new Date(existingTimer.endTime).getTime() : NaN;
       if (Number.isFinite(existingEndMs) && existingEndMs <= Date.now()) {
         console.log('Quiz time already expired for this team:', teamId);
@@ -1637,6 +1651,10 @@ router.post('/:id/team-selection', async (req, res) => {
 
     if (raceSnap.val()?.status !== 'active') {
       return res.status(403).json({ success: false, error: 'Space race is not active' });
+    }
+
+    if (isJoinWindowExpired(raceSnap.val())) {
+      return res.status(403).json(JOIN_WINDOW_EXPIRED_PAYLOAD);
     }
 
     const participantSnap = await raceParticipantsRef(raceId).child(participantId).get();
