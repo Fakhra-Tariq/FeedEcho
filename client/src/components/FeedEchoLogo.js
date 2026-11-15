@@ -4,8 +4,7 @@ import { Link } from 'react-router-dom';
 export const FEED_ECHO_LOGO_SRC = '/FeedEcho-logo.png.png';
 
 /**
- * Phone (<768px): same rendered size as /audience/home —
- * 10rem-tall image clipped to a 4rem header strip, no max-width shrink.
+ * Shared header logo. Phone size/nudge live on --logo-*-phone in index.css.
  * md+: pass desktopImgClassName / wrapClassName to keep each page's current size.
  */
 export default function FeedEchoLogo({
@@ -21,14 +20,12 @@ export default function FeedEchoLogo({
     <img
       src={FEED_ECHO_LOGO_SRC}
       alt="FeedEcho"
-      className={`feed-echo-logo-img w-auto object-contain object-left mix-blend-multiply shrink-0 max-md:!h-[var(--logo-height-phone)] max-md:!max-w-none ${desktopImgClassName}`.trim()}
+      className={`feed-echo-logo-img w-auto object-contain object-left mix-blend-multiply shrink-0 ${desktopImgClassName}`.trim()}
     />
   );
 
   const clipped = (
-    <div
-      className={`feed-echo-logo-clip relative flex items-center max-md:h-[var(--logo-clip-height-phone)] max-md:overflow-hidden max-md:shrink-0 ${wrapClassName}`.trim()}
-    >
+    <div className={`feed-echo-logo-clip relative flex items-center ${wrapClassName}`.trim()}>
       {img}
     </div>
   );

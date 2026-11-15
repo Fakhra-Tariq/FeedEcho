@@ -4,6 +4,7 @@ import { Rocket, Trophy, Clock, Users, Star, Zap, Flame, Flag } from 'lucide-rea
 import { useRtdbList, useRtdbValue } from '../../hooks/useRtdb';
 import { spaceRacesAPI } from '../../services/api';
 import { getStoredAudienceSession } from '../../utils/audienceSession';
+import AudiencePostActivityHomeButton from '../Audience/AudiencePostActivityHomeButton';
 
 const TimerDisplay = ({ timerInfo, onTimeUp }) => {
   const [timeLeft, setTimeLeft] = useState(0);
@@ -548,7 +549,7 @@ export default function SpaceRaceGamePanel({
         {hasAttemptedQuiz && !window.location.pathname.includes('/quiz/') && (
           <div className="mt-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
             <p className="text-text text-sm">You have already attempted this quiz.</p>
-            <div className="px-5 py-2 bg-neutral-300 text-neutral-600 rounded-lg font-semibold whitespace-nowrap">
+            <div className="px-5 py-2 bg-neutral-300 text-neutral-600 rounded-lg font-semibold whitespace-nowrap max-sm:w-full max-sm:flex max-sm:items-center max-sm:justify-center max-sm:text-center max-sm:whitespace-normal">
               Quiz Completed
             </div>
           </div>
@@ -556,13 +557,10 @@ export default function SpaceRaceGamePanel({
       </div>
       {hasAttemptedQuiz && !window.location.pathname.includes('/quiz/') && (
         <div className="max-w-3xl mx-auto mt-4">
-          <button
-            type="button"
+          <AudiencePostActivityHomeButton
             onClick={handleBackToHome}
-            className="w-full px-6 py-3 bg-primary text-white rounded-xl hover:bg-primary/90 transition-colors"
-          >
-            Back to Home
-          </button>
+            className="w-full px-6 py-3 bg-primary text-white rounded-xl hover:bg-primary/90 transition-colors text-center leading-snug"
+          />
         </div>
       )}
     </div>

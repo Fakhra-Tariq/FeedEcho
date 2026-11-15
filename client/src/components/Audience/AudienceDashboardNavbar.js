@@ -30,9 +30,22 @@ export default function AudienceDashboardNavbar({
 
   return (
     <nav className="bg-white shadow-sm border-b border-gray-200 flex-shrink-0">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex justify-between items-center h-16 min-w-0 gap-2 max-[480px]:gap-1">
-          <div className="flex items-center max-[480px]:order-2 max-md:shrink-0">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 phone-header-gutter">
+        <div className="flex justify-between items-center h-16 min-w-0 gap-2">
+          <div className="flex items-center min-w-0 shrink-0 max-md:gap-[var(--header-logo-gap-phone)]">
+            <button
+              type="button"
+              onClick={() => setIsMenuOpen((prev) => !prev)}
+              aria-label={isMenuOpen ? 'Close menu' : 'Open menu'}
+              aria-expanded={isMenuOpen}
+              className="md:hidden min-h-11 min-w-11 p-2 rounded-lg hover:bg-neutral-100 transition-colors inline-flex items-center justify-center shrink-0"
+            >
+              {isMenuOpen ? (
+                <X className="w-6 h-6 text-neutral-600" />
+              ) : (
+                <Menu className="w-6 h-6 text-neutral-600" />
+              )}
+            </button>
             <FeedEchoLogo desktopImgClassName="md:h-32" />
           </div>
 
@@ -57,23 +70,18 @@ export default function AudienceDashboardNavbar({
             </Link>
           </div>
 
-          <div
-            className="hidden max-[480px]:block max-[480px]:flex-1 max-[480px]:order-3 max-[480px]:min-w-0"
-            aria-hidden="true"
-          />
-
-          <div className="flex items-center space-x-3 max-md:space-x-1 shrink-0 max-[480px]:contents">
+          <div className="flex items-center space-x-3 max-md:space-x-1 shrink-0">
             {typeof onChatbotToggle === 'function' && (
               <button
                 type="button"
                 onClick={onChatbotToggle}
-                className="p-2 rounded-lg text-gray-600 hover:text-primary transition-colors min-h-11 min-w-11 inline-flex items-center justify-center max-[480px]:order-4 max-[480px]:shrink-0"
+                className="p-2 rounded-lg text-gray-600 hover:text-primary transition-colors min-h-11 min-w-11 inline-flex items-center justify-center shrink-0"
               >
                 <Bot className="w-5 h-5" />
               </button>
             )}
 
-            <div className="relative max-[480px]:order-5 max-[480px]:shrink-0" ref={profileDropdownRef}>
+            <div className="relative shrink-0" ref={profileDropdownRef}>
               <button
                 type="button"
                 onClick={() => setShowProfileDropdown((prev) => !prev)}
@@ -113,20 +121,6 @@ export default function AudienceDashboardNavbar({
                 </div>
               )}
             </div>
-
-            <button
-              type="button"
-              onClick={() => setIsMenuOpen((prev) => !prev)}
-              aria-label={isMenuOpen ? 'Close menu' : 'Open menu'}
-              aria-expanded={isMenuOpen}
-              className="md:hidden min-h-11 min-w-11 p-2 rounded-lg hover:bg-neutral-100 transition-colors inline-flex items-center justify-center max-[480px]:order-1 max-[480px]:shrink-0"
-            >
-              {isMenuOpen ? (
-                <X className="w-6 h-6 text-neutral-600" />
-              ) : (
-                <Menu className="w-6 h-6 text-neutral-600" />
-              )}
-            </button>
           </div>
         </div>
 

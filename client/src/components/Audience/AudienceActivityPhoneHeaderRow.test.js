@@ -2,7 +2,7 @@ import { render } from '@testing-library/react';
 import AudienceActivityPhoneHeaderRow from './AudienceActivityPhoneHeaderRow';
 
 describe('AudienceActivityPhoneHeaderRow', () => {
-  it('uses the shared phone header class (1fr / auto / 1fr grid, hidden from md up)', () => {
+  it('uses the shared phone header class (logo | title | name grid, hidden from md up)', () => {
     const { container } = render(
       <AudienceActivityPhoneHeaderRow
         left={<span>L</span>}

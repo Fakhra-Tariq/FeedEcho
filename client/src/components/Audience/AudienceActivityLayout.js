@@ -41,13 +41,13 @@ export function AudienceActivityHeader({
     <FeedEchoLogo
       onClick={onLogoClick}
       ariaLabel="Leave"
-      buttonClassName="relative flex h-16 shrink-0 items-center overflow-hidden cursor-pointer"
-      wrapClassName="h-16 overflow-hidden"
+      buttonClassName="relative flex md:h-16 shrink-0 items-center overflow-hidden cursor-pointer"
+      wrapClassName="md:h-16 md:overflow-hidden"
       desktopImgClassName={activityLogoDesktop}
     />
   ) : (
     <FeedEchoLogo
-      wrapClassName="h-16 overflow-hidden"
+      wrapClassName="md:h-16 md:overflow-hidden"
       desktopImgClassName={activityLogoDesktop}
     />
   );
@@ -126,13 +126,11 @@ export function AudienceActivityHeader({
 
   return (
     <div className={`bg-white border-b border-neutral-200 ${className}`.trim()}>
-      <div className={`${AUDIENCE_ACTIVITY_PAGE_WIDTH} ${compactMobileZones ? 'max-md:!px-3' : ''}`.trim()}>
+      <div className={`${AUDIENCE_ACTIVITY_PAGE_WIDTH} phone-header-gutter`.trim()}>
         <AudienceActivityPhoneHeaderRow
           left={logoSlot}
           center={
-            <div className="min-w-0 flex items-center justify-center gap-x-1 overflow-hidden">
-              {titleContent}
-            </div>
+            <div className="audience-activity-phone-header__cluster-title">{titleContent}</div>
           }
           right={phoneRight}
           rightHasAddon={Boolean(rightAddon)}

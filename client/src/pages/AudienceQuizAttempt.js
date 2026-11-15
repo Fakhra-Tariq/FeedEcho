@@ -28,6 +28,7 @@ import { ref as dbRef, onValue, get, off } from 'firebase/database';
 import { db } from '../firebase';
 import { useRtdbValue } from '../hooks/useRtdb';
 import GuestProgressLoginBanner from '../components/Audience/GuestProgressLoginBanner';
+import AudiencePostActivityHomeButton from '../components/Audience/AudiencePostActivityHomeButton';
 import {
   formatSpaceRaceQuizCountdown,
   remainingSecondsUntil,
@@ -2121,17 +2122,23 @@ const AudienceQuizAttempt = ({
           <AlertCircle className="w-16 h-16 text-error-500 mx-auto mb-4" />
           <h1 className="text-2xl font-bold text-text mb-4">Quiz Error</h1>
           <p className="text-text-light mb-6">{error}</p>
-          <button
-            onClick={() =>
-              navigate(
-                isSpaceRace && raceId ? `/audience/space-race/${raceId}` : '/audience/home',
-                { replace: true }
-              )
-            }
-            className="px-6 py-3 bg-primary text-white rounded-xl hover:bg-primary/90 transition-colors"
-          >
-            {isSpaceRace ? 'Back to Race' : 'Back to Home'}
-          </button>
+          {isSpaceRace ? (
+            <button
+              onClick={() =>
+                navigate(raceId ? `/audience/space-race/${raceId}` : '/audience/home', {
+                  replace: true,
+                })
+              }
+              className="px-6 py-3 bg-primary text-white rounded-xl hover:bg-primary/90 transition-colors"
+            >
+              Back to Race
+            </button>
+          ) : (
+            <AudiencePostActivityHomeButton
+              onClick={() => navigate('/audience/home', { replace: true })}
+              className="px-6 py-3 bg-primary text-white rounded-xl hover:bg-primary/90 transition-colors text-center leading-snug"
+            />
+          )}
         </div>
       </div>
     );
@@ -2211,13 +2218,20 @@ const AudienceQuizAttempt = ({
               </div>
             </div>
 
-            <button
-              type="button"
-              onClick={navigateHome}
-              className="w-full px-6 py-3 bg-primary text-white rounded-xl hover:bg-primary/90 transition-colors"
-            >
-              {isSpaceRace ? 'Back to Space Race' : 'Go to Home'}
-            </button>
+            {isSpaceRace ? (
+              <button
+                type="button"
+                onClick={navigateHome}
+                className="w-full px-6 py-3 bg-primary text-white rounded-xl hover:bg-primary/90 transition-colors"
+              >
+                Back to Space Race
+              </button>
+            ) : (
+              <AudiencePostActivityHomeButton
+                onClick={navigateHome}
+                className="w-full px-6 py-3 bg-primary text-white rounded-xl hover:bg-primary/90 transition-colors text-center leading-snug"
+              />
+            )}
           </div>
         </div>
       );
@@ -2343,18 +2357,25 @@ const AudienceQuizAttempt = ({
             </div>
           </div>
           
-          <button
-            onClick={() => {
-              if (isSpaceRace && raceId) {
-                navigate(`/audience/space-race/${raceId}`, { replace: true });
-              } else {
-                navigate('/audience/home', { replace: true });
-              }
-            }}
-            className="w-full px-6 py-3 bg-primary text-white rounded-xl hover:bg-primary/90 transition-colors"
-          >
-            {isSpaceRace ? 'Back to Space Race' : 'Go to Home'}
-          </button>
+          {isSpaceRace ? (
+            <button
+              onClick={() => {
+                if (raceId) {
+                  navigate(`/audience/space-race/${raceId}`, { replace: true });
+                } else {
+                  navigate('/audience/home', { replace: true });
+                }
+              }}
+              className="w-full px-6 py-3 bg-primary text-white rounded-xl hover:bg-primary/90 transition-colors"
+            >
+              Back to Space Race
+            </button>
+          ) : (
+            <AudiencePostActivityHomeButton
+              onClick={() => navigate('/audience/home', { replace: true })}
+              className="w-full px-6 py-3 bg-primary text-white rounded-xl hover:bg-primary/90 transition-colors text-center leading-snug"
+            />
+          )}
         </div>
       </div>
     );
@@ -2367,17 +2388,23 @@ const AudienceQuizAttempt = ({
           <AlertCircle className="w-16 h-16 text-gray-400 mx-auto mb-4" />
           <h1 className="text-2xl font-bold text-text mb-4">Quiz Not Available</h1>
           <p className="text-text-light mb-6">This quiz is not currently available.</p>
-          <button
-            onClick={() =>
-              navigate(
-                isSpaceRace && raceId ? `/audience/space-race/${raceId}` : '/audience/home',
-                { replace: true }
-              )
-            }
-            className="px-6 py-3 bg-primary text-white rounded-xl hover:bg-primary/90 transition-colors"
-          >
-            {isSpaceRace ? 'Back to Race' : 'Back to Home'}
-          </button>
+          {isSpaceRace ? (
+            <button
+              onClick={() =>
+                navigate(raceId ? `/audience/space-race/${raceId}` : '/audience/home', {
+                  replace: true,
+                })
+              }
+              className="px-6 py-3 bg-primary text-white rounded-xl hover:bg-primary/90 transition-colors"
+            >
+              Back to Race
+            </button>
+          ) : (
+            <AudiencePostActivityHomeButton
+              onClick={() => navigate('/audience/home', { replace: true })}
+              className="px-6 py-3 bg-primary text-white rounded-xl hover:bg-primary/90 transition-colors text-center leading-snug"
+            />
+          )}
         </div>
       </div>
     );

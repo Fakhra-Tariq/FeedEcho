@@ -158,6 +158,7 @@ const pastelFromTeamColor = (base) => {
     flag: mixHex(base, white, 0.28),
     btnBorder: mixHex(base, white, 0.38),
     btnFill: mixHex(base, white, 0.82),
+    text: mixHex(base, black, 0.32),
   };
 };
 
@@ -514,17 +515,19 @@ export default function HostSpaceRaceDisplay() {
   return (
     <div className="min-h-screen bg-gray-50 text-text overflow-x-hidden [overflow-anchor:none]">
       {/* Header - match teacher layout theme */}
-      <div className="bg-white shadow-sm border-b border-gray-200">
+      <div className="bg-white shadow-sm border-b border-gray-200 max-sm:bg-transparent max-sm:shadow-none max-sm:border-b-0">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex flex-col gap-2 py-3 sm:flex-row sm:items-center sm:justify-between sm:h-16 sm:py-0">
-            <div className="flex items-center gap-4 min-w-0">
-              <h1 className="text-lg font-semibold text-text break-words min-w-0">{raceData.title}</h1>
+          <div className="flex flex-col gap-2 py-3 sm:flex-row sm:items-center sm:justify-between sm:h-16 sm:py-0 max-sm:flex-row max-sm:items-center max-sm:justify-between max-sm:h-auto max-sm:gap-2.5 max-sm:my-4 max-sm:px-4 max-sm:py-3.5 max-sm:bg-white max-sm:rounded-2xl max-sm:border max-sm:border-gray-200 max-sm:shadow">
+            <div className="flex items-center gap-4 min-w-0 max-sm:flex-1">
+              <h1 className="text-lg font-semibold text-text break-words min-w-0 max-sm:flex-1 max-sm:truncate max-sm:break-normal">
+                {raceData.title}
+              </h1>
             </div>
             <div className="flex items-center gap-4 shrink-0">
-              <div className="flex items-center gap-2 text-sm">
+              <div className="flex items-center gap-2 text-sm max-sm:gap-1.5 max-sm:whitespace-nowrap">
                 <Clock className="h-4 w-4 text-text-light shrink-0" />
-                <span className="text-text-light">Join Time:</span>
-                <span className="font-medium text-text">
+                <span className="text-text-light max-[360px]:hidden">Join Time:</span>
+                <span className="font-medium text-text max-sm:font-bold max-sm:tabular-nums">
                   <JoinDurationTimer raceData={raceData} />
                 </span>
               </div>
@@ -534,11 +537,11 @@ export default function HostSpaceRaceDisplay() {
       </div>
 
       {/* Rockets board inside a card, same card style as rest of app */}
-      <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-6 md:py-10">
-        <div className="bg-white rounded-lg shadow border border-gray-200 p-4 md:p-8">
-          <div className="text-center mb-8">
+      <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-6 md:py-10 max-sm:pt-0">
+        <div className="bg-white rounded-lg shadow border border-gray-200 p-4 md:p-8 max-sm:p-3.5">
+          <div className="text-center mb-8 max-sm:mb-6">
             <h2 className="text-xl md:text-2xl font-bold text-text mb-1">Space Race</h2>
-            <p className="text-text-light">
+            <p className="text-text-light max-sm:text-[clamp(12px,3.2vw,14px)] max-sm:leading-normal max-sm:whitespace-nowrap max-sm:overflow-hidden max-sm:text-ellipsis">
               Watch your teams compete in real-time
               {totalQuestions > 0 ? ` · ${totalQuestions} questions` : ''}
             </p>
@@ -560,14 +563,14 @@ export default function HostSpaceRaceDisplay() {
 
               return (
                 <div key={teamId} className="space-y-2">
-                  <div className="flex items-center justify-between gap-2 min-w-0">
+                  <div className="flex items-center justify-between gap-2 min-w-0 max-sm:gap-3">
                     <div className="flex items-center gap-2 min-w-0 flex-1">
                       <span
                         className="inline-flex h-3 w-3 rounded-full shrink-0"
                         style={{ backgroundColor: style.fill }}
                         aria-hidden="true"
                       />
-                      <span className={`text-lg font-semibold truncate min-w-0 ${style.text}`}>
+                      <span className={`text-lg font-semibold truncate min-w-0 ${style.text} max-sm:text-base`}>
                         {style.label} Team
                       </span>
                     </div>
@@ -580,19 +583,20 @@ export default function HostSpaceRaceDisplay() {
                           ? `Hide members of ${style.label} Team`
                           : `Show members of ${style.label} Team`
                       }
-                      className="flex items-center gap-1.5 px-4 min-h-11 h-11 shrink-0 whitespace-nowrap rounded-2xl border-2 text-sm font-semibold transition-colors"
+                      className="flex items-center gap-1.5 px-4 min-h-11 h-11 shrink-0 whitespace-nowrap rounded-2xl border-2 text-sm font-semibold transition-colors max-sm:gap-1.5 max-sm:px-3.5 max-sm:text-[13px] max-sm:font-semibold max-sm:[color:var(--sr-member-btn-text)] max-sm:hover:opacity-90 max-sm:active:opacity-[0.82] max-sm:focus-visible:outline max-sm:focus-visible:outline-2 max-sm:focus-visible:outline-offset-2"
                       style={{
                         color: pastel.flag,
                         borderColor: pastel.btnBorder,
                         backgroundColor: expanded ? pastel.btnFill : '#ffffff',
+                        '--sr-member-btn-text': pastel.text,
                       }}
                     >
                       <Users className="h-4 w-4 shrink-0" />
                       <span>{expanded ? 'Hide Members' : 'Show Members'}</span>
                       {expanded ? (
-                        <ChevronUp className="h-3 w-3 shrink-0" />
+                        <ChevronUp className="h-3 w-3 shrink-0 max-sm:hidden" />
                       ) : (
-                        <ChevronDown className="h-3 w-3 shrink-0" />
+                        <ChevronDown className="h-3 w-3 shrink-0 max-sm:hidden" />
                       )}
                     </button>
                   </div>

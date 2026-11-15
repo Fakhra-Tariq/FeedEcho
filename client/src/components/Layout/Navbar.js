@@ -59,7 +59,7 @@ const Navbar = () => {
 
   return (
     <nav className="bg-background/80 backdrop-blur-md shadow-soft sticky top-0 z-50 border-b border-neutral-200 overflow-x-hidden">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 phone-header-gutter">
         <div className="flex justify-between items-center h-16 min-w-0 gap-2">
           {/* Logo — unchanged */}
           <FeedEchoLogo

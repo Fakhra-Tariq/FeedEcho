@@ -4,10 +4,42 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Audience Home phone logo: img h-40 (10rem) clipped to header h-16 (4rem). */
+/*
+ * Phone (<768px) header logo.
+ * Asset is 500×500 with a centered wordmark (opaque ~96–400 x, 200–284 y).
+ * Old: img 10rem (160px) clipped to 4rem (64px). New: 12.5% smaller.
+ */
 :root {
-  --logo-height-phone: 10rem;
-  --logo-clip-height-phone: 4rem;
+  --header-pad-x-phone: 12px;
+  --header-logo-gap-phone: 8px;
+  --logo-height-phone: 8.75rem; /* 140px; was 10rem / 160px */
+  --logo-clip-height-phone: 3.5rem; /* 56px; was 4rem / 64px */
+  --logo-clip-width-phone: 5.375rem; /* ~86px wordmark width at 140px */
+  --logo-nudge-x-phone: -1.6875rem; /* -27px: 19.2% left padding of the PNG */
+}
+
+@media (max-width: 767.98px) {
+  .phone-header-gutter {
+    padding-left: var(--header-pad-x-phone) !important;
+    padding-right: var(--header-pad-x-phone) !important;
+  }
+
+  .feed-echo-logo-clip {
+    height: var(--logo-clip-height-phone);
+    width: var(--logo-clip-width-phone);
+    overflow: hidden;
+    flex-shrink: 0;
+  }
+
+  .feed-echo-logo-img {
+    height: var(--logo-height-phone) !important;
+    width: auto !important;
+    max-width: none !important;
+    margin-left: var(--logo-nudge-x-phone);
+    object-fit: contain;
+    object-position: left center;
+    flex-shrink: 0;
+  }
 }
 
 * {

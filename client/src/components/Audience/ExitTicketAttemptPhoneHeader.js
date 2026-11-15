@@ -10,16 +10,11 @@ export const isLoggedInAudienceUser = (userProfile, session) =>
 
 export default function ExitTicketAttemptPhoneHeader({ title, participantName, isLoggedIn }) {
   return (
-    <div className="md:hidden bg-white border-b border-neutral-200 px-3">
+    <div className="md:hidden bg-white border-b border-neutral-200 phone-header-gutter px-3">
       <AudienceActivityPhoneHeaderRow
-        left={
-          <FeedEchoLogo wrapClassName="pointer-events-none" />
-        }
+        left={<FeedEchoLogo wrapClassName="pointer-events-none" />}
         center={
-          <h1
-            dir="auto"
-            className="text-base font-semibold text-text"
-          >
+          <h1 dir="auto" className="text-base font-semibold text-text">
             {title}
           </h1>
         }

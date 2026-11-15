@@ -42,6 +42,7 @@ describe('ExitTicketAttemptPhoneHeader', () => {
     expect(logo.className).toMatch(/object-contain/);
     expect(logo.getAttribute('src')).toBe('/FeedEcho-logo.png.png');
     expect(logo.closest('[data-audience-phone-header="true"]')).toBeTruthy();
+    expect(logo.closest('.audience-activity-phone-header__left')).toBeTruthy();
     expect(logo.closest('[data-audience-phone-header="true"]').className).toMatch(
       /audience-activity-phone-header/
     );

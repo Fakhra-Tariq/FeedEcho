@@ -1,8 +1,8 @@
-/* Phone-only activity header: equal 1fr side columns keep the title on the viewport midline. */
+/* Phone-only activity header: logo | title | name — equal 1fr sides keep the title on the midline. */
 
 .audience-activity-phone-header {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr) minmax(0, auto) minmax(0, 1fr);
   align-items: center;
   min-height: 3.5rem;
   width: 100%;
@@ -12,6 +12,8 @@
 .audience-activity-phone-header__left {
   justify-self: start;
   min-width: 0;
+  display: flex;
+  align-items: center;
 }
 
 .audience-activity-phone-header__left .feed-echo-logo-clip {
@@ -20,16 +22,26 @@
 
 .audience-activity-phone-header__center {
   justify-self: center;
-  max-width: 46vw;
   min-width: 0;
+  max-width: 100%;
   overflow: hidden;
   text-align: center;
+}
+
+.audience-activity-phone-header__cluster-title {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.25rem;
+  min-width: 0;
+  overflow: hidden;
 }
 
 .audience-activity-phone-header__center h1 {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  min-width: 0;
   max-width: 100%;
   margin: 0;
 }

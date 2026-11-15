@@ -102,10 +102,29 @@ function logCloud(stage, detail) {
   }
 }
 
+function nowMs() {
+  return typeof performance !== 'undefined' && performance.now ? performance.now() : Date.now();
+}
+
+function nextAnimationFrame() {
+  return new Promise((resolve) => {
+    if (typeof requestAnimationFrame === 'function') {
+      requestAnimationFrame(() => resolve());
+    } else {
+      window.setTimeout(resolve, 16);
+    }
+  });
+}
+
+function itemSignature(items) {
+  return (items || []).map((row) => `${row.key || row.label}:${row.count}`).join('|');
+}
+
 function BrainWordCloud({ items, extra, empty, seedKey = '' }) {
   const wrapRef = useRef(null);
   const canvasRef = useRef(null);
   const renderIdRef = useRef(0);
+  const layoutCacheRef = useRef(new Map());
   const [size, setSize] = useState({ width: 0, height: 0 });
   const [tooltip, setTooltip] = useState(null);
 
@@ -131,7 +150,8 @@ function BrainWordCloud({ items, extra, empty, seedKey = '' }) {
     };
     const schedule = () => {
       window.clearTimeout(debounce);
-      debounce = window.setTimeout(apply, 150);
+      const compact = isCompactPresentViewport(window.innerWidth, window.innerHeight);
+      debounce = window.setTimeout(apply, compact ? 32 : 150);
     };
     apply();
     const ro = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(schedule) : null;
@@ -164,9 +184,13 @@ function BrainWordCloud({ items, extra, empty, seedKey = '' }) {
     const cw = Math.max(1, Math.round(cssW * dpr));
     const ch = Math.max(1, Math.round(cssH * dpr));
     const stillCurrent = () => myId === renderIdRef.current;
+    const tOpen = nowMs();
+    const mark = (phase, extra) => {
+      logCloud('phase', { phase, ms: Math.round(nowMs() - tOpen), ...extra });
+    };
     logCloud('start', { cssW, cssH, cw, ch, items: (items || []).length, myId });
 
-    const runCloud = (WordCloud, list, options, timeoutMs, target) =>
+    const runCloud = (WordCloud, list, options, timeoutMs, target, onProgress) =>
       new Promise((resolve) => {
         const el = target || canvas;
         if (!list.length) {
@@ -187,6 +211,7 @@ function BrainWordCloud({ items, extra, empty, seedKey = '' }) {
         };
         const onDrawn = (event) => {
           if (event?.detail?.drawn) drawn += 1;
+          if (typeof onProgress === 'function' && event?.detail?.drawn) onProgress();
         };
         const kill = window.setTimeout(() => {
           timedOut = true;
@@ -240,28 +265,87 @@ function BrainWordCloud({ items, extra, empty, seedKey = '' }) {
       return placed.length;
     };
 
+    const replayFillerOps = async (ctx, ops, reduceMotion) => {
+      if (!ops.length) return;
+      const duration = reduceMotion ? 400 : 1300;
+      const started = nowMs();
+      let i = 0;
+      let batch = 10;
+      while (i < ops.length && stillCurrent()) {
+        const frameStart = nowMs();
+        const elapsed = frameStart - started;
+        const targetCount = Math.ceil(Math.min(1, elapsed / duration) * ops.length);
+        const drawUntil = Math.min(ops.length, Math.max(i + batch, targetCount), i + 14);
+        for (; i < drawUntil; i += 1) {
+          const op = ops[i];
+          ctx.save();
+          ctx.setTransform(op.a, op.b, op.c, op.d, op.e, op.f);
+          ctx.font = op.font;
+          ctx.fillStyle = op.fillStyle;
+          ctx.textAlign = op.textAlign;
+          ctx.textBaseline = op.textBaseline;
+          ctx.fillText(op.text, op.x, op.y);
+          ctx.restore();
+        }
+        const dt = nowMs() - frameStart;
+        if (dt > 10) batch = Math.max(6, batch - 2);
+        else if (dt < 6) batch = Math.min(14, batch + 1);
+        await nextAnimationFrame();
+        if (!reduceMotion && nowMs() - started < duration && i < ops.length) {
+          const ahead = i / ops.length - (nowMs() - started) / duration;
+          if (ahead > 0.04) await nextAnimationFrame();
+        }
+      }
+      if (i < ops.length && stillCurrent()) {
+        for (; i < ops.length; i += 1) {
+          const op = ops[i];
+          ctx.save();
+          ctx.setTransform(op.a, op.b, op.c, op.d, op.e, op.f);
+          ctx.font = op.font;
+          ctx.fillStyle = op.fillStyle;
+          ctx.textAlign = op.textAlign;
+          ctx.textBaseline = op.textBaseline;
+          ctx.fillText(op.text, op.x, op.y);
+          ctx.restore();
+        }
+      }
+    };
+
     const drawBrainCloud = async (fillerScale) => {
       const WordCloud = require('wordcloud');
       const compact = isCompactPresentViewport(window.innerWidth, window.innerHeight);
-      const target = compact ? document.createElement('canvas') : canvas;
-      if (compact) {
-        target.width = cw;
-        target.height = ch;
+      const cacheKey = `${seedKey}|${cssW}x${cssH}|${compact ? 'c' : 'd'}|${itemSignature(items)}|${fillerScale}`;
+      const cached = compact ? layoutCacheRef.current.get(cacheKey) : null;
+      const relayout = Boolean(compact && canvas._cloudReady);
+      const work = relayout ? document.createElement('canvas') : canvas;
+      if (work !== canvas) {
+        work.width = cw;
+        work.height = ch;
       } else {
         const sizeChanged = canvas.width !== cw || canvas.height !== ch;
         if (sizeChanged) {
           canvas.width = cw;
           canvas.height = ch;
         }
-        canvas.style.width = `${cssW}px`;
-        canvas.style.height = `${cssH}px`;
-        canvas.style.backgroundColor = WORD_CLOUD_BG;
       }
-      const ctx = target.getContext('2d');
+      canvas.style.width = `${cssW}px`;
+      canvas.style.height = `${cssH}px`;
+      canvas.style.backgroundColor = WORD_CLOUD_BG;
+      const ctx = work.getContext('2d');
       if (!ctx || !WordCloud?.isSupported) return 0;
       ctx.setTransform(1, 0, 0, 1, 0, 0);
       paintBrainOccupancyMask(ctx, cw, ch);
-      logCloud('mask-built', { fillerScale, compact });
+      if (!relayout) mark('mask', { fillerScale, compact });
+      const blitWork = () => {
+        if (work === canvas || !stillCurrent()) return;
+        if (canvas.width !== cw || canvas.height !== ch) {
+          canvas.width = cw;
+          canvas.height = ch;
+        }
+        const vis = canvas.getContext('2d');
+        if (vis) vis.drawImage(work, 0, 0);
+      };
+      if (!relayout && compact) mark('mask-visible', { fillerScale });
 
       const { realList, fillerList, realCount } = buildBulbCloudLists(items, {
         width: cssW,
@@ -302,11 +386,31 @@ function BrainWordCloud({ items, extra, empty, seedKey = '' }) {
 
       const realHits = [];
       const allHits = [];
+      const fillerOps = [];
+      const realOps = [];
+      let recordingFiller = false;
       const origFill = ctx.fillText.bind(ctx);
       const countByLabel = new Map(realList.map((row) => [row[0], row[2].count]));
+      const captureOp = (text, x, y, tr) => ({
+        text,
+        x,
+        y,
+        font: ctx.font,
+        fillStyle: ctx.fillStyle,
+        textAlign: ctx.textAlign,
+        textBaseline: ctx.textBaseline,
+        a: tr.a,
+        b: tr.b,
+        c: tr.c,
+        d: tr.d,
+        e: tr.e,
+        f: tr.f,
+      });
       ctx.fillText = function fillTextTracked(text, x, y) {
         if (typeof ctx.getTransform === 'function') {
           const tr = ctx.getTransform();
+          if (recordingFiller) fillerOps.push(captureOp(text, x, y, tr));
+          else realOps.push(captureOp(text, x, y, tr));
           const w = ctx.measureText(text).width;
           const fs = parseFloat(ctx.font) || 16;
           const corners = [
@@ -346,13 +450,45 @@ function BrainWordCloud({ items, extra, empty, seedKey = '' }) {
       }
 
       const realTimeout = compact ? 1500 : 3000;
-      const fillerTimeout = compact ? 2200 : 3000;
+      const fillerTimeout = compact ? 4000 : 3000;
+      const fillerWait = !compact
+        ? 0
+        : reduceMotion
+          ? 0
+          : Math.max(4, Math.min(16, Math.round(1700 / Math.max(1, fillerList.length))));
 
       let drawn = 0;
       let timedOut = false;
-      const t0 =
-        typeof performance !== 'undefined' && performance.now ? performance.now() : Date.now();
+      const t0 = nowMs();
       try {
+        if (cached?.realOps && cached.fillerOps && stillCurrent()) {
+          mark('cache-hit', { ops: cached.fillerOps.length });
+          const drawOp = (op) => {
+            ctx.save();
+            ctx.setTransform(op.a, op.b, op.c, op.d, op.e, op.f);
+            ctx.font = op.font;
+            ctx.fillStyle = op.fillStyle;
+            ctx.textAlign = op.textAlign;
+            ctx.textBaseline = op.textBaseline;
+            origFill(op.text, op.x, op.y);
+            ctx.restore();
+          };
+          cached.realOps.forEach(drawOp);
+          blitWork();
+          mark('phase-1-visible', { cache: true, reals: cached.realOps.length });
+          const fadeCtx = work === canvas ? ctx : canvas.getContext('2d');
+          await replayFillerOps(fadeCtx || ctx, cached.fillerOps, reduceMotion);
+          canvas._realHits = cached.realHits;
+          canvas._allHits = cached.allHits;
+          canvas._cloudReady = true;
+          canvas._layoutMs = nowMs() - t0;
+          mark('cache-replay-done', { ms: Math.round(canvas._layoutMs) });
+          ctx.fillText = origFill;
+          restoreRandom();
+          canvas._restoreRandom = null;
+          return cached.realHits.length + cached.fillerOps.length;
+        }
+
         const reals = await runCloud(
           WordCloud,
           realList,
@@ -363,11 +499,11 @@ function BrainWordCloud({ items, extra, empty, seedKey = '' }) {
             rotateRatio: !compact && realCount >= 12 && !reduceMotion ? 0.3 : 0,
           },
           realTimeout,
-          target
+          work
         );
         drawn += reals.drawn;
         timedOut = timedOut || reals.timedOut;
-        logCloud('reals-stop', { drawn, timedOut: reals.timedOut });
+        mark('reals-stop', { drawn, timedOut: reals.timedOut });
         if (compact && stillCurrent()) {
           const placedLabels = new Set(realHits.map((box) => box.text));
           realList.forEach((row) => {
@@ -386,17 +522,10 @@ function BrainWordCloud({ items, extra, empty, seedKey = '' }) {
               drawn += 1;
             }
           });
+          blitWork();
+          mark('phase-1-visible', { reals: realHits.length });
         }
-        if (compact && stillCurrent() && fillerList.length) {
-          await new Promise((resolve) => {
-            const ric = window.requestIdleCallback;
-            if (typeof ric === 'function') {
-              ric(() => resolve(), { timeout: 48 });
-            } else {
-              window.setTimeout(resolve, 0);
-            }
-          });
-        }
+        recordingFiller = compact;
         const fillers = await runCloud(
           WordCloud,
           fillerList,
@@ -405,36 +534,29 @@ function BrainWordCloud({ items, extra, empty, seedKey = '' }) {
             fontWeight: '500',
             shrinkToFit: false,
             rotateRatio: reduceMotion ? 0 : compact ? 0.18 : 0.3,
+            wait: fillerWait,
           },
           fillerTimeout,
-          target
+          work,
+          compact && work !== canvas ? blitWork : undefined
         );
         drawn += fillers.drawn;
         timedOut = timedOut || fillers.timedOut;
-        logCloud('filler-stop', { drawn, timedOut: fillers.timedOut });
+        mark('filler-stop', { drawn, timedOut: fillers.timedOut, wait: fillerWait });
+        if (compact && stillCurrent()) blitWork();
         if (compact && stillCurrent()) {
-          const idle = () =>
-            new Promise((resolve) => {
-              const ric = window.requestIdleCallback;
-              if (typeof ric === 'function') ric(() => resolve(), { timeout: 80 });
-              else window.setTimeout(resolve, 0);
-            });
           let coverage = measureSilhouetteCoverage(ctx, cw, ch);
           let extraStart = fillerList.length;
           let totalPlacedCap = realCount + extraStart;
-          const now =
-            typeof performance !== 'undefined' && performance.now
-              ? () => performance.now()
-              : () => Date.now();
           const budgetEnd = t0 + 380;
           logCloud('coverage-0', { coverage, totalPlacedCap });
           while (
             stillCurrent() &&
             coverage < PHONE_FILL_TARGET &&
             totalPlacedCap < PHONE_CLOUD_CAP &&
-            now() < budgetEnd
+            nowMs() < budgetEnd
           ) {
-            await idle();
+            await nextAnimationFrame();
             if (!stillCurrent()) break;
             const want = Math.min(40, PHONE_CLOUD_CAP - totalPlacedCap);
             const extra = extraFillerList(items, extraStart, want);
@@ -450,12 +572,14 @@ function BrainWordCloud({ items, extra, empty, seedKey = '' }) {
                 fontWeight: '500',
                 shrinkToFit: false,
                 rotateRatio: reduceMotion ? 0 : 0.18,
+                wait: fillerWait,
               },
               700,
-              target
+              work
             );
             drawn += more.drawn;
             coverage = measureSilhouetteCoverage(ctx, cw, ch);
+            blitWork();
             logCloud('coverage-pass', { coverage, drawn: more.drawn, totalPlacedCap });
             if (!more.drawn) break;
           }
@@ -473,39 +597,46 @@ function BrainWordCloud({ items, extra, empty, seedKey = '' }) {
           });
         }
       }
-      if (compact && stillCurrent()) {
-        if (canvas.width !== cw || canvas.height !== ch) {
-          canvas.width = cw;
-          canvas.height = ch;
-        }
-        canvas.style.width = `${cssW}px`;
-        canvas.style.height = `${cssH}px`;
-        canvas.style.backgroundColor = WORD_CLOUD_BG;
-        const vis = canvas.getContext('2d');
-        if (vis) {
-          vis.setTransform(1, 0, 0, 1, 0, 0);
-          vis.drawImage(target, 0, 0);
-        }
-      }
-      const elapsed =
-        (typeof performance !== 'undefined' && performance.now ? performance.now() : Date.now()) -
-        t0;
+      if (compact && stillCurrent()) blitWork();
+      const elapsed = nowMs() - t0;
       logCloud('layout-ms', { ms: Math.round(elapsed), drawn, compact });
       canvas._realHits = realHits;
       canvas._allHits = allHits;
       canvas._layoutMs = elapsed;
+      canvas._cloudReady = true;
+      if (compact && (fillerOps.length || realOps.length)) {
+        const cache = layoutCacheRef.current;
+        cache.set(cacheKey, {
+          realHits,
+          allHits,
+          realOps,
+          fillerOps,
+        });
+        if (cache.size > 6) {
+          const first = cache.keys().next().value;
+          cache.delete(first);
+        }
+      }
       return drawn;
     };
 
     const run = async () => {
+      const compactNow = isCompactPresentViewport(window.innerWidth, window.innerHeight);
       if (document.fonts?.ready) {
         try {
-          await document.fonts.ready;
+          if (compactNow) {
+            await Promise.race([
+              document.fonts.ready,
+              new Promise((resolve) => window.setTimeout(resolve, 40)),
+            ]);
+          } else {
+            await document.fonts.ready;
+          }
         } catch {
           // system fonts
         }
       }
-      logCloud('fonts-ready', { current: stillCurrent() });
+      mark('fonts-ready', { current: stillCurrent(), compact: compactNow });
       if (!stillCurrent()) return;
       try {
         let drawn = await drawBrainCloud(1);
@@ -540,7 +671,8 @@ function BrainWordCloud({ items, extra, empty, seedKey = '' }) {
       }
     };
 
-    timer = window.setTimeout(run, 300);
+    const compactStart = isCompactPresentViewport(window.innerWidth, window.innerHeight);
+    timer = window.setTimeout(run, compactStart ? 0 : 300);
     return () => {
       renderIdRef.current += 1;
       window.clearTimeout(timer);
