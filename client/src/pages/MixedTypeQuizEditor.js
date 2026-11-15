@@ -31,7 +31,6 @@ const QUIZ_TYPE = 'Mixed Type';
 const MixedTypeQuizEditor = () => {
   const navigate = useNavigate();
   const location = useLocation();
-  useQuizCreateBackToLibrary();
   const { alert } = useHybridAlert();
   const { user, userProfile } = useAuth();
   const teacherUid = userProfile?.uid || user?.uid;
@@ -72,6 +71,7 @@ const MixedTypeQuizEditor = () => {
     persistedId,
     snapshot,
   });
+  useQuizCreateBackToLibrary(mode === 'saved');
 
   useEffect(() => {
     if (location.state?.openAiPanel) {

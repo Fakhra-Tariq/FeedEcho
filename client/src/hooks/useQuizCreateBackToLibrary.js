@@ -2,7 +2,6 @@ import { useCallback, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 export const QUIZ_LIBRARY_PATH = '/host/library';
-const LIBRARY_PATH = QUIZ_LIBRARY_PATH;
 
 /** Replace the editor with Library so Back does not return to a stale form. */
 export function useGoToQuizLibrary() {
@@ -13,27 +12,33 @@ export function useGoToQuizLibrary() {
 }
 
 /**
- * Browser / gesture Back from a quiz create/edit page lands on Library
- * (replace), so the editor is not left in history. Save must not navigate.
+ * After a successful Save (mode === 'saved' only), browser / gesture Back
+ * replace-navigates to Quiz Library so the editor is not left in history.
+ * Save itself must not navigate. Unsaved / dirty Back is unchanged.
+ *
+ * @param {boolean} saved  true when useQuizEditorDirty mode is 'saved'
  */
-export default function useQuizCreateBackToLibrary() {
+export default function useQuizCreateBackToLibrary(saved) {
   const navigate = useNavigate();
 
   useEffect(() => {
-    const historyIdx = window.history.state?.idx;
-    if (historyIdx === 0) {
-      const current = `${window.location.pathname}${window.location.search}`;
-      const state = window.history.state || {};
-      window.history.replaceState({ ...state, idx: 0 }, '', LIBRARY_PATH);
-      window.history.pushState({ ...state, idx: 1 }, '', current);
-    }
+    if (!saved) return undefined;
+
+    window.history.pushState({ feedechoQuizEditorSaved: true }, '');
+    let consumedByBack = false;
 
     const onPopState = () => {
-      if (window.location.pathname.startsWith('/create/')) return;
-      navigate(LIBRARY_PATH, { replace: true });
+      consumedByBack = true;
+      navigate(QUIZ_LIBRARY_PATH, { replace: true });
     };
 
     window.addEventListener('popstate', onPopState);
-    return () => window.removeEventListener('popstate', onPopState);
-  }, [navigate]);
+    return () => {
+      window.removeEventListener('popstate', onPopState);
+      // Drop the sentinel so Save-then-edit (dirty) Back still uses normal history.
+      if (!consumedByBack && window.history.state?.feedechoQuizEditorSaved) {
+        window.history.back();
+      }
+    };
+  }, [saved, navigate]);
 }

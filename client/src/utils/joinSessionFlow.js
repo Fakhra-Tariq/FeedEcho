@@ -4,6 +4,8 @@ import { getStoredAudienceSession, getStudentQueryParams } from './audienceSessi
 import { persistQuizParticipantSession } from './quizParticipantSession';
 import { saveLocalQuizSubmission } from './audienceQuizAttempts';
 import { findLocalQuizSubmissionForJoin } from './quizLaunchAudienceSettings';
+import { getAudienceDeviceId } from './audienceDeviceId';
+import { collectLegacyParticipantIds, GUEST_ALREADY_ATTEMPTED_MESSAGE } from './guestAttemptIdentity';
 
 function isAlreadyCompletedQuizError(error) {
   if (error?.response?.data?.code === 'ALREADY_ATTEMPTED') return true;
@@ -12,7 +14,7 @@ function isAlreadyCompletedQuizError(error) {
     error?.response?.data?.error ||
     error?.message ||
     '';
-  return /already completed this quiz/i.test(String(message));
+  return /already completed this quiz|already been used on this device/i.test(String(message));
 }
 
 async function openSavedQuizResult({
@@ -166,6 +168,8 @@ export async function proceedWithSessionJoin({
   const joinResponse = await sessionsAPI.join(trimmedName, trimmedCode, teamId, {
     studentUid: ctx.studentUid,
     studentEmail: ctx.studentEmail,
+    deviceId: getAudienceDeviceId(),
+    legacyParticipantIds: collectLegacyParticipantIds(),
   });
 
   const payload = joinResponse.data || {};
@@ -306,7 +310,7 @@ export async function joinSessionByCode({
       studentEmail,
       studentName: trimmedName,
     });
-    if (localCompleted) {
+    if (localCompleted && studentUid) {
       return await openSavedQuizResult({
         trimmedName,
         trimmedCode,
@@ -315,6 +319,17 @@ export async function joinSessionByCode({
         navigate,
         localRow: localCompleted,
       });
+    }
+    if (localCompleted && !studentUid) {
+      const quizId = String(localCompleted.quizId || '').trim();
+      if (quizId) {
+        persistJoinIdentity(trimmedName, { studentUid, studentEmail });
+        sessionStorage.setItem('sessionCode', trimmedCode);
+        navigate(`/audience/quiz/${quizId}`, {
+          state: { alreadyAttemptedOnDevice: true, hideGuestScore: true },
+        });
+        return { success: true, type: 'quiz', quizId, alreadySubmitted: true, alreadyAttemptedOnDevice: true };
+      }
     }
 
     const result = await proceedWithSessionJoin({
@@ -332,6 +347,41 @@ export async function joinSessionByCode({
       : { success: true, ...result };
   } catch (error) {
     if (isAlreadyCompletedQuizError(error)) {
+      if (!studentUid) {
+        try {
+          const lookup = await sessionsAPI.getByCode(trimmedCode);
+          const payload = lookup.data || {};
+          const type = payload.type || payload.data?.type;
+          const quizId = String(payload.quizId || payload.data?.id || '').trim();
+          const raceId = String(payload.raceId || payload.data?.id || '').trim();
+          const ticketId = payload.ticketId;
+          persistJoinIdentity(trimmedName, { studentUid, studentEmail });
+          sessionStorage.setItem('sessionCode', trimmedCode);
+          if (type === 'spaceRace' && raceId) {
+            navigate(`/audience/space-race/${raceId}`, {
+              state: { alreadyAttemptedOnDevice: true },
+            });
+            return { success: true, type: 'spaceRace', raceId, alreadyAttemptedOnDevice: true };
+          }
+          if (type === 'exitTicket') {
+            const code = String(payload.joinCode || trimmedCode).toUpperCase();
+            navigate(`/audience/exit-ticket/${code}`, {
+              replace: true,
+              state: { alreadyAttemptedOnDevice: true },
+            });
+            return { success: true, type: 'exitTicket', ticketId, alreadyAttemptedOnDevice: true };
+          }
+          if (quizId) {
+            navigate(`/audience/quiz/${quizId}`, {
+              state: { alreadyAttemptedOnDevice: true, hideGuestScore: true },
+            });
+            return { success: true, type: 'quiz', quizId, alreadyAttemptedOnDevice: true };
+          }
+        } catch {
+          onError(GUEST_ALREADY_ATTEMPTED_MESSAGE);
+          return { success: false, error: GUEST_ALREADY_ATTEMPTED_MESSAGE, alreadyAttemptedOnDevice: true };
+        }
+      }
       try {
         return await openSavedQuizResult({
           trimmedName,

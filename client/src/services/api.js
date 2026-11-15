@@ -181,6 +181,7 @@ export const exitTicketsAPI = {
   clearResponses: (id) => api.delete(`/exit-tickets/${id}/responses`),
   // Public routes for students (no auth)
   getByCode: (joinCode) => anonymousApi.get(`/exit-tickets/code/${joinCode}`),
+  startAttempt: (id, data) => anonymousApi.post(`/exit-tickets/${id}/start-attempt`, data),
   submitResponse: (id, responseData) => anonymousApi.post(`/exit-tickets/${id}/respond`, responseData),
 };
 
@@ -230,13 +231,15 @@ export const spaceRacesAPI = {
 // Sessions API (unified join for both quizzes and space races - NO AUTH)
 export const sessionsAPI = {
   getByCode: (code) => anonymousApi.get(`/sessions/code/${code}`),
-  join: (name, code, teamId = null, { studentUid, studentEmail } = {}) =>
+  join: (name, code, teamId = null, { studentUid, studentEmail, deviceId, legacyParticipantIds } = {}) =>
     anonymousApi.post('/sessions/join', {
       name,
       code,
       ...(teamId !== null && teamId !== undefined ? { teamId } : {}),
       ...(studentUid ? { studentUid } : {}),
       ...(studentEmail ? { studentEmail } : {}),
+      ...(deviceId ? { deviceId } : {}),
+      ...(legacyParticipantIds?.length ? { legacyParticipantIds } : {}),
     }),
   // Standalone session management (teacher auth required)
   create: (sessionData) => api.post('/sessions/create', sessionData),

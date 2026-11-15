@@ -7,6 +7,11 @@ const {
   loadLaunchBundles,
 } = require('../utils/quizLaunches');
 const { ALREADY_ATTEMPTED_BODY, findCompletedQuizAttempt } = require('../utils/quizOneAttempt');
+const {
+  GUEST_ALREADY_ATTEMPTED_BODY,
+  normalizeGuestName,
+} = require('../utils/guestAttemptIdentity');
+const { markGuestAttemptCompleted } = require('../utils/guestAttemptClaims');
 
 const normalizeQuestionsArray = (questions) => {
   if (Array.isArray(questions)) return questions;
@@ -70,6 +75,8 @@ router.post('/:quizId/submit', async (req, res) => {
     raceId,
     studentUid,
     studentEmail,
+    deviceId,
+    legacyParticipantIds,
   } = req.body;
 
   const logContext = {
@@ -126,6 +133,9 @@ router.post('/:quizId/submit', async (req, res) => {
     const completedAttempt = await findCompletedQuizAttempt(quizId, launchId, {
       studentUid,
       participantId,
+      deviceId,
+      normalizedName: normalizeGuestName(studentName),
+      legacyParticipantIds,
     });
     if (completedAttempt) {
       const sameParticipant =
@@ -146,7 +156,7 @@ router.post('/:quizId/submit', async (req, res) => {
         });
       }
       console.warn('[quiz-submit] rejected duplicate attempt', logContext);
-      return res.status(400).json(ALREADY_ATTEMPTED_BODY);
+      return res.status(409).json(studentUid ? ALREADY_ATTEMPTED_BODY : GUEST_ALREADY_ATTEMPTED_BODY);
     }
 
     if (participantJoined && launchSettings.timePerStudentMinutes > 0) {
@@ -278,6 +288,9 @@ router.post('/:quizId/submit', async (req, res) => {
       ...(launchId ? { launchId } : {}),
       ...(studentUid ? { studentUid } : {}),
       ...(studentEmail ? { studentEmail } : {}),
+      ...(!studentUid && deviceId
+        ? { deviceId: String(deviceId), normalizedName: normalizeGuestName(studentName) }
+        : {}),
     });
 
     const participantUpdates = stripUndefinedDeep({
@@ -293,7 +306,25 @@ router.post('/:quizId/submit', async (req, res) => {
 
     // Save submission
     try {
-      await quizSubmissionsRef(quizId).child(participantId).set(submission);
+      const submitTxn = await quizSubmissionsRef(quizId).child(participantId).transaction((cur) => {
+        if (cur && typeof cur === 'object') return cur;
+        return submission;
+      });
+      const stored = submitTxn.snapshot.exists() ? submitTxn.snapshot.val() : submission;
+      if (stored && stored.submittedAt && stored.submittedAt !== submission.submittedAt) {
+        return res.json({
+          success: true,
+          data: {
+            score: stored.score,
+            correctAnswers: stored.correctAnswers,
+            totalQuestions: stored.totalQuestions,
+            percentage: stored.percentage,
+            points: stored.score,
+            submittedAt: stored.submittedAt,
+          },
+          message: 'Quiz submitted successfully!',
+        });
+      }
       await quizParticipantsRef(quizId).child(participantId).update(participantUpdates);
       if (launchId) {
         await writeLaunchSubmission(quizId, launchId, participantId, submission, participantUpdates);
@@ -326,6 +357,19 @@ router.post('/:quizId/submit', async (req, res) => {
         success: false,
         error: 'Server error during submission',
       });
+    }
+
+    if (!studentUid && deviceId) {
+      try {
+        await markGuestAttemptCompleted({
+          kind: 'quiz',
+          activitySessionId: `${quizId}:${launchId || '_'}`,
+          deviceId,
+          name: studentName,
+        });
+      } catch (claimErr) {
+        console.warn('[quiz-submit] guest claim complete failed', claimErr?.message);
+      }
     }
 
     console.log('[quiz-submit] saved', {

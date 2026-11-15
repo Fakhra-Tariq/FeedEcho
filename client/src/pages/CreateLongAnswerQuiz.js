@@ -24,7 +24,6 @@ import {
 const QUIZ_TYPE = 'Long Answer';
 
 const CreateLongAnswerQuiz = () => {
-  useQuizCreateBackToLibrary();
   const { alert } = useHybridAlert();
   const { user, userProfile } = useAuth();
   const teacherUid = userProfile?.uid || user?.uid;
@@ -56,6 +55,7 @@ const CreateLongAnswerQuiz = () => {
     persistedId,
     snapshot,
   });
+  useQuizCreateBackToLibrary(mode === 'saved');
 
   useEffect(() => {
     if (initialEdit) localStorage.removeItem('editingQuiz');

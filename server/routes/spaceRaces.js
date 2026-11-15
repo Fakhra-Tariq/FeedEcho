@@ -32,6 +32,13 @@ const {
   isJoinWindowExpired,
   JOIN_WINDOW_EXPIRED_PAYLOAD,
 } = require('../utils/spaceRaceJoinWindow');
+const {
+  GUEST_ALREADY_ATTEMPTED_BODY,
+  matchesGuestDeviceName,
+  normalizeGuestName,
+} = require('../utils/guestAttemptIdentity');
+const { asRowList, claimGuestAttempt, markGuestAttemptCompleted } = require('../utils/guestAttemptClaims');
+const { ALREADY_ATTEMPTED_BODY } = require('../utils/quizOneAttempt');
 const router = express.Router();
 
 // ERD-aligned RTDB paths
@@ -237,7 +244,18 @@ async function resolveRaceRecord(idOrCode) {
 router.get('/join/:joinCode', async (req, res) => {
   try {
     const { joinCode } = req.params;
-    const { name, studentUid, studentEmail, teamId: requestedTeamId } = req.query;
+    const {
+      name,
+      studentUid,
+      studentEmail,
+      teamId: requestedTeamId,
+      deviceId,
+      legacyParticipantIds: legacyRaw,
+    } = req.query;
+    const legacyParticipantIds = String(legacyRaw || '')
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean);
     
     // Normalize code to uppercase for consistent lookup
     const normalizedCode = String(joinCode).toUpperCase();
@@ -351,8 +369,46 @@ router.get('/join/:joinCode', async (req, res) => {
         }
         assignedTeamId = assignment.teamId;
 
+        const trimmedName = name.trim();
+        const raceActivitySessionId = `${raceId}:${raceData.currentLaunchId || '_'}`;
+        const existingRows = asRowList(
+          (await raceParticipantsRef(raceId).get()).val() || {}
+        );
+
+        if (studentUid) {
+          const uidHit = existingRows.find(
+            (row) => row.studentUid && String(row.studentUid) === String(studentUid)
+          );
+          if (uidHit && (uidHit.completedAt || (Array.isArray(uidHit.answers) && uidHit.answers.some((a) => a && a.awardedByTeammate !== true)))) {
+            return res.status(409).json(ALREADY_ATTEMPTED_BODY);
+          }
+          if (uidHit) {
+            participantId = uidHit.participantId || uidHit.id;
+            assignedTeamId = uidHit.teamId || assignedTeamId;
+          }
+        } else {
+          const guestClaim = await claimGuestAttempt({
+            kind: 'spaceRace',
+            activitySessionId: raceActivitySessionId,
+            deviceId,
+            name: trimmedName,
+            legacyParticipantIds,
+            existingRows,
+          });
+          if (guestClaim.reason === 'already-attempted') {
+            return res.status(409).json(GUEST_ALREADY_ATTEMPTED_BODY);
+          }
+          if (guestClaim.ok && guestClaim.participantId) {
+            participantId = guestClaim.participantId;
+            const existing = existingRows.find(
+              (row) => String(row.participantId || row.id) === String(participantId)
+            );
+            if (existing?.teamId) assignedTeamId = existing.teamId;
+          }
+        }
+
         const participantData = {
-          name: name.trim(),
+          name: trimmedName,
           joinedAt: new Date().toISOString(),
           score: 0,
           teamId: assignedTeamId,
@@ -360,10 +416,18 @@ router.get('/join/:joinCode', async (req, res) => {
           ...(raceData.currentLaunchId ? { launchId: raceData.currentLaunchId } : {}),
           ...(studentUid ? { studentUid: String(studentUid).trim() } : {}),
           ...(studentEmail ? { studentEmail: String(studentEmail).toLowerCase().trim() } : {}),
+          ...(!studentUid && deviceId
+            ? { deviceId: String(deviceId), normalizedName: normalizeGuestName(trimmedName) }
+            : {}),
         };
-        
-        participantId = raceParticipantsRef(raceId).push().key;
-        await raceParticipantsRef(raceId).child(participantId).set({ id: participantId, ...participantData });
+
+        if (!participantId) {
+          participantId = raceParticipantsRef(raceId).push().key;
+        }
+        await raceParticipantsRef(raceId).child(participantId).transaction((cur) => {
+          if (cur && typeof cur === 'object') return cur;
+          return { id: participantId, ...participantData };
+        });
         console.log('✅ Created participant:', { participantId, teamId: assignedTeamId });
       } catch (error) {
         console.error('❌ Error creating participant:', error);
@@ -1540,7 +1604,7 @@ router.post('/:id/submit-answer', async (req, res) => {
 router.post('/:id/start-quiz', async (req, res) => {
   try {
     const { id } = req.params;
-    const { quizId, timerSeconds, teamId } = req.body;
+    const { quizId, timerSeconds, teamId, participantId, deviceId, studentName, studentUid } = req.body;
     
     console.log('🚀 Starting quiz timer:', { id, quizId, timerSeconds, teamId });
     
@@ -1550,6 +1614,43 @@ router.post('/:id/start-quiz', async (req, res) => {
     }
     
     const race = raceSnap.val();
+
+    if (participantId) {
+      const pSnap = await raceParticipantsRef(id).child(participantId).get();
+      if (pSnap.exists()) {
+        const p = pSnap.val() || {};
+        const launchId = race.currentLaunchId;
+        const sameLaunch = !launchId || !p.launchId || String(p.launchId) === String(launchId);
+        const completed =
+          sameLaunch &&
+          Boolean(
+            p.completedAt ||
+              (Array.isArray(p.answers) &&
+                p.answers.some((answer) => answer && answer.awardedByTeammate !== true))
+          );
+        if (completed) {
+          return res.status(409).json(
+            studentUid ? ALREADY_ATTEMPTED_BODY : GUEST_ALREADY_ATTEMPTED_BODY
+          );
+        }
+      }
+    } else if (deviceId && studentName && !studentUid) {
+      const allSnap = await raceParticipantsRef(id).get();
+      const hit = asRowList(allSnap.exists() ? allSnap.val() : {}).find((row) =>
+        matchesGuestDeviceName(row, {
+          deviceId,
+          normalizedName: normalizeGuestName(studentName),
+        })
+      );
+      if (
+        hit &&
+        (hit.completedAt ||
+          (Array.isArray(hit.answers) &&
+            hit.answers.some((answer) => answer && answer.awardedByTeammate !== true)))
+      ) {
+        return res.status(409).json(GUEST_ALREADY_ATTEMPTED_BODY);
+      }
+    }
 
     // Store timer per team instead of globally
     const teamTimerPath = `space_race_team_timers/${id}/team_${teamId}`;
@@ -1769,6 +1870,14 @@ router.get('/:id/final-score', async (req, res) => {
         score,
         completedAt: new Date().toISOString(),
       });
+      if (participant.deviceId && participant.name) {
+        await markGuestAttemptCompleted({
+          kind: 'spaceRace',
+          activitySessionId: `${id}:${race.currentLaunchId || '_'}`,
+          deviceId: participant.deviceId,
+          name: participant.name,
+        }).catch(() => {});
+      }
       return res.json({
         success: true,
         score,
@@ -1804,6 +1913,15 @@ router.get('/:id/final-score', async (req, res) => {
     });
 
     await db.ref().update(finalUpdates);
+
+    if (participant.deviceId && participant.name) {
+      await markGuestAttemptCompleted({
+        kind: 'spaceRace',
+        activitySessionId: `${id}:${race.currentLaunchId || '_'}`,
+        deviceId: participant.deviceId,
+        name: participant.name,
+      }).catch(() => {});
+    }
     
     return res.json({ 
       success: true, 

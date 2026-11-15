@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { handleAPIError } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
 import { joinSessionByCode } from '../utils/joinSessionFlow';
@@ -8,9 +8,12 @@ import { db } from '../firebase';
 
 const AudienceJoin = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const { audienceSignIn, audienceSignInWithGoogle } = useAuth();
   const [name, setName] = useState('');
-  const [code, setCode] = useState('');
+  const [code, setCode] = useState(() =>
+    String(location.state?.sessionCode || '').toUpperCase().slice(0, 6)
+  );
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
   const [raceData, setRaceData] = useState(null);

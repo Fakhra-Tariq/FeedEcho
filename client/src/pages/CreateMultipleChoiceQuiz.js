@@ -25,7 +25,6 @@ import {
 const QUIZ_TYPE = 'Multiple Choice';
 
 const CreateMultipleChoiceQuiz = () => {
-  useQuizCreateBackToLibrary();
   const { alert } = useHybridAlert();
   const { user, userProfile } = useAuth();
   const teacherUid = userProfile?.uid || user?.uid;
@@ -58,6 +57,7 @@ const CreateMultipleChoiceQuiz = () => {
     persistedId,
     snapshot,
   });
+  useQuizCreateBackToLibrary(mode === 'saved');
 
   useEffect(() => {
     if (initialEdit) localStorage.removeItem('editingQuiz');

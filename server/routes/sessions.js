@@ -17,6 +17,13 @@ const {
 } = require('../utils/teacherSessionGuard');
 const { writeLaunchParticipant, closeActiveQuizLaunch } = require('../utils/quizLaunches');
 const { ALREADY_ATTEMPTED_BODY, findCompletedQuizAttempt } = require('../utils/quizOneAttempt');
+const {
+  GUEST_ALREADY_ATTEMPTED_BODY,
+  isLoggedInStudentUid,
+  matchesGuestDeviceName,
+  normalizeGuestName,
+} = require('../utils/guestAttemptIdentity');
+const { asRowList, claimGuestAttempt } = require('../utils/guestAttemptClaims');
 const { getSharedTeamScoreState } = require('../utils/spaceRaceTeamScore');
 const router = express.Router();
 
@@ -78,7 +85,15 @@ router.post('/join', async (req, res) => {
   try {
     console.log('🔍 Join session attempt:', req.body);
     
-    const { name, code, teamId: requestedTeamId, studentUid, studentEmail } = req.body;
+    const {
+      name,
+      code,
+      teamId: requestedTeamId,
+      studentUid,
+      studentEmail,
+      deviceId,
+      legacyParticipantIds,
+    } = req.body;
     
     if (!name || !code) {
       console.log('❌ Missing name or code');
@@ -318,6 +333,33 @@ router.post('/join', async (req, res) => {
         if (standaloneSessionId) {
           await incrementStandaloneSessionParticipants(standaloneSessionId);
         }
+
+        const ticketActivitySessionId = `${ticketId}:${activeCode || ticket.joinCode || '_'}`;
+        if (isLoggedInStudentUid(studentUid)) {
+          const respSnap = await db.ref(`exit_responses/${ticketId}`).get();
+          const rows = asRowList(respSnap.exists() ? respSnap.val() : {});
+          const uidHit = rows.find(
+            (row) => row.studentUid && String(row.studentUid) === String(studentUid)
+          );
+          if (uidHit) {
+            return res.status(409).json(ALREADY_ATTEMPTED_BODY);
+          }
+        } else {
+          const respSnap = await db.ref(`exit_responses/${ticketId}`).get();
+          const rows = asRowList(respSnap.exists() ? respSnap.val() : {});
+          const guestClaim = await claimGuestAttempt({
+            kind: 'exitTicket',
+            activitySessionId: ticketActivitySessionId,
+            deviceId,
+            name,
+            legacyParticipantIds,
+            existingRows: rows,
+          });
+          if (guestClaim.reason === 'already-attempted') {
+            return res.status(409).json(GUEST_ALREADY_ATTEMPTED_BODY);
+          }
+        }
+
         return res.json({
           success: true,
           type: 'exitTicket',
@@ -437,12 +479,18 @@ router.post('/join', async (req, res) => {
       const existingParticipants = existingParticipantsSnap.exists()
         ? (existingParticipantsSnap.val() || {})
         : {};
+      const guestNameKey = normalizeGuestName(trimmedName);
       const existingMatch = Object.entries(existingParticipants).find(([, participant]) => {
         if (!participant) return false;
         if (studentUid && participant.studentUid && String(participant.studentUid) === String(studentUid)) {
           return true;
         }
-        return participant.name === trimmedName;
+        if (studentUid) return false;
+        return matchesGuestDeviceName(participant, {
+          deviceId,
+          normalizedName: guestNameKey,
+          legacyParticipantIds,
+        });
       });
 
       if (existingMatch) {
@@ -456,10 +504,9 @@ router.post('/join', async (req, res) => {
           );
 
         if (completedThisLaunch) {
-          return res.status(400).json({
-            success: false,
-            error: 'You have already attempted this quiz',
-            message: 'You have already attempted this quiz.',
+          return res.status(409).json({
+            ...(studentUid ? ALREADY_ATTEMPTED_BODY : GUEST_ALREADY_ATTEMPTED_BODY),
+            raceId: effectiveSession.sessionId,
           });
         }
 
@@ -606,7 +653,28 @@ router.post('/join', async (req, res) => {
       }
 
       // Create participant document
-      const participantId = db.ref(`space_race_participants/${effectiveSession.sessionId}`).push().key;
+      const raceActivitySessionId = `${effectiveSession.sessionId}:${currentLaunchId || '_'}`;
+      let participantId = db.ref(`space_race_participants/${effectiveSession.sessionId}`).push().key;
+
+      if (!studentUid) {
+        const guestClaim = await claimGuestAttempt({
+          kind: 'spaceRace',
+          activitySessionId: raceActivitySessionId,
+          deviceId,
+          name: trimmedName,
+          legacyParticipantIds,
+          existingRows: asRowList(existingParticipants),
+        });
+        if (guestClaim.reason === 'already-attempted') {
+          return res.status(409).json({
+            ...GUEST_ALREADY_ATTEMPTED_BODY,
+            raceId: effectiveSession.sessionId,
+          });
+        }
+        if (guestClaim.ok && guestClaim.participantId) {
+          participantId = guestClaim.participantId;
+        }
+      }
 
       const participant = {
         id: participantId,
@@ -617,9 +685,15 @@ router.post('/join', async (req, res) => {
         ...(currentLaunchId ? { launchId: currentLaunchId } : {}),
         ...(studentUid ? { studentUid } : {}),
         ...(studentEmail ? { studentEmail } : {}),
+        ...(!studentUid && deviceId
+          ? { deviceId: String(deviceId), normalizedName: normalizeGuestName(trimmedName) }
+          : {}),
       };
 
-      await raceParticipantsRef(effectiveSession.sessionId).child(participantId).set(participant);
+      await raceParticipantsRef(effectiveSession.sessionId).child(participantId).transaction((cur) => {
+        if (cur && typeof cur === 'object') return cur;
+        return participant;
+      });
 
       if (standaloneSessionId) {
         await incrementStandaloneSessionParticipants(standaloneSessionId);
@@ -790,18 +864,63 @@ router.post('/join', async (req, res) => {
       }
 
       const trimmedName = name.trim();
+      const quizActivitySessionId = `${effectiveSession.sessionId}:${currentLaunchId || '_'}`;
+      const guestIdentity = {
+        studentUid,
+        deviceId,
+        normalizedName: normalizeGuestName(trimmedName),
+        legacyParticipantIds,
+      };
 
       const completedAttempt = await findCompletedQuizAttempt(
         effectiveSession.sessionId,
         currentLaunchId,
-        { studentUid }
+        studentUid ? { studentUid } : guestIdentity
       );
       if (completedAttempt) {
-        return res.status(400).json(ALREADY_ATTEMPTED_BODY);
+        return res.status(409).json(studentUid ? ALREADY_ATTEMPTED_BODY : GUEST_ALREADY_ATTEMPTED_BODY);
       }
 
-      // Create participant document
-      const participantId = db.ref(`quiz_participants/${effectiveSession.sessionId}`).push().key;
+      const participantsSnap = await quizParticipantsRef(effectiveSession.sessionId).get();
+      const participantRows = asRowList(participantsSnap.exists() ? participantsSnap.val() : {});
+
+      let participantId = db.ref(`quiz_participants/${effectiveSession.sessionId}`).push().key;
+      let resumeExisting = false;
+
+      if (studentUid) {
+        const uidRow = participantRows.find(
+          (row) =>
+            row.studentUid &&
+            String(row.studentUid) === String(studentUid) &&
+            (!currentLaunchId || !row.launchId || String(row.launchId) === String(currentLaunchId))
+        );
+        if (uidRow) {
+          participantId = uidRow.participantId || uidRow.id;
+          resumeExisting = true;
+        }
+      } else {
+        const guestClaim = await claimGuestAttempt({
+          kind: 'quiz',
+          activitySessionId: quizActivitySessionId,
+          deviceId,
+          name: trimmedName,
+          legacyParticipantIds,
+          existingRows: participantRows,
+        });
+        if (guestClaim.reason === 'already-attempted') {
+          return res.status(409).json(GUEST_ALREADY_ATTEMPTED_BODY);
+        }
+        if (guestClaim.reason === 'missing-identity') {
+          return res.status(400).json({
+            success: false,
+            error: 'Device identity is required to join as a guest',
+          });
+        }
+        if (guestClaim.ok && guestClaim.participantId) {
+          participantId = guestClaim.participantId;
+          resumeExisting = Boolean(guestClaim.resume);
+        }
+      }
 
       const participant = {
         id: participantId,
@@ -812,9 +931,15 @@ router.post('/join', async (req, res) => {
         ...(currentLaunchId ? { launchId: currentLaunchId } : {}),
         ...(studentUid ? { studentUid } : {}),
         ...(studentEmail ? { studentEmail } : {}),
+        ...(!studentUid && deviceId
+          ? { deviceId: String(deviceId), normalizedName: normalizeGuestName(trimmedName) }
+          : {}),
       };
 
-      await quizParticipantsRef(effectiveSession.sessionId).child(participantId).set(participant);
+      await quizParticipantsRef(effectiveSession.sessionId).child(participantId).transaction((cur) => {
+        if (cur && typeof cur === 'object') return cur;
+        return participant;
+      });
       if (currentLaunchId) {
         await writeLaunchParticipant(
           effectiveSession.sessionId,
@@ -824,13 +949,15 @@ router.post('/join', async (req, res) => {
         );
       }
 
-      if (standaloneSessionId) {
-        await incrementStandaloneSessionParticipants(standaloneSessionId);
-      }
+      if (!resumeExisting) {
+        if (standaloneSessionId) {
+          await incrementStandaloneSessionParticipants(standaloneSessionId);
+        }
 
-      // Update participant count
-      await db.ref(`quizzes/${effectiveSession.sessionId}/participantsCount`)
-        .transaction((cur) => Number(cur || 0) + 1);
+        // Update participant count
+        await db.ref(`quizzes/${effectiveSession.sessionId}/participantsCount`)
+          .transaction((cur) => Number(cur || 0) + 1);
+      }
 
       console.log('Participant joined Quiz successfully:', {
         participantId,

@@ -6,6 +6,8 @@ import GuestProgressLoginBanner from '../components/Audience/GuestProgressLoginB
 import { onValue, ref as dbRef, off } from 'firebase/database';
 import { db } from '../firebase';
 import { sessionsAPI, spaceRacesAPI } from '../services/api';
+import { getAudienceDeviceId } from '../utils/audienceDeviceId';
+import { collectLegacyParticipantIds, goToGuestNameStep } from '../utils/guestAttemptIdentity';
 import { useHybridAlert } from '../contexts/HybridAlertContext';
 import AudienceQuizAttempt from './AudienceQuizAttempt';
 import SpaceRaceGamePanel from '../components/SpaceRace/SpaceRaceGamePanel';
@@ -244,7 +246,10 @@ export default function AudienceSpaceRacePage() {
     setJoinError('');
 
     try {
-      const joinResponse = await sessionsAPI.join(trimmedName, trimmedCode, teamId);
+      const joinResponse = await sessionsAPI.join(trimmedName, trimmedCode, teamId, {
+        deviceId: getAudienceDeviceId(),
+        legacyParticipantIds: collectLegacyParticipantIds(),
+      });
 
       if (!joinResponse.data?.success) {
         setJoinError(joinResponse.data?.message || joinResponse.data?.error || 'Failed to join session');
@@ -291,6 +296,18 @@ export default function AudienceSpaceRacePage() {
       alert.toast.success('Joined Space Race!');
     } catch (err) {
       console.error('Join error:', err);
+      if (err.response?.data?.code === 'ALREADY_ATTEMPTED') {
+        const raceId = err.response?.data?.raceId;
+        if (raceId) {
+          navigate(`/audience/space-race/${raceId}`, {
+            replace: true,
+            state: { alreadyAttemptedOnDevice: true },
+          });
+          return;
+        }
+        goToGuestNameStep(navigate, trimmedCode);
+        return;
+      }
       setJoinError(err.response?.data?.message || err.message || 'Failed to join');
     } finally {
       setIsJoining(false);
@@ -550,7 +567,7 @@ export default function AudienceSpaceRacePage() {
           />
         </div>
         {isQuizView ? (
-          <div className={`flex-1 min-h-0 overflow-y-auto overflow-x-hidden bg-background ${hasTeamChat ? 'max-md:pb-20' : ''}`}>
+          <div className={`relative flex-1 min-h-0 overflow-y-auto overflow-x-hidden bg-background ${hasTeamChat ? 'max-md:pb-20' : ''}`}>
             <SpaceRaceGamePanel
               raceId={activeRaceId}
               participant={participant}

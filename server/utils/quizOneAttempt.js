@@ -1,4 +1,5 @@
 const { db } = require('../config/firebase');
+const { matchesGuestDeviceName } = require('./guestAttemptIdentity');
 
 const ALREADY_ATTEMPTED_MESSAGE = 'You have already completed this quiz';
 
@@ -23,10 +24,18 @@ function matchesLaunch(row, currentLaunchId) {
   return true;
 }
 
-function matchesIdentity(row, { studentUid, participantId } = {}) {
+function matchesIdentity(row, { studentUid, participantId, deviceId, normalizedName, legacyParticipantIds } = {}) {
   if (!row || typeof row !== 'object') return false;
-  if (participantId && String(row.participantId) === String(participantId)) return true;
   if (studentUid && row.studentUid && String(row.studentUid) === String(studentUid)) return true;
+  if (studentUid) return false;
+  if (participantId && String(row.participantId) === String(participantId)) return true;
+  if (deviceId || (legacyParticipantIds && legacyParticipantIds.length)) {
+    return matchesGuestDeviceName(row, {
+      deviceId,
+      normalizedName,
+      legacyParticipantIds,
+    });
+  }
   return false;
 }
 
@@ -43,13 +52,14 @@ async function loadQuizSubmissions(quizId, currentLaunchId) {
 
 /**
  * Find a completed attempt for this live launch.
- * Logged-in students match by uid; guests match by participantId only (not by name).
+ * Logged-in students match by uid; guests match deviceId + normalized name
+ * (and legacy participant ids for this activity).
  */
 async function findCompletedQuizAttempt(quizId, currentLaunchId, identity = {}) {
-  const { studentUid, participantId } = identity;
-  if (!studentUid && !participantId) return null;
+  const { studentUid, participantId, deviceId } = identity;
+  if (!studentUid && !participantId && !deviceId) return null;
   const rows = await loadQuizSubmissions(quizId, currentLaunchId);
-  return rows.find((row) => matchesIdentity(row, { studentUid, participantId })) || null;
+  return rows.find((row) => matchesIdentity(row, identity)) || null;
 }
 
 module.exports = {

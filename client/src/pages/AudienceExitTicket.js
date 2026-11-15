@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import { ArrowLeft, Send, CheckCircle } from 'lucide-react';
 import { useHybridAlert } from '../contexts/HybridAlertContext';
 import { useAuth } from '../contexts/AuthContext';
@@ -7,6 +7,9 @@ import { auth } from '../firebase';
 import { exitTicketsAPI, studentsAPI } from '../services/api';
 import { getStoredAudienceSession, getStudentQueryParams } from '../utils/audienceSession';
 import GuestProgressLoginBanner from '../components/Audience/GuestProgressLoginBanner';
+import GuestAlreadyAttemptedNotice from '../components/Audience/GuestAlreadyAttemptedNotice';
+import { getAudienceDeviceId } from '../utils/audienceDeviceId';
+import { collectLegacyParticipantIds, goToGuestNameStep } from '../utils/guestAttemptIdentity';
 import ExitTicketAttemptPhoneHeader, {
   isLoggedInAudienceUser,
 } from '../components/Audience/ExitTicketAttemptPhoneHeader';
@@ -37,6 +40,7 @@ const activityHasExitTicket = (items, ticketId) =>
 const AudienceExitTicket = () => {
   const navigate = useNavigate();
   const { joinCode } = useParams();
+  const location = useLocation();
   const { alert } = useHybridAlert();
   const { user, userProfile, loading: authLoading } = useAuth();
   const accountUid = resolveLoggedInUid(user, userProfile);
@@ -44,7 +48,10 @@ const AudienceExitTicket = () => {
   const [exitTicket, setExitTicket] = useState(null);
   const [answers, setAnswers] = useState({});
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [isSubmitted, setIsSubmitted] = useState(false);
+  const [isSubmitted, setIsSubmitted] = useState(Boolean(location.state?.alreadyAttemptedOnDevice));
+  const [guestBlockedOnDevice, setGuestBlockedOnDevice] = useState(
+    Boolean(location.state?.alreadyAttemptedOnDevice)
+  );
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
@@ -79,6 +86,23 @@ const AudienceExitTicket = () => {
             initialAnswers[index] = '';
           });
           setAnswers(initialAnswers);
+
+          const joinedName = (sessionStorage.getItem('studentName') || '').trim();
+          const uidForAttempt = resolveLoggedInUid(user, userProfile);
+          if (joinedName && !uidForAttempt && response.data.data.id) {
+            try {
+              await exitTicketsAPI.startAttempt(response.data.data.id, {
+                studentName: joinedName,
+                deviceId: getAudienceDeviceId(),
+                legacyParticipantIds: collectLegacyParticipantIds(),
+              });
+            } catch (startErr) {
+              if (startErr?.response?.data?.code === 'ALREADY_ATTEMPTED') {
+                setGuestBlockedOnDevice(true);
+                setIsSubmitted(true);
+              }
+            }
+          }
 
           // Same as Mobile getMyParticipation: GET /students/activity by auth uid.
           const uid = resolveLoggedInUid(user, userProfile);
@@ -188,6 +212,12 @@ const AudienceExitTicket = () => {
         ...(loggedInAudience?.email || user?.email
           ? { studentEmail: loggedInAudience?.email || user?.email }
           : {}),
+        ...(!submitAccountUid
+          ? {
+              deviceId: getAudienceDeviceId(),
+              legacyParticipantIds: collectLegacyParticipantIds(),
+            }
+          : {}),
       };
 
       console.log('Submitting response:', responseData);
@@ -220,6 +250,11 @@ const AudienceExitTicket = () => {
       }
     } catch (error) {
       console.error('Error submitting response:', error);
+      if (error.response?.data?.code === 'ALREADY_ATTEMPTED') {
+        setGuestBlockedOnDevice(!resolveLoggedInUid(user, userProfile));
+        setIsSubmitted(true);
+        return;
+      }
       const errorMessage = error.response?.data?.error || 'Failed to submit response';
       alert.toast.error(errorMessage);
     } finally {
@@ -351,6 +386,11 @@ const AudienceExitTicket = () => {
             <p className="text-gray-600 mb-6">
               Thank you for completing the exit ticket. Your response has been recorded.
             </p>
+            {guestBlockedOnDevice ? (
+              <GuestAlreadyAttemptedNotice
+                onUseDifferentName={() => goToGuestNameStep(navigate, joinCode)}
+              />
+            ) : null}
             <button
               onClick={() => navigate('/')}
               className="w-full min-h-11 flex items-center justify-center space-x-2 px-6 py-3 bg-gradient-to-r from-primary to-primary/80 text-white rounded-xl hover:from-primary/90 hover:to-primary/70 transition-all duration-300 font-semibold"

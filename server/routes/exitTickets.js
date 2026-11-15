@@ -1,5 +1,13 @@
 const express = require('express');
 const { db } = require('../config/firebase');
+const { ALREADY_ATTEMPTED_BODY } = require('../utils/quizOneAttempt');
+const {
+  GUEST_ALREADY_ATTEMPTED_BODY,
+  guestAttemptSlotId,
+  isLoggedInStudentUid,
+  normalizeGuestName,
+} = require('../utils/guestAttemptIdentity');
+const { asRowList, claimGuestAttempt, markGuestAttemptCompleted } = require('../utils/guestAttemptClaims');
 const { simpleAuth } = require('../middleware/simpleAuth');
 const { generateSessionCode } = require('../utils/sessionCodeGenerator');
 const {
@@ -481,10 +489,72 @@ router.get('/:id/responses', async (req, res) => {
   }
 });
 
+function ticketActivitySessionId(ticket) {
+  return `${ticket.id}:${ticket.joinCode || ticket.sessionCode || '_'}`;
+}
+
+// Public: record that a guest/logged-in student started this ticket (before answers).
+router.post('/:id/start-attempt', async (req, res) => {
+  try {
+    const { studentName, studentUid, studentEmail, deviceId, legacyParticipantIds } = req.body || {};
+    const id = req.params.id;
+    const ticket = await loadTicket(id);
+    if (!ticket) {
+      return res.status(404).json({ success: false, error: 'Exit ticket not found' });
+    }
+    if (ticket.status !== 'active') {
+      return res.status(400).json({ success: false, error: 'Exit ticket is not active' });
+    }
+
+    const respSnap = await ticketResponsesRef(id).get();
+    const rows = asRowList(respSnap.exists() ? respSnap.val() : {});
+
+    if (isLoggedInStudentUid(studentUid)) {
+      const hit = rows.find((row) => row.studentUid && String(row.studentUid) === String(studentUid));
+      if (hit) {
+        return res.status(409).json(ALREADY_ATTEMPTED_BODY);
+      }
+      return res.json({ success: true, resumed: false });
+    }
+
+    const guestClaim = await claimGuestAttempt({
+      kind: 'exitTicket',
+      activitySessionId: ticketActivitySessionId(ticket),
+      deviceId,
+      name: studentName,
+      legacyParticipantIds,
+      existingRows: rows,
+    });
+    if (guestClaim.reason === 'already-attempted') {
+      return res.status(409).json(GUEST_ALREADY_ATTEMPTED_BODY);
+    }
+    if (!guestClaim.ok && guestClaim.reason === 'missing-identity') {
+      return res.status(400).json({ success: false, error: 'Name and device are required' });
+    }
+    return res.json({
+      success: true,
+      resumed: Boolean(guestClaim.resume),
+      attemptId: guestClaim.participantId,
+      ...(studentEmail ? { studentEmail } : {}),
+    });
+  } catch (error) {
+    console.error('Start exit ticket attempt error:', error);
+    return res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 // Public route: Submit response to exit ticket
 router.post('/:id/respond', async (req, res) => {
   try {
-    const { ticketId, answers, studentName: bodyStudentName, studentUid, studentEmail } = req.body;
+    const {
+      ticketId,
+      answers,
+      studentName: bodyStudentName,
+      studentUid,
+      studentEmail,
+      deviceId,
+      legacyParticipantIds,
+    } = req.body;
     const resolvedStudentName = String(bodyStudentName || '').trim();
 
     console.log('Submitting response for ticket:', req.params.id);
@@ -511,9 +581,38 @@ router.post('/:id/respond', async (req, res) => {
     if (ticket.status !== 'active') {
       return res.status(400).json({ success: false, error: 'Exit ticket is not active' });
     }
+
+    const respSnap = await ticketResponsesRef(id).get();
+    const rows = asRowList(respSnap.exists() ? respSnap.val() : {});
+
+    if (isLoggedInStudentUid(studentUid)) {
+      const hit = rows.find((row) => row.studentUid && String(row.studentUid) === String(studentUid));
+      if (hit) {
+        return res.status(409).json(ALREADY_ATTEMPTED_BODY);
+      }
+    } else {
+      const guestClaim = await claimGuestAttempt({
+        kind: 'exitTicket',
+        activitySessionId: ticketActivitySessionId(ticket),
+        deviceId,
+        name: resolvedStudentName,
+        legacyParticipantIds,
+        existingRows: rows,
+      });
+      if (guestClaim.reason === 'already-attempted') {
+        return res.status(409).json(GUEST_ALREADY_ATTEMPTED_BODY);
+      }
+    }
     
     // Save response to exit_responses node
-    const responseId = generateId('resp');
+    const responseId =
+      !studentUid && deviceId
+        ? `g_${guestAttemptSlotId(
+            ticketActivitySessionId(ticket),
+            String(deviceId),
+            normalizeGuestName(resolvedStudentName)
+          )}`
+        : generateId('resp');
     const snapshotTitle = String(ticket.title || '').trim();
     const responseData = {
       id: responseId,
@@ -524,9 +623,28 @@ router.post('/:id/respond', async (req, res) => {
       ...(snapshotTitle ? { ticketTitle: snapshotTitle } : {}),
       ...(studentUid ? { studentUid } : {}),
       ...(studentEmail ? { studentEmail } : {}),
+      ...(!studentUid && deviceId
+        ? { deviceId: String(deviceId), normalizedName: normalizeGuestName(resolvedStudentName) }
+        : {}),
     };
-    
-    await ticketResponsesRef(id).child(responseId).set(responseData);
+
+    const writeTxn = await ticketResponsesRef(id).child(responseId).transaction((cur) => {
+      if (cur && typeof cur === 'object') return cur;
+      return responseData;
+    });
+    const stored = writeTxn.snapshot.exists() ? writeTxn.snapshot.val() : responseData;
+    if (stored && stored.submittedAt && stored.submittedAt !== responseData.submittedAt) {
+      return res.status(409).json(studentUid ? ALREADY_ATTEMPTED_BODY : GUEST_ALREADY_ATTEMPTED_BODY);
+    }
+
+    if (!studentUid && deviceId) {
+      await markGuestAttemptCompleted({
+        kind: 'exitTicket',
+        activitySessionId: ticketActivitySessionId(ticket),
+        deviceId,
+        name: resolvedStudentName,
+      });
+    }
     await db.ref(`exit_tickets/${id}/responsesCount`).transaction((cur) => Number(cur || 0) + 1);
     await ticketRef(id).update({ updatedAt: new Date().toISOString() });
     

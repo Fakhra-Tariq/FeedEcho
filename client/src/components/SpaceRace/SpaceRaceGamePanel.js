@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { Rocket, Trophy, Clock, Users, Star, Zap, Flame, Flag } from 'lucide-react';
 import { useRtdbList, useRtdbValue } from '../../hooks/useRtdb';
 import { spaceRacesAPI } from '../../services/api';
@@ -7,6 +7,9 @@ import { getStoredAudienceSession } from '../../utils/audienceSession';
 import { isJoinWindowExpired } from '../../utils/spaceRaceJoinWindow';
 import AudiencePostActivityHomeButton from '../Audience/AudiencePostActivityHomeButton';
 import SpaceRaceQuizClosedCard from './SpaceRaceQuizClosedCard';
+import GuestAlreadyAttemptedNotice from '../Audience/GuestAlreadyAttemptedNotice';
+import { getAudienceDeviceId } from '../../utils/audienceDeviceId';
+import { collectLegacyParticipantIds, goToGuestNameStep } from '../../utils/guestAttemptIdentity';
 
 const TimerDisplay = ({ timerInfo, onTimeUp }) => {
   const [timeLeft, setTimeLeft] = useState(0);
@@ -165,6 +168,10 @@ export default function SpaceRaceGamePanel({
   compact = false,
 }) {
   const navigate = useNavigate();
+  const location = useLocation();
+  const [guestBlockedOnDevice, setGuestBlockedOnDevice] = useState(
+    Boolean(location.state?.alreadyAttemptedOnDevice)
+  );
   const { value: raceData, loading: raceLoading } = useRtdbValue(raceId ? `spaceRaces/${raceId}` : null, {
     enabled: Boolean(raceId),
   });
@@ -328,6 +335,7 @@ export default function SpaceRaceGamePanel({
       me.answers.some((answer) => answer && answer.awardedByTeammate !== true);
     return Boolean(hasPersonalAnswers) || Boolean(me.completedAt);
   }, [effectiveParticipants, participant, raceData?.currentLaunchId, raceData?.startedAt]);
+  const showAlreadyAttempted = hasAttemptedQuiz || guestBlockedOnDevice;
 
   const handleBackToHome = useCallback(() => {
     if (getStoredAudienceSession()) {
@@ -358,7 +366,16 @@ export default function SpaceRaceGamePanel({
         const response = await spaceRacesAPI.startQuiz(raceId, {
           quizId: qId,
           timerSeconds,
-          teamId: participant.teamId
+          teamId: participant.teamId,
+          participantId: participant.id,
+          studentName: participant.name,
+          studentUid: participant.studentUid || undefined,
+          ...(!participant.studentUid
+            ? {
+                deviceId: getAudienceDeviceId(),
+                legacyParticipantIds: collectLegacyParticipantIds(),
+              }
+            : {}),
         });
 
         if (response.data?.expired) {
@@ -375,6 +392,10 @@ export default function SpaceRaceGamePanel({
           console.log('🕐 Stored synchronized endTime for team:', participant.teamId, response.data.endTime);
         }
       } catch (error) {
+        if (error?.response?.data?.code === 'ALREADY_ATTEMPTED') {
+          setGuestBlockedOnDevice(true);
+          return;
+        }
         if (error?.response?.data?.expired) {
           if (error.response.data.joinWindowExpired) setJoinBlockedByApi(true);
           else setQuizTimeExpired(true);
@@ -547,7 +568,7 @@ export default function SpaceRaceGamePanel({
 
         {hasQuiz &&
           !window.location.pathname.includes('/quiz/') &&
-          !hasAttemptedQuiz &&
+          !showAlreadyAttempted &&
           !raceLoading &&
           joinWindowExpired && (
           <div className="mt-6 flex justify-center">
@@ -559,7 +580,7 @@ export default function SpaceRaceGamePanel({
 
         {hasQuiz &&
           !window.location.pathname.includes('/quiz/') &&
-          !hasAttemptedQuiz &&
+          !showAlreadyAttempted &&
           !raceLoading &&
           !joinWindowExpired &&
           !quizTimeExpired && (
@@ -579,7 +600,7 @@ export default function SpaceRaceGamePanel({
 
         {hasQuiz &&
           !window.location.pathname.includes('/quiz/') &&
-          !hasAttemptedQuiz &&
+          !showAlreadyAttempted &&
           !raceLoading &&
           !joinWindowExpired &&
           quizTimeExpired && (
@@ -591,7 +612,7 @@ export default function SpaceRaceGamePanel({
           </div>
         )}
 
-        {hasAttemptedQuiz && !window.location.pathname.includes('/quiz/') && (
+        {showAlreadyAttempted && !window.location.pathname.includes('/quiz/') && (
           <div className="mt-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
             <p className="text-text text-sm">You have already attempted this quiz.</p>
             <div className="px-5 py-2 bg-neutral-300 text-neutral-600 rounded-lg font-semibold whitespace-nowrap max-sm:w-full max-sm:flex max-sm:items-center max-sm:justify-center max-sm:text-center max-sm:whitespace-normal">
@@ -600,8 +621,13 @@ export default function SpaceRaceGamePanel({
           </div>
         )}
       </div>
-      {hasAttemptedQuiz && !window.location.pathname.includes('/quiz/') && (
+      {showAlreadyAttempted && !window.location.pathname.includes('/quiz/') && (
         <div className="max-w-3xl mx-auto mt-4">
+          {guestBlockedOnDevice && !getStoredAudienceSession()?.uid ? (
+            <GuestAlreadyAttemptedNotice
+              onUseDifferentName={() => goToGuestNameStep(navigate)}
+            />
+          ) : null}
           <AudiencePostActivityHomeButton
             onClick={handleBackToHome}
             className="w-full px-6 py-3 bg-primary text-white rounded-xl hover:bg-primary/90 transition-colors text-center leading-snug"

@@ -25,7 +25,6 @@ import {
 const QUIZ_TYPE = 'True / False';
 
 const CreateTrueFalseQuiz = () => {
-  useQuizCreateBackToLibrary();
   const { alert } = useHybridAlert();
   const { user, userProfile } = useAuth();
   const teacherUid = userProfile?.uid || user?.uid;
@@ -58,6 +57,7 @@ const CreateTrueFalseQuiz = () => {
     persistedId,
     snapshot,
   });
+  useQuizCreateBackToLibrary(mode === 'saved');
 
   useEffect(() => {
     if (initialEdit) localStorage.removeItem('editingQuiz');
