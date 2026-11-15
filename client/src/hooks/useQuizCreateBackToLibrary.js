@@ -1,7 +1,16 @@
-import { useEffect } from 'react';
+import { useCallback, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 
-const LIBRARY_PATH = '/host/library';
+export const QUIZ_LIBRARY_PATH = '/host/library';
+const LIBRARY_PATH = QUIZ_LIBRARY_PATH;
+
+/** Replace the editor with Library so Back does not return to a stale form. */
+export function useGoToQuizLibrary() {
+  const navigate = useNavigate();
+  return useCallback(() => {
+    navigate(QUIZ_LIBRARY_PATH, { replace: true });
+  }, [navigate]);
+}
 
 /**
  * Browser Back from a quiz creation page always lands on Library.

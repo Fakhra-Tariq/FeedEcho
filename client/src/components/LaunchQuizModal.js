@@ -1,7 +1,9 @@
 import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { X, Play, Minus, Plus } from 'lucide-react';
 import QuizLaunchedModal from './QuizLaunchedModal';
 import { useHybridAlert } from '../contexts/HybridAlertContext';
+import { QUIZ_LIBRARY_PATH } from '../hooks/useQuizCreateBackToLibrary';
 import { NO_ACTIVE_SESSION_MESSAGE } from '../utils/requireActiveHostSession';
 import {
   launchQuizWithSettings,
@@ -12,8 +14,16 @@ import {
   QUIZ_TIME_STEP_MINUTES,
 } from '../utils/quizLaunchSettings';
 
-const LaunchQuizModal = ({ isOpen, onClose, onLaunch, quiz, existingAccessCode }) => {
+const LaunchQuizModal = ({
+  isOpen,
+  onClose,
+  onLaunch,
+  quiz,
+  existingAccessCode,
+  redirectToLibraryOnSuccess = false,
+}) => {
   const { alert } = useHybridAlert();
+  const navigate = useNavigate();
   
   const [timeLimit, setTimeLimit] = useState(null);
   const [timePerStudent, setTimePerStudent] = useState(null);
@@ -81,6 +91,10 @@ const LaunchQuizModal = ({ isOpen, onClose, onLaunch, quiz, existingAccessCode }
         title: 'Quiz Launched',
         duration: 4000,
       });
+      if (redirectToLibraryOnSuccess) {
+        navigate(QUIZ_LIBRARY_PATH, { replace: true });
+        return;
+      }
       setShowLaunchedModal(true);
     } catch (err) {
       const msg = err.response?.data?.error || err.message || 'Failed to launch quiz';

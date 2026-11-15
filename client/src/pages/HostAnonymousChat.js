@@ -40,7 +40,7 @@ const isMobileChatLayout = () =>
 const getMobileChatIdFromSearch = (search) =>
   new URLSearchParams(search || '').get(MOBILE_CHAT_QUERY) || '';
 
-function NamesToggleButton({ namesVisible, disabled, onClick, variant = 'onDark' }) {
+function NamesToggleButton({ namesVisible, disabled, onClick, variant = 'onDark', className = '' }) {
   const label = namesVisible ? 'Names visible' : 'Names hidden';
   const Icon = namesVisible ? Eye : EyeOff;
   const onDark = variant === 'onDark';
@@ -53,7 +53,7 @@ function NamesToggleButton({ namesVisible, disabled, onClick, variant = 'onDark'
       aria-label={label}
       title="Show sender names on new messages"
       className={clsx(
-        'inline-flex items-center justify-center min-h-11 px-3 sm:px-4 py-2 rounded-lg text-sm border transition-colors disabled:opacity-50 disabled:cursor-not-allowed',
+        'inline-flex items-center justify-center min-h-11 h-11 px-3 sm:px-4 py-2 rounded-lg text-sm border transition-colors disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap',
         namesVisible ? 'font-medium' : 'font-medium',
         onDark &&
           (namesVisible
@@ -62,7 +62,8 @@ function NamesToggleButton({ namesVisible, disabled, onClick, variant = 'onDark'
         !onDark &&
           (namesVisible
             ? 'bg-white border-[#6B3A5C] text-[#4A1F3D]'
-            : 'bg-white border-[#6D415F]/40 text-[#6D415F]')
+            : 'bg-white border-[#6D415F]/40 text-[#6D415F]'),
+        className
       )}
     >
       <Icon className="w-4 h-4 shrink-0" />
@@ -688,30 +689,36 @@ export default function HostAnonymousChat() {
         }
         subtitle="Anonymous Q&A and feedback sessions"
         actions={
-          <div className="flex flex-wrap items-stretch gap-2 w-full sm:w-auto min-w-0">
+          <div className="flex flex-wrap items-stretch gap-2 w-full sm:w-auto min-w-0 max-md:flex-nowrap max-md:gap-2 max-[320px]:flex-col">
             <button
               onClick={toggleModeration}
+              aria-label={moderationMode ? 'Moderation ON' : 'Moderation OFF'}
               className={clsx(
-                'inline-flex items-center justify-center min-h-11 px-4 py-2 rounded-lg text-sm font-medium border transition-colors',
+                'inline-flex items-center justify-center min-h-11 h-11 px-4 py-2 rounded-lg text-sm font-medium border transition-colors whitespace-nowrap',
+                'max-md:flex-1 max-md:min-w-0 max-md:px-2 max-[320px]:w-full max-[320px]:text-xs',
                 moderationMode
                   ? 'bg-white/25 border-white/60 text-white hover:bg-white/35'
                   : 'bg-white/10 border-white/30 text-white/90 hover:bg-white/20'
               )}
             >
-              <Settings className="w-4 h-4 mr-2" />
-              {moderationMode ? 'Moderation ON' : 'Moderation OFF'}
+              <Settings className="w-4 h-4 mr-2 shrink-0" />
+              <span className="whitespace-nowrap">
+                {moderationMode ? 'Moderation ON' : 'Moderation OFF'}
+              </span>
             </button>
-            <NamesToggleButton
-              namesVisible={namesVisible}
-              disabled={namesToggleDisabled}
-              onClick={toggleNamesVisible}
-              variant="onDark"
-            />
+            <div className="hidden md:contents">
+              <NamesToggleButton
+                namesVisible={namesVisible}
+                disabled={namesToggleDisabled}
+                onClick={toggleNamesVisible}
+                variant="onDark"
+              />
+            </div>
             <button
               onClick={() => setShowCreate(true)}
-              className="inline-flex items-center justify-center min-h-11 px-4 py-2 bg-white text-primary text-sm font-medium rounded-lg hover:bg-white/90 transition-colors shadow-sm"
+              className="inline-flex items-center justify-center min-h-11 h-11 px-4 py-2 bg-white text-primary text-sm font-medium rounded-lg hover:bg-white/90 transition-colors shadow-sm whitespace-nowrap max-md:flex-1 max-md:min-w-0 max-md:px-2 max-[320px]:w-full max-[320px]:text-xs"
             >
-              <MessageSquare className="w-4 h-4 mr-2" />
+              <MessageSquare className="w-4 h-4 mr-2 shrink-0" />
               New Chat
             </button>
           </div>
@@ -848,33 +855,37 @@ export default function HostAnonymousChat() {
                         </span>
                       )}
                     </div>
-                    <div className="flex flex-wrap items-stretch gap-2">
-                      <button
-                        type="button"
-                        onClick={toggleModeration}
-                        className={clsx(
-                          'inline-flex flex-1 items-center justify-center min-h-11 px-3 py-2 rounded-lg text-sm font-medium border transition-colors text-center',
-                          moderationMode
-                            ? 'bg-[#6D415F] border-[#6D415F] text-white'
-                            : 'bg-white border-[#6D415F]/40 text-[#6D415F]'
-                        )}
-                      >
-                        <span className="inline-flex items-center justify-center gap-2">
-                          <Settings className="w-4 h-4 shrink-0" />
-                          {moderationMode ? 'Moderation ON' : 'Moderation OFF'}
-                        </span>
-                      </button>
-                      <NamesToggleButton
-                        namesVisible={namesVisible}
-                        disabled={namesToggleDisabled}
-                        onClick={toggleNamesVisible}
-                        variant="onLight"
-                      />
+                    <div className="flex flex-col gap-2">
+                      <div className="flex items-stretch gap-2">
+                        <button
+                          type="button"
+                          onClick={toggleModeration}
+                          aria-label={moderationMode ? 'Moderation ON' : 'Moderation OFF'}
+                          className={clsx(
+                            'inline-flex flex-1 min-w-0 items-center justify-center min-h-11 h-11 px-3 max-[320px]:px-2 py-2 rounded-lg text-sm max-[320px]:text-xs font-medium border transition-colors whitespace-nowrap',
+                            moderationMode
+                              ? 'bg-[#6D415F] border-[#6D415F] text-white'
+                              : 'bg-white border-[#6D415F]/40 text-[#6D415F]'
+                          )}
+                        >
+                          <Settings className="w-4 h-4 mr-2 shrink-0" />
+                          <span className="whitespace-nowrap">
+                            {moderationMode ? 'Moderation ON' : 'Moderation OFF'}
+                          </span>
+                        </button>
+                        <NamesToggleButton
+                          namesVisible={namesVisible}
+                          disabled={namesToggleDisabled}
+                          onClick={toggleNamesVisible}
+                          variant="onLight"
+                          className="flex-1 min-w-0 max-[320px]:px-2 max-[320px]:text-xs"
+                        />
+                      </div>
                       {selectedChat.status === 'active' && (
                         <button
                           type="button"
                           onClick={handleEndChat}
-                          className="inline-flex flex-1 items-center justify-center min-h-11 px-3 py-2 bg-red-500 text-white text-sm rounded-lg hover:bg-red-600 transition-colors"
+                          className="inline-flex w-full items-center justify-center min-h-11 px-3 py-2 bg-red-500 text-white text-sm rounded-lg hover:bg-red-600 transition-colors"
                         >
                           End Chat
                         </button>

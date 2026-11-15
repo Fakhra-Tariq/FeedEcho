@@ -1,6 +1,5 @@
 import React from 'react';
 import { Check, Rocket, Save } from 'lucide-react';
-import { LaunchRequiresSessionHint } from './Host/NoActiveSessionLaunchModal';
 
 const ACTION_BTN =
   'flex items-center justify-center space-x-2 min-h-11 h-11 px-4 sm:px-6 rounded-xl font-medium text-sm sm:text-base shadow-sm transition-all w-full md:w-auto md:min-w-[9.5rem] whitespace-nowrap';
@@ -58,7 +57,6 @@ export default function QuizEditorHeaderActions({
         <Rocket className="w-4 h-4 sm:w-5 sm:h-5 shrink-0" />
         <span>Launch Quiz</span>
       </button>
-      {launchEnabled ? <LaunchRequiresSessionHint className="text-center md:text-right" /> : null}
     </div>
   );
 

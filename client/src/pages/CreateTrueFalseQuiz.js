@@ -14,7 +14,7 @@ import {
   getActiveTeacherSession,
 } from '../utils/requireActiveHostSession';
 import { persistLaunchedQuizInLocalStorage } from '../utils/quizLaunchSettings';
-import useQuizCreateBackToLibrary from '../hooks/useQuizCreateBackToLibrary';
+import useQuizCreateBackToLibrary, { useGoToQuizLibrary } from '../hooks/useQuizCreateBackToLibrary';
 import useQuizEditorDirty from '../hooks/useQuizEditorDirty';
 import { openHostQuizLaunch } from '../utils/openHostQuizLaunch';
 import {
@@ -26,6 +26,7 @@ const QUIZ_TYPE = 'True / False';
 
 const CreateTrueFalseQuiz = () => {
   useQuizCreateBackToLibrary();
+  const goToLibrary = useGoToQuizLibrary();
   const { alert } = useHybridAlert();
   const { user, userProfile } = useAuth();
   const teacherUid = userProfile?.uid || user?.uid;
@@ -130,6 +131,7 @@ const CreateTrueFalseQuiz = () => {
           : [...savedQuizzes, { ...saved, createdDate: saved.createdAt }];
         localStorage.setItem('savedQuizzes', JSON.stringify(updatedList));
         alert.toast.success(isActuallyEditMode ? 'Quiz updated successfully' : 'Quiz saved successfully');
+        goToLibrary();
       }
     } catch (err) {
       const apiErr = handleAPIError(err);
@@ -350,6 +352,7 @@ const CreateTrueFalseQuiz = () => {
           questions: questions
         }}
         existingAccessCode={launchAccessCode || getActiveTeacherSession(teacherData.activeSession)?.joinCode || ''}
+        redirectToLibraryOnSuccess
       />
 
       <NoActiveSessionLaunchModal
