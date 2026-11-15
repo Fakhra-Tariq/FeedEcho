@@ -77,3 +77,34 @@
     max-width: 30vw;
   }
 }
+
+/* Quiz-taking phone header: logo | 2-line title | account. md+ uses the desktop grid. */
+.audience-activity-phone-header--quiz {
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  height: 3.5rem;
+  min-height: 3.5rem;
+}
+
+.audience-activity-phone-header--quiz .audience-activity-phone-header__left {
+  min-width: auto;
+  flex-shrink: 0;
+}
+
+.audience-activity-phone-header--quiz .audience-activity-phone-header__left .feed-echo-logo-clip {
+  flex-shrink: 0;
+}
+
+.audience-activity-phone-header--quiz .audience-activity-phone-header__center h1 {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  white-space: normal;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  word-break: break-word;
+}
+
+.audience-activity-phone-header--quiz .audience-activity-phone-header__right {
+  flex-shrink: 0;
+}

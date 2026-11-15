@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { Trash2, Sparkles } from 'lucide-react';
-import clsx from 'clsx';
+import { Trash2 } from 'lucide-react';
 import { useHybridAlert } from '../contexts/HybridAlertContext';
 import LaunchQuizModal from '../components/LaunchQuizModal';
 import QuizEditorHeaderActions from '../components/QuizEditorHeaderActions';
@@ -474,21 +473,6 @@ const MixedTypeQuizEditor = () => {
               saving={saving}
               onSave={saveQuiz}
               onLaunch={launchQuiz}
-              extra={
-                <button
-                  type="button"
-                  onClick={() => setShowAiPanel(true)}
-                  className={clsx(
-                    'flex items-center justify-center space-x-2 min-h-11 h-11 px-4 sm:px-5 rounded-xl font-medium text-sm sm:text-base shadow-sm hover:shadow-md transition-all w-full md:w-auto',
-                    showAiPanel
-                      ? 'bg-primary/10 text-primary border border-primary/20'
-                      : 'bg-white text-primary border border-primary/20 hover:bg-primary/5'
-                  )}
-                >
-                  <Sparkles className="w-4 h-4 sm:w-5 sm:h-5" />
-                  <span>AI Generator</span>
-                </button>
-              }
             />
           </div>
         </div>

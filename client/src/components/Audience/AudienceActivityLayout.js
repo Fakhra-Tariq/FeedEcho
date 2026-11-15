@@ -25,6 +25,7 @@ export function AudienceActivityHeader({
   compactMobileZones = false,
   trueCenterTitle = false,
   leftAlignMobileTitle = false,
+  phoneHeaderVariant = null,
 }) {
   void showAvatar;
   void trueCenterTitle;
@@ -93,15 +94,31 @@ export function AudienceActivityHeader({
       desktopIdentity
     );
 
-  const titleContent = (
+  const titleHeading = (twoLine) => (
+    <h1
+      dir="auto"
+      title={typeof title === 'string' ? title : undefined}
+      className={
+        twoLine
+          ? 'font-bold text-gray-900 text-center leading-tight text-sm sm:text-base min-w-0 line-clamp-2 whitespace-normal break-words'
+          : 'font-bold text-gray-900 text-center leading-tight truncate whitespace-nowrap text-sm sm:text-base'
+      }
+    >
+      {title}
+    </h1>
+  );
+
+  const phoneTitleContent = (
     <>
       {titleIcon}
-      <h1
-        dir="auto"
-        className="font-bold text-gray-900 text-center leading-tight truncate whitespace-nowrap text-sm sm:text-base"
-      >
-        {title}
-      </h1>
+      {titleHeading(phoneHeaderVariant === 'quiz')}
+    </>
+  );
+
+  const desktopTitleContent = (
+    <>
+      {titleIcon}
+      {titleHeading(false)}
       {badge ? (
         <span
           className={`px-2 py-0.5 rounded-full text-xs font-medium whitespace-nowrap text-rose-purple shrink-0 max-[480px]:px-1.5 max-[480px]:text-[10px] ${
@@ -130,15 +147,16 @@ export function AudienceActivityHeader({
         <AudienceActivityPhoneHeaderRow
           left={logoSlot}
           center={
-            <div className="audience-activity-phone-header__cluster-title">{titleContent}</div>
+            <div className="audience-activity-phone-header__cluster-title">{phoneTitleContent}</div>
           }
           right={phoneRight}
           rightHasAddon={Boolean(rightAddon)}
+          variant={phoneHeaderVariant}
         />
         <div className="hidden md:grid md:grid-cols-3 md:h-16 md:gap-2 md:items-center">
           {logoSlot}
           <div className="min-w-0 flex items-center justify-center gap-x-2 overflow-hidden">
-            {titleContent}
+            {desktopTitleContent}
           </div>
           <div className="flex justify-end items-center shrink-0 min-w-0">
             {rightAddon ? (

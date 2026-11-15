@@ -689,13 +689,12 @@ export default function HostAnonymousChat() {
         }
         subtitle="Anonymous Q&A and feedback sessions"
         actions={
-          <div className="flex flex-wrap items-stretch gap-2 w-full sm:w-auto min-w-0 max-md:flex-nowrap max-md:gap-2 max-[320px]:flex-col">
+          <div className="flex flex-wrap items-stretch gap-2 w-full sm:w-auto min-w-0 max-md:flex-nowrap">
             <button
               onClick={toggleModeration}
               aria-label={moderationMode ? 'Moderation ON' : 'Moderation OFF'}
               className={clsx(
-                'inline-flex items-center justify-center min-h-11 h-11 px-4 py-2 rounded-lg text-sm font-medium border transition-colors whitespace-nowrap',
-                'max-md:flex-1 max-md:min-w-0 max-md:px-2 max-[320px]:w-full max-[320px]:text-xs',
+                'hidden md:inline-flex items-center justify-center min-h-11 h-11 px-4 py-2 rounded-lg text-sm font-medium border transition-colors whitespace-nowrap',
                 moderationMode
                   ? 'bg-white/25 border-white/60 text-white hover:bg-white/35'
                   : 'bg-white/10 border-white/30 text-white/90 hover:bg-white/20'
@@ -716,7 +715,7 @@ export default function HostAnonymousChat() {
             </div>
             <button
               onClick={() => setShowCreate(true)}
-              className="inline-flex items-center justify-center min-h-11 h-11 px-4 py-2 bg-white text-primary text-sm font-medium rounded-lg hover:bg-white/90 transition-colors shadow-sm whitespace-nowrap max-md:flex-1 max-md:min-w-0 max-md:px-2 max-[320px]:w-full max-[320px]:text-xs"
+              className="inline-flex items-center justify-center min-h-11 h-11 px-4 py-2 bg-white text-primary text-sm font-medium rounded-lg hover:bg-white/90 transition-colors shadow-sm whitespace-nowrap w-full md:w-auto"
             >
               <MessageSquare className="w-4 h-4 mr-2 shrink-0" />
               New Chat

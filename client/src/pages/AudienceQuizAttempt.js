@@ -2437,6 +2437,7 @@ const AudienceQuizAttempt = ({
         badge={quiz.type}
         participantName={studentSession?.studentName || 'Audience'}
         showLoggedInLogoutMenu
+        phoneHeaderVariant="quiz"
       >
           {/* Duration notice + single live countdown (header shows Duration label only) */}
           {(!isSpaceRace && (quiz.launchSettings && (quiz.launchSettings.timePerStudentMinutes || quiz.launchSettings.quizAvailabilityMinutes || quiz.launchSettings.timeLimit || quiz.launchSettings.countdown))) && (

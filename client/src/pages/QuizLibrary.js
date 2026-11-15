@@ -27,6 +27,25 @@ function isHydratedQuizList(list) {
   return (list || []).some((quiz) => quiz.type || quiz.createdBy || quiz.launchSettings);
 }
 
+/** Tailwind md is 768px. Narrow Library Edit must seed the cache the editors use for update vs create. */
+const NARROW_LIBRARY_EDIT_MQ = '(max-width: 768px)';
+
+function seedSavedQuizzesForNarrowEdit(quiz) {
+  if (typeof window === 'undefined') return;
+  if (!window.matchMedia(NARROW_LIBRARY_EDIT_MQ).matches) return;
+  const id = quiz?.id;
+  if (!id) return;
+  try {
+    const list = JSON.parse(localStorage.getItem('savedQuizzes') || '[]');
+    const idx = list.findIndex((row) => row.id === id || String(row.id) === String(id));
+    if (idx === -1) list.push(quiz);
+    else list[idx] = { ...list[idx], ...quiz };
+    localStorage.setItem('savedQuizzes', JSON.stringify(list));
+  } catch {
+    // Editors still save via API; cache seed is only for choosing update vs create.
+  }
+}
+
 function formatQuizTime(seconds) {
   if (!seconds || seconds <= 0) {
     return '00:00';
@@ -266,6 +285,7 @@ const QuizLibrary = () => {
         questions: normalizeQuestionsForEditor(quiz.questions, quizType),
       };
       localStorage.setItem('editingQuiz', JSON.stringify(normalizedQuiz));
+      seedSavedQuizzesForNarrowEdit(normalizedQuiz);
       navigate(getEditorRouteForQuizType(quizType));
     } catch (err) {
       const apiErr = handleAPIError(err);

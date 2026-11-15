@@ -10,9 +10,15 @@ export default function AudienceActivityPhoneHeaderRow({
   center,
   right,
   rightHasAddon = false,
+  variant = null,
 }) {
+  const variantClass =
+    variant === 'quiz' ? ' audience-activity-phone-header--quiz' : '';
   return (
-    <div className="audience-activity-phone-header md:hidden" data-audience-phone-header="true">
+    <div
+      className={`audience-activity-phone-header md:hidden${variantClass}`}
+      data-audience-phone-header="true"
+    >
       <div className="audience-activity-phone-header__left">{left}</div>
       <div className="audience-activity-phone-header__center">{center}</div>
       <div
