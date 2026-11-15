@@ -13,7 +13,7 @@ import {
   getActiveTeacherSession,
 } from '../utils/requireActiveHostSession';
 import { persistLaunchedQuizInLocalStorage } from '../utils/quizLaunchSettings';
-import useQuizCreateBackToLibrary, { useGoToQuizLibrary } from '../hooks/useQuizCreateBackToLibrary';
+import useQuizCreateBackToLibrary from '../hooks/useQuizCreateBackToLibrary';
 import useQuizEditorDirty from '../hooks/useQuizEditorDirty';
 import { openHostQuizLaunch } from '../utils/openHostQuizLaunch';
 import {
@@ -25,11 +25,10 @@ const QUIZ_TYPE = 'Long Answer';
 
 const CreateLongAnswerQuiz = () => {
   useQuizCreateBackToLibrary();
-  const goToLibrary = useGoToQuizLibrary();
   const { alert } = useHybridAlert();
   const { user, userProfile } = useAuth();
   const teacherUid = userProfile?.uid || user?.uid;
-  const { data: teacherData } = useHostData();
+  const { data: teacherData, syncQuizzes } = useHostData();
   const [initialEdit] = useState(() => peekEditingQuizForType(QUIZ_TYPE));
   const [quizTitle, setQuizTitle] = useState(initialEdit?.quiz.title || '');
   const [questions, setQuestions] = useState(initialEdit?.quiz.questions || []);
@@ -102,6 +101,7 @@ const CreateLongAnswerQuiz = () => {
   };
 
   const saveQuiz = async () => {
+    if (saving) return;
     if (!quizTitle.trim() || questions.length === 0) {
       alert.toast.error('Please add a quiz title and at least one question before saving.');
       return;
@@ -111,9 +111,10 @@ const CreateLongAnswerQuiz = () => {
       alert.toast.error('Please complete all questions with text before saving.');
       return;
     }
+    const persistId = savedQuizId || editingQuizId;
     const savedQuizzes = JSON.parse(localStorage.getItem('savedQuizzes') || '[]');
-    const existingQuiz = savedQuizzes.find(q => q.id === editingQuizId);
-    const isActuallyEditMode = isEditMode && existingQuiz;
+    const existingQuiz = savedQuizzes.find(q => String(q.id) === String(persistId));
+    const isActuallyEditMode = Boolean(isEditMode && persistId);
     const payload = {
       title: quizTitle.trim(),
       description: '',
@@ -123,11 +124,11 @@ const CreateLongAnswerQuiz = () => {
       status: 'Ready',
       launched: false,
     };
-    if (isActuallyEditMode) payload.id = editingQuizId;
+    if (isActuallyEditMode) payload.id = persistId;
     setSaving(true);
     try {
       const res = isActuallyEditMode
-        ? await quizzesAPI.update(editingQuizId, payload)
+        ? await quizzesAPI.update(persistId, payload)
         : await quizzesAPI.create(payload);
       if (res.data.success && res.data.data) {
         const saved = res.data.data;
@@ -136,11 +137,11 @@ const CreateLongAnswerQuiz = () => {
         setIsEditMode(true);
         setSnapshot(serializeQuizEditorSnapshot({ title: quizTitle, questions, quizType: QUIZ_TYPE }));
         const updatedList = isActuallyEditMode
-          ? savedQuizzes.map(q => (q.id === editingQuizId ? { ...saved, createdDate: saved.createdAt || q.createdDate } : q))
+          ? savedQuizzes.map(q => (String(q.id) === String(persistId) ? { ...saved, createdDate: saved.createdAt || q.createdDate } : q))
           : [...savedQuizzes, { ...saved, createdDate: saved.createdAt }];
         localStorage.setItem('savedQuizzes', JSON.stringify(updatedList));
         alert.toast.success(isActuallyEditMode ? 'Quiz updated successfully' : 'Quiz saved successfully');
-        goToLibrary();
+        void syncQuizzes();
       }
     } catch (err) {
       const apiErr = handleAPIError(err);

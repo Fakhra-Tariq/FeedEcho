@@ -16,7 +16,7 @@ export default function AudienceActivityPhoneHeaderRow({
     variant === 'quiz' ? ' audience-activity-phone-header--quiz' : '';
   return (
     <div
-      className={`audience-activity-phone-header md:hidden${variantClass}`}
+      className={`audience-activity-phone-header md:!hidden${variantClass}`}
       data-audience-phone-header="true"
     >
       <div className="audience-activity-phone-header__left">{left}</div>

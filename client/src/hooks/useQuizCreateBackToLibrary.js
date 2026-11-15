@@ -13,8 +13,8 @@ export function useGoToQuizLibrary() {
 }
 
 /**
- * Browser Back from a quiz creation page always lands on Library.
- * Does not push an extra entry when history already has a previous page.
+ * Browser / gesture Back from a quiz create/edit page lands on Library
+ * (replace), so the editor is not left in history. Save must not navigate.
  */
 export default function useQuizCreateBackToLibrary() {
   const navigate = useNavigate();

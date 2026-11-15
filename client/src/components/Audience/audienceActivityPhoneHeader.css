@@ -1,12 +1,25 @@
-/* Phone-only activity header: logo | title | name — equal 1fr sides keep the title on the midline. */
+/* Phone-only activity header: logo | title | name — equal 1fr sides keep the title on the midline.
+   display:grid must stay inside max-md; otherwise it overrides Tailwind `md:hidden`
+   and the phone row stacks under the desktop row on laptop/desktop. */
 
 .audience-activity-phone-header {
-  display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, auto) minmax(0, 1fr);
   align-items: center;
   min-height: 3.5rem;
   width: 100%;
   column-gap: 0.5rem;
+}
+
+@media (max-width: 767px) {
+  .audience-activity-phone-header {
+    display: grid;
+  }
+}
+
+@media (min-width: 768px) {
+  .audience-activity-phone-header {
+    display: none;
+  }
 }
 
 .audience-activity-phone-header__left {

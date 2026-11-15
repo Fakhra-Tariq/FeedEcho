@@ -13,7 +13,7 @@ describe('AudienceActivityPhoneHeaderRow', () => {
     const row = container.querySelector('[data-audience-phone-header="true"]');
     expect(row).toBeTruthy();
     expect(row.className).toMatch(/audience-activity-phone-header/);
-    expect(row.className).toMatch(/md:hidden/);
+    expect(row.className).toMatch(/md:!hidden/);
     expect(row.children).toHaveLength(3);
     expect(row.children[0].className).toMatch(/__left/);
     expect(row.children[1].className).toMatch(/__center/);

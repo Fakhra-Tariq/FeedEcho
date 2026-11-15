@@ -18,7 +18,7 @@ import {
   getActiveTeacherSession,
 } from '../utils/requireActiveHostSession';
 import { persistLaunchedQuizInLocalStorage } from '../utils/quizLaunchSettings';
-import useQuizCreateBackToLibrary, { useGoToQuizLibrary } from '../hooks/useQuizCreateBackToLibrary';
+import useQuizCreateBackToLibrary from '../hooks/useQuizCreateBackToLibrary';
 import useQuizEditorDirty from '../hooks/useQuizEditorDirty';
 import { openHostQuizLaunch } from '../utils/openHostQuizLaunch';
 import {
@@ -32,11 +32,10 @@ const MixedTypeQuizEditor = () => {
   const navigate = useNavigate();
   const location = useLocation();
   useQuizCreateBackToLibrary();
-  const goToLibrary = useGoToQuizLibrary();
   const { alert } = useHybridAlert();
   const { user, userProfile } = useAuth();
   const teacherUid = userProfile?.uid || user?.uid;
-  const { data: teacherData } = useHostData();
+  const { data: teacherData, syncQuizzes } = useHostData();
   const [initialEdit] = useState(() =>
     peekEditingQuizForType(QUIZ_TYPE, { acceptAnyWithQuestions: true })
   );
@@ -141,6 +140,7 @@ const MixedTypeQuizEditor = () => {
   };
 
   const saveQuiz = async () => {
+    if (saving) return;
     // Save quiz state logic here
     if (quizTitle.trim() && questions.length > 0) {
       // Check if all questions have required content
@@ -160,9 +160,10 @@ const MixedTypeQuizEditor = () => {
       });
       
       if (validQuestions) {
+        const persistId = savedQuizId || editingQuizId;
         const savedQuizzes = JSON.parse(localStorage.getItem('savedQuizzes') || '[]');
-        const existingQuiz = savedQuizzes.find(q => q.id === editingQuizId);
-        const isActuallyEditMode = isEditMode && existingQuiz;
+        const existingQuiz = savedQuizzes.find(q => String(q.id) === String(persistId));
+        const isActuallyEditMode = Boolean(isEditMode && persistId);
 
         const payload = {
           title: quizTitle.trim(),
@@ -176,12 +177,12 @@ const MixedTypeQuizEditor = () => {
         if (quizSource === AI_GENERATED_QUIZ_SOURCE || existingQuiz?.source === AI_GENERATED_QUIZ_SOURCE) {
           payload.source = AI_GENERATED_QUIZ_SOURCE;
         }
-        if (isActuallyEditMode) payload.id = editingQuizId;
+        if (isActuallyEditMode) payload.id = persistId;
 
         setSaving(true);
         try {
           const res = isActuallyEditMode
-            ? await quizzesAPI.update(editingQuizId, payload)
+            ? await quizzesAPI.update(persistId, payload)
             : await quizzesAPI.create(payload);
 
           if (res.data.success && res.data.data) {
@@ -194,12 +195,12 @@ const MixedTypeQuizEditor = () => {
 
             const updatedList = isActuallyEditMode
               ? savedQuizzes.map((q) =>
-                  q.id === editingQuizId ? { ...saved, createdDate: saved.createdAt || q.createdDate } : q
+                  String(q.id) === String(persistId) ? { ...saved, createdDate: saved.createdAt || q.createdDate } : q
                 )
               : [...savedQuizzes, { ...saved, createdDate: saved.createdAt }];
             localStorage.setItem('savedQuizzes', JSON.stringify(updatedList));
             alert.toast.success(isActuallyEditMode ? 'Quiz updated successfully' : 'Quiz saved successfully');
-            goToLibrary();
+            void syncQuizzes();
           }
         } catch (err) {
           const apiErr = handleAPIError(err);
