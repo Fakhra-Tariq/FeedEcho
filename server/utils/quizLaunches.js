@@ -195,6 +195,92 @@ async function writeLaunchSubmission(quizId, launchId, participantId, submission
     .transaction((cur) => Number(cur || 0) + 1);
 }
 
+function isActiveQuizLaunch(launch, quiz) {
+  const status = String(launch?.status || '').toLowerCase();
+  if (status === 'active' || status === 'live' || status === 'running') return true;
+  const currentId = String(quiz?.currentLaunchId || '').trim();
+  const launchId = String(launch?.id || '').trim();
+  if (currentId && launchId && currentId === launchId) {
+    if (quiz?.launched === true || quiz?.launched === 'true' || !launch?.finishedAt) return true;
+  }
+  return false;
+}
+
+/**
+ * Remove one launch record and only that launch's participant/submission copies.
+ * Does not delete the quiz or other launches.
+ */
+async function deleteQuizLaunch(quizId, launchId) {
+  const id = String(quizId || '').trim();
+  const lid = String(launchId || '').trim();
+  if (!id || !lid) {
+    const err = new Error('Launch not found');
+    err.statusCode = 404;
+    throw err;
+  }
+
+  const launchRef = quizLaunchesRef(id).child(lid);
+  const [launchSnap, quizSnap] = await Promise.all([
+    launchRef.get(),
+    db.ref(`quizzes/${id}`).get(),
+  ]);
+  if (!launchSnap.exists()) {
+    const err = new Error('Launch not found');
+    err.statusCode = 404;
+    throw err;
+  }
+
+  const launch = { ...(launchSnap.val() || {}), id: lid };
+  const quiz = quizSnap.exists() ? quizSnap.val() || {} : {};
+  if (isActiveQuizLaunch(launch, quiz)) {
+    const err = new Error('Finish the quiz first');
+    err.statusCode = 400;
+    throw err;
+  }
+
+  const [partsSnap, subsSnap, flatPartsSnap, flatSubsSnap] = await Promise.all([
+    quizLaunchParticipantsRef(id, lid).get(),
+    quizLaunchSubmissionsRef(id, lid).get(),
+    quizParticipantsRef(id).get(),
+    quizSubmissionsRef(id).get(),
+  ]);
+
+  const launchParts = partsSnap.exists() ? partsSnap.val() || {} : {};
+  const launchSubs = subsSnap.exists() ? subsSnap.val() || {} : {};
+  const flatParts = flatPartsSnap.exists() ? flatPartsSnap.val() || {} : {};
+  const flatSubs = flatSubsSnap.exists() ? flatSubsSnap.val() || {} : {};
+
+  const updates = {
+    [`quiz_launches/${id}/${lid}`]: null,
+    [`quiz_launch_participants/${id}/${lid}`]: null,
+    [`quiz_launch_submissions/${id}/${lid}`]: null,
+  };
+
+  const markStudentIndex = (row, participantId) => {
+    const studentUid = String(row?.studentUid || '').trim();
+    const pid = String(participantId || row?.participantId || row?.id || '').trim();
+    if (!studentUid || !pid) return;
+    updates[`quiz_submissions_by_student/${studentUid}/${id}/${pid}`] = null;
+  };
+
+  Object.entries(launchParts).forEach(([pid, row]) => markStudentIndex(row, pid));
+  Object.entries(launchSubs).forEach(([pid, row]) => markStudentIndex(row, pid));
+
+  Object.entries(flatParts).forEach(([pid, row]) => {
+    if (String(row?.launchId || '') !== lid) return;
+    updates[`quiz_participants/${id}/${pid}`] = null;
+    markStudentIndex(row, pid);
+  });
+  Object.entries(flatSubs).forEach(([pid, row]) => {
+    if (String(row?.launchId || '') !== lid) return;
+    updates[`quiz_submissions/${id}/${pid}`] = null;
+    markStudentIndex(row, pid);
+  });
+
+  await db.ref().update(updates);
+  return { id: lid };
+}
+
 async function loadLaunchBundles(quizId) {
   const [launchesSnap, launchPartsSnap, launchSubsSnap] = await Promise.all([
     quizLaunchesRef(quizId).get(),
@@ -242,6 +328,8 @@ module.exports = {
   createQuizLaunch,
   endQuizLaunch,
   closeActiveQuizLaunch,
+  deleteQuizLaunch,
+  isActiveQuizLaunch,
   ensureLegacyLaunchMigrated,
   writeLaunchParticipant,
   writeLaunchSubmission,

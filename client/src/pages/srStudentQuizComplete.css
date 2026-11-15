@@ -5,6 +5,13 @@
   display: none;
 }
 
+/* Score-hidden only: quiz pane must be a flex column so the shell can fill leftover height. */
+.relative:has(> .sr-student-complete-shell--noscore) {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
 .sr-student-complete-shell {
   box-sizing: border-box;
   position: relative;
@@ -50,7 +57,18 @@
   overflow: visible;
 }
 
-/* Score-hidden variant only: vertically center the short card without clipping. */
+/* Score-hidden variant only: fill leftover height; center with margin-block auto (no top clip). */
+.sr-student-complete-shell--noscore {
+  display: flex;
+  flex: 1 1 auto;
+  min-height: 0;
+  justify-content: center;
+  align-items: flex-start;
+  overflow-x: hidden;
+  overflow-y: auto;
+  padding: 24px 16px 96px;
+}
+
 .sr-student-complete-shell--noscore .sr-student-complete-card {
   margin-block: auto;
   margin-inline: auto;
@@ -288,5 +306,42 @@
   .sr-student-complete-btn {
     height: 40px;
     min-height: 40px;
+  }
+}
+
+/* Score-hidden desktop only: slightly taller card. Width stays the shared max-width. */
+@media (min-width: 1024px) {
+  .sr-student-complete-shell--noscore {
+    padding: 24px 16px 48px;
+  }
+
+  .sr-student-complete-shell--noscore .sr-student-complete-card {
+    padding: 36px 20px;
+    gap: 18px;
+  }
+
+  .sr-student-complete-shell--noscore .sr-student-complete-icon {
+    width: 72px;
+    height: 72px;
+  }
+
+  .sr-student-complete-shell--noscore .sr-student-complete-title {
+    font-size: 32px;
+    line-height: 1.25;
+  }
+
+  .sr-student-complete-shell--noscore .sr-student-complete-subtitle {
+    font-size: 17px;
+    margin-top: 4px;
+  }
+
+  .sr-student-complete-shell--noscore .sr-student-complete-redirect {
+    margin-top: 8px;
+  }
+
+  .sr-student-complete-shell--noscore .sr-student-complete-btn {
+    margin-top: 8px;
+    height: 54px;
+    min-height: 54px;
   }
 }

@@ -5,8 +5,13 @@ import { useRtdbList, useRtdbValue } from '../../hooks/useRtdb';
 import { spaceRacesAPI } from '../../services/api';
 import { getStoredAudienceSession } from '../../utils/audienceSession';
 import { isJoinWindowExpired } from '../../utils/spaceRaceJoinWindow';
+import {
+  getQuizDeadlineMs,
+  isSpaceRaceEndedByTeacher,
+  resolveSpaceRaceAudiencePhase,
+  useAlignedNowMs,
+} from '../../utils/spaceRaceAudiencePhase';
 import AudiencePostActivityHomeButton from '../Audience/AudiencePostActivityHomeButton';
-import SpaceRaceQuizClosedCard from './SpaceRaceQuizClosedCard';
 import { getAudienceDeviceId } from '../../utils/audienceDeviceId';
 import { collectLegacyParticipantIds } from '../../utils/guestAttemptIdentity';
 
@@ -178,7 +183,7 @@ export default function SpaceRaceGamePanel({
     enabled: Boolean(raceId),
   });
   const serverTimeOffset = Number(serverTimeOffsetRaw) || 0;
-  const [clockTick, setClockTick] = useState(() => Date.now());
+  const alignedNowMs = useAlignedNowMs(serverTimeOffset, Boolean(raceId));
 
   // Listen to team-specific timer
   const { value: teamTimer } = useRtdbValue(
@@ -186,31 +191,11 @@ export default function SpaceRaceGamePanel({
     { enabled: Boolean(raceId && participant?.teamId != null) }
   );
 
-  const [quizTimeExpired, setQuizTimeExpired] = useState(false);
   const [joinBlockedByApi, setJoinBlockedByApi] = useState(false);
-
-  useEffect(() => {
-    const interval = setInterval(() => setClockTick(Date.now()), 1000);
-    return () => clearInterval(interval);
-  }, []);
 
   const joinWindowExpired =
     joinBlockedByApi ||
-    (!raceLoading && isJoinWindowExpired(raceData, clockTick + serverTimeOffset));
-
-  useEffect(() => {
-    if (!teamTimer?.endTime) {
-      setQuizTimeExpired(false);
-      return undefined;
-    }
-    const checkExpired = () => {
-      const end = new Date(teamTimer.endTime).getTime();
-      setQuizTimeExpired(Number.isFinite(end) && end <= Date.now());
-    };
-    checkExpired();
-    const interval = setInterval(checkExpired, 1000);
-    return () => clearInterval(interval);
-  }, [teamTimer?.endTime]);
+    (!raceLoading && isJoinWindowExpired(raceData, alignedNowMs));
 
   const { list: allParticipants, error: participantsRtdbError } = useRtdbList(
     raceId ? `space_race_participants/${raceId}` : null,
@@ -335,6 +320,17 @@ export default function SpaceRaceGamePanel({
     return Boolean(hasPersonalAnswers) || Boolean(me.completedAt);
   }, [effectiveParticipants, participant, raceData?.currentLaunchId, raceData?.startedAt]);
   const showAlreadyAttempted = hasAttemptedQuiz || guestBlockedOnDevice;
+  const insideQuiz =
+    typeof window !== 'undefined' && window.location.pathname.includes('/quiz/');
+  const audiencePhase = resolveSpaceRaceAudiencePhase({
+    completed: showAlreadyAttempted,
+    insideQuiz,
+    race: raceData,
+    nowMs: alignedNowMs,
+    quizEndMs: getQuizDeadlineMs(teamTimer?.endTime),
+    joinExpired: joinWindowExpired,
+  });
+  const showWelcomeClosed = audiencePhase === 'closed' && !insideQuiz;
 
   const handleBackToHome = useCallback(() => {
     if (getStoredAudienceSession()) {
@@ -347,12 +343,16 @@ export default function SpaceRaceGamePanel({
   const handleStartQuiz = async () => {
     const qId = quizId || raceData?.quizId;
     if (qId && raceId && participant?.teamId != null) {
+      if (isSpaceRaceEndedByTeacher(raceData) || audiencePhase === 'closed') {
+        setJoinBlockedByApi(true);
+        return;
+      }
       if (isJoinWindowExpired(raceData, Date.now() + serverTimeOffset)) {
         setJoinBlockedByApi(true);
         return;
       }
       if (teamTimer?.endTime && new Date(teamTimer.endTime).getTime() <= Date.now()) {
-        setQuizTimeExpired(true);
+        setJoinBlockedByApi(true);
         return;
       }
       // Always call startQuiz to ensure timer is set properly for this team
@@ -378,8 +378,7 @@ export default function SpaceRaceGamePanel({
         });
 
         if (response.data?.expired) {
-          if (response.data?.joinWindowExpired) setJoinBlockedByApi(true);
-          else setQuizTimeExpired(true);
+          setJoinBlockedByApi(true);
           return;
         }
 
@@ -396,8 +395,7 @@ export default function SpaceRaceGamePanel({
           return;
         }
         if (error?.response?.data?.expired) {
-          if (error.response.data.joinWindowExpired) setJoinBlockedByApi(true);
-          else setQuizTimeExpired(true);
+          setJoinBlockedByApi(true);
           return;
         }
         console.error('Failed to start quiz timer:', error);
@@ -569,20 +567,7 @@ export default function SpaceRaceGamePanel({
           !window.location.pathname.includes('/quiz/') &&
           !showAlreadyAttempted &&
           !raceLoading &&
-          joinWindowExpired && (
-          <div className="mt-6 flex justify-center">
-            <SpaceRaceQuizClosedCard
-              onBack={() => navigate(`/audience/space-race/${raceId}`, { replace: true })}
-            />
-          </div>
-        )}
-
-        {hasQuiz &&
-          !window.location.pathname.includes('/quiz/') &&
-          !showAlreadyAttempted &&
-          !raceLoading &&
-          !joinWindowExpired &&
-          !quizTimeExpired && (
+          audiencePhase === 'open' && (
           <div className="mt-6 flex flex-col items-center gap-3">
             <p className="text-text text-sm w-full max-md:text-center">
               The quiz is ready — start it whenever you&apos;re set, and coordinate with your teammates along the way.
@@ -601,12 +586,13 @@ export default function SpaceRaceGamePanel({
           !window.location.pathname.includes('/quiz/') &&
           !showAlreadyAttempted &&
           !raceLoading &&
-          !joinWindowExpired &&
-          quizTimeExpired && (
-          <div className="mt-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-            <p className="text-text text-sm">Time&apos;s up — this quiz is closed and can no longer be opened or attempted.</p>
-            <div className="px-5 py-2 bg-neutral-300 text-neutral-600 rounded-lg font-semibold whitespace-nowrap">
-              Quiz Closed
+          showWelcomeClosed && (
+          <div className="mt-6 flex flex-col items-center gap-3">
+            <div
+              className="px-5 py-2 min-h-11 bg-neutral-300 text-neutral-600 rounded-lg font-semibold whitespace-nowrap max-md:w-full max-md:flex max-md:items-center max-md:justify-center max-md:text-center max-md:whitespace-normal"
+              aria-disabled="true"
+            >
+              Closed
             </div>
           </div>
         )}

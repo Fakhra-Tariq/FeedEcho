@@ -35,6 +35,12 @@ import {
   isQuizDurationLimited,
 } from '../utils/spaceRaceQuestionTimer';
 import { isJoinWindowExpired } from '../utils/spaceRaceJoinWindow';
+import {
+  getQuizDeadlineMs,
+  resolveSpaceRaceAudiencePhase,
+  SPACE_RACE_ENDED_BY_TEACHER_MESSAGE,
+  useAlignedNowMs,
+} from '../utils/spaceRaceAudiencePhase';
 import './srStudentQuizComplete.css';
 import SpaceRaceQuizClosedCard from '../components/SpaceRace/SpaceRaceQuizClosedCard';
 import { getAudienceDeviceId } from '../utils/audienceDeviceId';
@@ -109,6 +115,16 @@ const AudienceQuizAttempt = ({
   const [quizTimeExpired, setQuizTimeExpired] = useState(false);
   const [teamQuizEndTime, setTeamQuizEndTime] = useState(null);
   const [serverTimeOffset, setServerTimeOffset] = useState(0);
+  const alignedNowMs = useAlignedNowMs(serverTimeOffset, isSpaceRace);
+  const quizDeadlineMs =
+    getQuizDeadlineMs(teamQuizEndTime) ?? getQuizDeadlineMs(quiz?.launchSettings?.endTime);
+  const audiencePhase = resolveSpaceRaceAudiencePhase({
+    completed: Boolean(isSubmitted || guestBlockedOnDevice),
+    insideQuiz: true,
+    race: raceData,
+    nowMs: alignedNowMs,
+    quizEndMs: quizDeadlineMs,
+  });
 
   const getQuestionKey = (question, index) => getStableQuestionId(question, index);
 
@@ -900,8 +916,12 @@ const AudienceQuizAttempt = ({
       onTimerLabelChange(null);
       return;
     }
+    if (audiencePhase === 'times_up' || audiencePhase === 'race_ended') {
+      onTimerLabelChange('00:00');
+      return;
+    }
     onTimerLabelChange(timeLeft == null ? null : formatQuizCountdown(timeLeft));
-  }, [onTimerLabelChange, embedded, spaceRaceMode, isSpaceRace, timeLeft]);
+  }, [onTimerLabelChange, embedded, spaceRaceMode, isSpaceRace, timeLeft, audiencePhase]);
 
   useEffect(() => {
     return () => {
@@ -1009,14 +1029,14 @@ const AudienceQuizAttempt = ({
   useEffect(() => {
     if (!isSpaceRace || isSubmitted) return undefined;
     const tick = () => {
-      if (isJoinWindowExpired(raceData, Date.now() + serverTimeOffset)) {
+      if (isJoinWindowExpired(raceData, alignedNowMs)) {
         setQuizTimeExpired(true);
       }
     };
     tick();
     const timer = setInterval(tick, 1000);
     return () => clearInterval(timer);
-  }, [isSpaceRace, isSubmitted, raceData, serverTimeOffset]);
+  }, [isSpaceRace, isSubmitted, raceData, alignedNowMs]);
 
   const spaceRaceQuizDurationLimited = isQuizDurationLimited(
     raceData?.settings?.countdown ??
@@ -1610,7 +1630,14 @@ const AudienceQuizAttempt = ({
   }, [timeLeft, isSubmitted, isSpaceRace]);
 
   const handleAnswerChange = async (questionIndex, answer) => {
-    if (isSpaceRace && (quizTimeExpired || isCurrentQuestionSubmitted) && questionIndex === currentQuestion) {
+    if (
+      isSpaceRace &&
+      (quizTimeExpired ||
+        audiencePhase === 'times_up' ||
+        audiencePhase === 'race_ended' ||
+        isCurrentQuestionSubmitted) &&
+      questionIndex === currentQuestion
+    ) {
       return;
     }
 
@@ -1661,7 +1688,7 @@ const AudienceQuizAttempt = ({
 
   const handleSubmitTeamAnswer = async () => {
     if (!isSpaceRace || !quiz || !raceId || !participantId || isCurrentQuestionSubmitted) return;
-    if (quizTimeExpired) return;
+    if (quizTimeExpired || audiencePhase === 'times_up' || audiencePhase === 'race_ended') return;
     if (isJoinWindowExpired(raceData, Date.now() + serverTimeOffset)) {
       setQuizTimeExpired(true);
       return;
@@ -2250,13 +2277,17 @@ const AudienceQuizAttempt = ({
     );
   }
 
-  if (error) {
+  if (error || (isSpaceRace && audiencePhase === 'race_ended' && !isSubmitted)) {
+    const errorMessage =
+      isSpaceRace && audiencePhase === 'race_ended' && !isSubmitted
+        ? SPACE_RACE_ENDED_BY_TEACHER_MESSAGE
+        : error;
     return (
       <div className={`${shellClass} flex items-center justify-center p-4`}>
         <div className="bg-white rounded-3xl shadow-soft border border-primary/10 p-8 max-w-md w-full text-center">
           <AlertCircle className="w-16 h-16 text-error-500 mx-auto mb-4" />
           <h1 className="text-2xl font-bold text-text mb-4">Quiz Error</h1>
-          <p className="text-text-light mb-6">{error}</p>
+          <p className="text-text-light mb-6">{errorMessage}</p>
           {isSpaceRace ? (
             <button
               onClick={() =>
@@ -2279,7 +2310,7 @@ const AudienceQuizAttempt = ({
     );
   }
 
-  if (isSpaceRace && quizTimeExpired && !isSubmitted) {
+  if (isSpaceRace && audiencePhase === 'times_up' && !isSubmitted) {
     return (
       <div className={`${shellClass} flex items-center justify-center p-4 min-h-full h-full`}>
         <SpaceRaceQuizClosedCard

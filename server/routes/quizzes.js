@@ -11,7 +11,7 @@ const {
 const { normalizeQuestionsForScoring } = require('../utils/scoringUtils');
 const { validateGenerateAiQuizBody, generateQuizWithAi } = require('../utils/generateAiQuiz');
 const { normalizeQuizRecord, normalizeQuizListRecord } = require('../utils/quizNormalization');
-const { createQuizLaunch, closeActiveQuizLaunch } = require('../utils/quizLaunches');
+const { createQuizLaunch, closeActiveQuizLaunch, deleteQuizLaunch } = require('../utils/quizLaunches');
 const { finishLaunchedQuiz } = require('../utils/finishLaunchedQuiz');
 const router = express.Router();
 
@@ -305,6 +305,26 @@ router.put('/:id', async (req, res) => {
   } catch (error) {
     console.error('Update quiz error:', error);
     return res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Delete one launch and only that launch's attempts (host reports)
+router.delete('/:id/launches/:launchId', async (req, res) => {
+  try {
+    const uid = req.user.uid;
+    const { id, launchId } = req.params;
+    const snap = await quizRef(id).get();
+    if (!snap.exists()) return res.status(404).json({ success: false, error: 'Quiz not found' });
+    const existing = snap.val();
+    if (existing.createdBy !== uid && req.userRole !== 'admin') {
+      return res.status(403).json({ success: false, error: 'Access denied' });
+    }
+    await deleteQuizLaunch(id, launchId);
+    return res.json({ success: true, message: 'Launch deleted' });
+  } catch (error) {
+    const status = error.statusCode || 500;
+    if (status >= 500) console.error('Delete launch error:', error);
+    return res.status(status).json({ success: false, error: error.message || 'Failed to delete launch' });
   }
 });
 

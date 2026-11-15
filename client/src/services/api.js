@@ -162,6 +162,7 @@ export const quizzesAPI = {
   update: (id, data) => api.put(`/quizzes/${id}`, data),
   delete: (id) => api.delete(`/quizzes/${id}`),
   deletePermanent: (id) => api.delete(`/quizzes/${id}?permanent=true`),
+  deleteLaunch: (quizId, launchId) => api.delete(`/quizzes/${quizId}/launches/${encodeURIComponent(launchId)}`),
   launch: (id, settings) => api.post(`/quizzes/${id}/launch`, settings),
   finish: (id) => api.post(`/quizzes/${id}/finish`),
   generateAi: (data) => api.post('/quiz/generate-ai', data),

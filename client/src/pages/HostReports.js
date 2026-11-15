@@ -16,6 +16,7 @@ import {
   AlertTriangle,
   Clock,
   FileQuestion,
+  Loader2,
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { useHybridAlert } from '../contexts/HybridAlertContext';
@@ -364,7 +365,9 @@ export default function HostReports() {
   const [reportModalView, setReportModalView] = useState(null);
   const [loadingReportDetail, setLoadingReportDetail] = useState(false);
   const [deleteConfirmQuizId, setDeleteConfirmQuizId] = useState(null);
+  const [deleteConfirmLaunch, setDeleteConfirmLaunch] = useState(null);
   const [deleting, setDeleting] = useState(false);
+  const [deletingLaunchId, setDeletingLaunchId] = useState(null);
 
   const modalDepthRef = useRef(0);
   const ignorePopRef = useRef(false);
@@ -688,6 +691,83 @@ export default function HostReports() {
     selectedSubmission?.participantId,
     reportModalView,
   ]);
+
+  const isActiveLaunch = useCallback((launch, quiz) => {
+    const status = String(launch?.status || '').toLowerCase();
+    if (status === 'active' || status === 'live' || status === 'running') return true;
+    const currentId = String(quiz?.currentLaunchId || '').trim();
+    const launchId = String(launch?.id || '').trim();
+    if (!currentId || !launchId || currentId !== launchId) return false;
+    return Boolean(quiz?.launched) || !launch?.finishedAt;
+  }, []);
+
+  const applyQuizResultsPayload = useCallback(
+    (quiz, data) => {
+      if (!quiz?.id || !data) return [];
+      let launches = [];
+      setApiFallbackByQuizId((prev) => {
+        const nextFallback = { ...prev, [quiz.id]: data };
+        const refreshed = collectReportDataForQuiz(
+          quiz,
+          submissionsByQuizId,
+          participantsByQuizId,
+          nextFallback,
+          { includeDetails: true }
+        );
+        setSelectedReport(refreshed);
+        launches = buildLaunchHistory(
+          quiz,
+          refreshed.submissions,
+          data.participants || [],
+          data.launches || null
+        );
+        setLaunchHistory(launches);
+        return nextFallback;
+      });
+      return launches;
+    },
+    [participantsByQuizId, submissionsByQuizId]
+  );
+
+  const handleDeleteLaunch = async () => {
+    const launch = deleteConfirmLaunch;
+    const quiz = selectedReport?.quiz;
+    if (!launch?.id || !quiz?.id || deletingLaunchId) return;
+    if (isActiveLaunch(launch, quiz)) {
+      alert.toast.error('Finish the quiz first');
+      setDeleteConfirmLaunch(null);
+      return;
+    }
+    setDeletingLaunchId(launch.id);
+    try {
+      const response = await quizzesAPI.deleteLaunch(quiz.id, launch.id);
+      if (!response.data?.success) throw new Error(response.data?.error || 'Delete failed');
+      alert.toast.success(`Launch ${launch.launchNumber} deleted`);
+      setDeleteConfirmLaunch(null);
+
+      let remaining = launchHistory.filter((row) => String(row.id) !== String(launch.id));
+      try {
+        const results = await quizSubmissionsAPI.getResults(quiz.id);
+        const data = results.data?.data;
+        if (data) {
+          remaining = applyQuizResultsPayload(quiz, data);
+        } else {
+          setLaunchHistory(remaining);
+        }
+      } catch {
+        setLaunchHistory(remaining);
+      }
+
+      if (remaining.length === 0) {
+        closeReportModal();
+      }
+    } catch (err) {
+      const apiErr = handleAPIError(err);
+      alert.toast.error(apiErr.message || 'Failed to delete launch');
+    } finally {
+      setDeletingLaunchId(null);
+    }
+  };
 
   const handleDeleteQuiz = async () => {
     if (!deleteConfirmQuizId) return;
@@ -1139,31 +1219,91 @@ export default function HostReports() {
                       {launchHistory
                         .slice()
                         .sort((a, b) => Number(b.launchNumber || 0) - Number(a.launchNumber || 0))
-                        .map((launch) => (
+                        .map((launch) => {
+                          const activeLaunch = isActiveLaunch(launch, selectedReport.quiz);
+                          const deletingThis = deletingLaunchId === launch.id;
+                          return (
                           <div
                             key={launch.id}
                             className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 p-4 rounded-xl border border-primary/10 hover:border-primary/25 hover:bg-primary/5 transition-colors"
                           >
-                            <div className="min-w-0">
-                              <p className="font-semibold text-text">Launch {launch.launchNumber}</p>
-                              <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1 text-sm text-text-light">
-                                <span>{formatDate(launch.launchedAt)}</span>
-                                <span>
-                                  {launch.joinedCount} participant
-                                  {launch.joinedCount === 1 ? '' : 's'}
-                                </span>
+                            <div className="flex items-start justify-between gap-2 min-w-0 w-full sm:w-auto sm:flex-1">
+                              <div className="min-w-0">
+                                <p className="font-semibold text-text">Launch {launch.launchNumber}</p>
+                                <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1 text-sm text-text-light">
+                                  <span>{formatDate(launch.launchedAt)}</span>
+                                  <span>
+                                    {launch.joinedCount} participant
+                                    {launch.joinedCount === 1 ? '' : 's'}
+                                  </span>
+                                </div>
                               </div>
+                              {activeLaunch ? (
+                                <button
+                                  type="button"
+                                  disabled
+                                  title="Finish the quiz first"
+                                  aria-label="Finish the quiz first"
+                                  className="sm:hidden inline-flex items-center justify-center min-h-11 min-w-11 p-2 text-red-300 border border-red-100 rounded-lg cursor-not-allowed"
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                </button>
+                              ) : (
+                                <button
+                                  type="button"
+                                  onClick={() => setDeleteConfirmLaunch(launch)}
+                                  disabled={Boolean(deletingLaunchId)}
+                                  title="Delete launch"
+                                  aria-label="Delete launch"
+                                  className="sm:hidden inline-flex items-center justify-center min-h-11 min-w-11 p-2 text-red-600 border border-red-200 rounded-lg hover:bg-red-50 transition-colors disabled:opacity-50"
+                                >
+                                  {deletingThis ? (
+                                    <Loader2 className="w-4 h-4 animate-spin" />
+                                  ) : (
+                                    <Trash2 className="w-4 h-4" />
+                                  )}
+                                </button>
+                              )}
                             </div>
-                            <button
-                              type="button"
-                              onClick={() => openLaunchReport(launch)}
-                              className="inline-flex items-center justify-center gap-1.5 min-h-11 px-3 py-2 text-sm font-medium bg-primary text-white rounded-lg hover:bg-[#5A344D] transition-colors shrink-0"
-                            >
-                              <Eye className="w-4 h-4" />
-                              View
-                            </button>
+                            <div className="flex items-center gap-2 w-full sm:w-auto shrink-0">
+                              <button
+                                type="button"
+                                onClick={() => openLaunchReport(launch)}
+                                className="inline-flex flex-1 sm:flex-none items-center justify-center gap-1.5 min-h-11 px-3 py-2 text-sm font-medium bg-primary text-white rounded-lg hover:bg-[#5A344D] transition-colors"
+                              >
+                                <Eye className="w-4 h-4" />
+                                View
+                              </button>
+                              {activeLaunch ? (
+                                <button
+                                  type="button"
+                                  disabled
+                                  title="Finish the quiz first"
+                                  aria-label="Finish the quiz first"
+                                  className="hidden sm:inline-flex items-center justify-center min-h-11 min-w-11 p-2 text-red-300 border border-red-100 rounded-lg cursor-not-allowed"
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                </button>
+                              ) : (
+                                <button
+                                  type="button"
+                                  onClick={() => setDeleteConfirmLaunch(launch)}
+                                  disabled={Boolean(deletingLaunchId)}
+                                  title="Delete launch"
+                                  aria-label="Delete launch"
+                                  className="hidden sm:inline-flex items-center justify-center min-h-11 min-w-11 p-2 text-red-600 border border-red-200 rounded-lg hover:bg-red-50 transition-colors disabled:opacity-50"
+                                >
+                                  {deletingThis ? (
+                                    <Loader2 className="w-4 h-4 animate-spin" />
+                                  ) : (
+                                    <Trash2 className="w-4 h-4" />
+                                  )}
+                                </button>
+                              )}
+                            </div>
                           </div>
-                        ))}
+                          );
+                        })}
                     </div>
                   )}
                 </div>
@@ -1174,6 +1314,49 @@ export default function HostReports() {
       )}
 
       {/* Delete confirmation */}
+      {deleteConfirmLaunch && (
+        <div
+          className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm"
+          onClick={() => !deletingLaunchId && setDeleteConfirmLaunch(null)}
+        >
+          <div
+            className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 border border-primary/10"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center gap-3 mb-4">
+              <div className="p-2 bg-red-100 rounded-full">
+                <AlertTriangle className="w-6 h-6 text-red-600" />
+              </div>
+              <h3 className="text-lg font-bold text-text">
+                Delete Launch {deleteConfirmLaunch.launchNumber}?
+              </h3>
+            </div>
+            <p className="text-text-light text-sm mb-6">
+              Delete Launch {deleteConfirmLaunch.launchNumber}? Its participant results will be
+              permanently removed. This cannot be undone.
+            </p>
+            <div className="flex gap-3">
+              <button
+                type="button"
+                onClick={() => setDeleteConfirmLaunch(null)}
+                disabled={Boolean(deletingLaunchId)}
+                className="flex-1 px-4 py-2.5 border border-primary/20 text-text rounded-xl hover:bg-primary/5 transition-colors font-medium disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleDeleteLaunch}
+                disabled={Boolean(deletingLaunchId)}
+                className="flex-1 px-4 py-2.5 bg-red-600 text-white rounded-xl hover:bg-red-700 transition-colors font-medium disabled:opacity-50"
+              >
+                {deletingLaunchId ? 'Deleting...' : 'Delete'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {deleteConfirmQuizId && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm"
