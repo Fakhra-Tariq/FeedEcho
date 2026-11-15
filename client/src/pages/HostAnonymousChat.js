@@ -693,7 +693,7 @@ export default function HostAnonymousChat() {
       className={clsx(
         'host-anon-chat-page px-0 sm:px-2 lg:px-6 -mt-4 lg:-mt-5 pt-4 lg:pt-5 flex flex-col gap-3 overflow-hidden overflow-x-hidden max-w-full min-h-[450px] max-md:h-[calc(100dvh-8.75rem)] max-md:max-h-[calc(100dvh-8.75rem)]',
         mobileShowConversation &&
-          'host-anon-chat-room-open max-md:!mt-0 max-md:!pt-0 max-md:!h-auto max-md:!max-h-none'
+          'host-anon-chat-room-open max-md:!mt-0 max-md:!pt-0 max-md:!min-h-0'
       )}
     >
       <div className={clsx('shrink-0', mobileShowConversation && 'max-md:hidden')}>
@@ -848,7 +848,7 @@ export default function HostAnonymousChat() {
 
         <section
           className={clsx(
-            'flex-1 min-w-0 min-h-0 flex flex-col overflow-hidden bg-white rounded-2xl border border-primary/15 shadow-sm h-full',
+            'host-anon-chat-room flex-1 min-w-0 min-h-0 flex flex-col overflow-hidden bg-white rounded-2xl border border-primary/15 shadow-sm h-full',
             !mobileShowConversation && 'max-md:hidden'
           )}
         >

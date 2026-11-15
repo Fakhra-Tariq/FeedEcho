@@ -99,14 +99,32 @@ body {
 
 /* Host Anonymous Chat — phone: open room fills remaining viewport (header stays) */
 @media (max-width: 767px) {
-  .host-anon-chat-shell:has(.host-anon-chat-room-open) {
+  html:has(.host-anon-chat-room-open),
+  body:has(.host-anon-chat-room-open) {
+    height: 100vh;
+    height: 100dvh;
     height: var(--host-chat-vvh, 100dvh);
+    max-height: 100vh;
+    max-height: 100dvh;
     max-height: var(--host-chat-vvh, 100dvh);
     overflow: hidden;
   }
 
+  .host-anon-chat-shell:has(.host-anon-chat-room-open) {
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    height: 100dvh;
+    height: var(--host-chat-vvh, 100dvh);
+    max-height: 100vh;
+    max-height: 100dvh;
+    max-height: var(--host-chat-vvh, 100dvh);
+    min-height: 0;
+    overflow: hidden;
+  }
+
   .host-anon-chat-shell:has(.host-anon-chat-room-open) > .host-anon-chat-main {
-    flex: 1 1 auto;
+    flex: 1 1 0%;
     min-height: 0;
     display: flex;
     flex-direction: column;
@@ -115,25 +133,38 @@ body {
   }
 
   .host-anon-chat-shell:has(.host-anon-chat-room-open) .host-anon-chat-gutter {
-    flex: 1 1 auto;
+    flex: 1 1 0%;
     min-height: 0;
     display: flex;
     flex-direction: column;
+    overflow: hidden;
   }
 
   .host-anon-chat-page.host-anon-chat-room-open {
-    flex: 1 1 auto;
-    min-height: 0;
-    height: auto !important;
-    max-height: none !important;
+    flex: 1 1 0%;
+    min-height: 0 !important;
+    height: 100% !important;
+    max-height: 100% !important;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
     gap: 0;
     margin-top: 0;
     padding-top: 0;
   }
 
   .host-anon-chat-page.host-anon-chat-room-open .host-anon-chat-columns {
-    flex: 1 1 auto;
+    flex: 1 1 0%;
     min-height: 0;
+    overflow: hidden;
+  }
+
+  .host-anon-chat-page.host-anon-chat-room-open .host-anon-chat-room {
+    flex: 1 1 0%;
+    min-height: 0;
+    height: 100%;
+    max-height: 100%;
+    overflow: hidden;
   }
 }
 
