@@ -229,9 +229,12 @@ function BrainWordCloud({ items, extra, empty, seedKey = '' }) {
 
     const myId = (renderIdRef.current += 1);
     let timer = 0;
+    // Desktop/laptop only: layout at phone logical size + CSS scale.
+    // Compact phone-width packing must not take this branch.
+    const desktopLogicalPack = phoneLogicalLayoutRef.current === true;
     const packingCompact =
       isCompactPresentViewport(window.innerWidth, window.innerHeight) ||
-      phoneLogicalLayoutRef.current;
+      desktopLogicalPack;
     const dpr = Math.max(1, window.devicePixelRatio || 1);
     const cssW = size.width;
     const cssH = size.height;
@@ -369,18 +372,21 @@ function BrainWordCloud({ items, extra, empty, seedKey = '' }) {
       const WordCloud = require('wordcloud');
       const compact = packingCompact;
       const cacheKey = `${seedKey}|${cssW}x${cssH}|${compact ? 'c' : 'd'}|${itemSignature(items)}|${fillerScale}`;
-      const cached = compact ? layoutCacheRef.current.get(cacheKey) : null;
-      const relayout = Boolean(compact && canvas._cloudReady);
+      // Phone-width keeps layout cache + offscreen relayout. Desktop logical
+      // packing must not: WordCloud is called with clearCanvas:false, so a
+      // same-size canvas keeps the previous mode's bitmap; cache replay then
+      // draws Each-word glyphs on top of that leftover (ghosted/blurred).
+      const cached =
+        compact && !desktopLogicalPack ? layoutCacheRef.current.get(cacheKey) : null;
+      const relayout = Boolean(compact && canvas._cloudReady && !desktopLogicalPack);
       const work = relayout ? document.createElement('canvas') : canvas;
       if (work !== canvas) {
         work.width = cw;
         work.height = ch;
-      } else {
-        const sizeChanged = canvas.width !== cw || canvas.height !== ch;
-        if (sizeChanged) {
-          canvas.width = cw;
-          canvas.height = ch;
-        }
+      } else if (desktopLogicalPack || canvas.width !== cw || canvas.height !== ch) {
+        // Reassigning width/height resets the 2d transform and wipes pixels.
+        canvas.width = cw;
+        canvas.height = ch;
       }
       canvas.style.width = `${cssW}px`;
       canvas.style.height = `${cssH}px`;
@@ -658,7 +664,7 @@ function BrainWordCloud({ items, extra, empty, seedKey = '' }) {
       canvas._allHits = allHits;
       canvas._layoutMs = elapsed;
       canvas._cloudReady = true;
-      if (compact && (fillerOps.length || realOps.length)) {
+      if (compact && !desktopLogicalPack && (fillerOps.length || realOps.length)) {
         const cache = layoutCacheRef.current;
         cache.set(cacheKey, {
           realHits,
