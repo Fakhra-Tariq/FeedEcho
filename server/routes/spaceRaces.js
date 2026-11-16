@@ -971,50 +971,17 @@ router.post('/start', async (req, res) => {
       return;
     }
 
-    // Single source of truth: sessions/{id}.currentActivity, checked fresh and
-    // self-healing (auto-clears stale flags) on every launch request.
-    const raceId = racesRef().push().key;
-
-    const launchPrep = await prepareActivityLaunch('spaceRace', raceId, uid);
+    // Block other live activities BEFORE allocating a race id or writing anything.
+    const launchPrep = await prepareActivityLaunch('spaceRace', null, uid);
     if (!launchPrep.ok) {
       return res.status(400).json({ success: false, error: launchPrep.error });
     }
 
+    const raceId = racesRef().push().key;
     const joinCode = launchPrep.sessionCode;
 
     console.log(`🚀 Using teacher session code: ${joinCode}`);
 
-    // Convert previous active races to completed in background (non-blocking)
-    // But exclude the current race being created
-    racesRef()
-      .orderByChild('createdBy')
-      .equalTo(uid)
-      .get()
-      .then((snap) => {
-        const raw = snap.exists() ? (snap.val() || {}) : {};
-        const activeIds = Object.entries(raw)
-          .filter(([id, r]) => r && String(r.status || '').toLowerCase() === 'active' && id !== raceId)
-          .map(([id]) => id);
-        if (activeIds.length > 0) {
-          console.log(`🔄 Converting ${activeIds.length} previous active races to completed...`);
-          const updates = {};
-          activeIds.forEach((rid) => {
-            updates[`spaceRaces/${rid}/status`] = 'completed';
-            updates[`spaceRaces/${rid}/endedAt`] = new Date().toISOString();
-            updates[`spaceRaces/${rid}/previousStatus`] = 'active';
-            const code = raw[rid]?.joinCode || raw[rid]?.accessCode;
-            // Never wipe the live session code — it belongs to the newly claimed race.
-            if (code && String(code).toUpperCase() !== String(joinCode).toUpperCase()) {
-              updates[`space_race_codes/${String(code).toUpperCase()}`] = null;
-            }
-          });
-          return db.ref().update(updates);
-        }
-        return null;
-      })
-      .then(() => console.log('✅ Previous active races converted to completed'))
-      .catch((err) => console.log('⚠️ Background race conversion failed:', err.message));
-    
     // Fetch quiz data to attach to race (so students can access it when joining)
     let quizData = null;
     let quizTitle = title || 'Space Race';
@@ -1124,6 +1091,35 @@ router.post('/start', async (req, res) => {
       activityId: raceId,
     });
     console.log('Race document created successfully with ID:', raceId);
+
+    // Only after a successful claim: convert this teacher's other active races.
+    racesRef()
+      .orderByChild('createdBy')
+      .equalTo(uid)
+      .get()
+      .then((snap) => {
+        const raw = snap.exists() ? (snap.val() || {}) : {};
+        const activeIds = Object.entries(raw)
+          .filter(([id, r]) => r && String(r.status || '').toLowerCase() === 'active' && id !== raceId)
+          .map(([id]) => id);
+        if (activeIds.length > 0) {
+          console.log(`🔄 Converting ${activeIds.length} previous active races to completed...`);
+          const updates = {};
+          activeIds.forEach((rid) => {
+            updates[`spaceRaces/${rid}/status`] = 'completed';
+            updates[`spaceRaces/${rid}/endedAt`] = new Date().toISOString();
+            updates[`spaceRaces/${rid}/previousStatus`] = 'active';
+            const code = raw[rid]?.joinCode || raw[rid]?.accessCode;
+            if (code && String(code).toUpperCase() !== String(joinCode).toUpperCase()) {
+              updates[`space_race_codes/${String(code).toUpperCase()}`] = null;
+            }
+          });
+          return db.ref().update(updates);
+        }
+        return null;
+      })
+      .then(() => console.log('✅ Previous active races converted to completed'))
+      .catch((err) => console.log('⚠️ Background race conversion failed:', err.message));
 
     const autoEndEnabled = false;
     if (autoEndEnabled) {

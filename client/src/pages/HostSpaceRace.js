@@ -702,42 +702,8 @@ export default function HostSpaceRace() {
       console.log('Starting race with payload:', raceData);
 
       const sessionJoinCode = String(sessionCheck.joinCode || '').trim().toUpperCase();
-      const pendingId = `pending-${Date.now()}`;
       const launchedAt = new Date().toISOString();
-      const optimisticRace = {
-        id: pendingId,
-        raceId: pendingId,
-        joinCode: sessionJoinCode,
-        title: selectedQuiz.title,
-        description: selectedQuiz.description || 'Live Space Race session',
-        status: 'active',
-        startedAt: launchedAt,
-        createdAt: launchedAt,
-        updatedAt: launchedAt,
-        createdBy: user?.uid || userProfile?.uid,
-        settings: {
-          numberOfTeams: launchSettings.numberOfTeams,
-          teamAssignment: launchSettings.teamAssignment,
-          countdown: launchSettings.countdown,
-          joinDuration: launchSettings.joinDuration,
-          studentsPerTeam: launchSettings.studentsPerTeam,
-          shuffleQuestions: launchSettings.shuffleQuestions,
-          shuffleAnswers: launchSettings.shuffleAnswers,
-          showQuestionFeedback: launchSettings.showQuestionFeedback,
-          showFinalScore: launchSettings.showFinalScore,
-        },
-        timerMinutes: launchSettings.joinDuration,
-        participants: 0,
-      };
 
-      if (sessionJoinCode) {
-        setCurrentJoinCode(sessionJoinCode);
-        setShowJoinCodeModal(true);
-      }
-      setRaces((prev) => [optimisticRace, ...(prev || [])]);
-      setShowCreate(false);
-
-      // Call backend start endpoint
       const res = await spaceRacesAPI.startRace(raceData);
 
       if (res.data?.raceId && res.data?.joinCode) {
@@ -746,26 +712,42 @@ export default function HostSpaceRace() {
         
         console.log('Space race launched successfully:', { raceId, joinCode: confirmedCode });
 
-        if (confirmedCode && confirmedCode !== sessionJoinCode) {
-          setCurrentJoinCode(confirmedCode);
-        }
-
         const newRace = {
-          ...optimisticRace,
           id: raceId,
-          raceId: raceId,
+          raceId,
           joinCode: confirmedCode,
+          title: selectedQuiz.title,
+          description: selectedQuiz.description || 'Live Space Race session',
+          status: 'active',
+          startedAt: launchedAt,
+          createdAt: launchedAt,
+          updatedAt: launchedAt,
+          createdBy: user?.uid || userProfile?.uid,
+          settings: {
+            numberOfTeams: launchSettings.numberOfTeams,
+            teamAssignment: launchSettings.teamAssignment,
+            countdown: launchSettings.countdown,
+            joinDuration: launchSettings.joinDuration,
+            studentsPerTeam: launchSettings.studentsPerTeam,
+            shuffleQuestions: launchSettings.shuffleQuestions,
+            shuffleAnswers: launchSettings.shuffleAnswers,
+            showQuestionFeedback: launchSettings.showQuestionFeedback,
+            showFinalScore: launchSettings.showFinalScore,
+          },
+          timerMinutes: launchSettings.joinDuration,
+          participants: 0,
         };
 
+        setCurrentJoinCode(confirmedCode);
+        setShowJoinCodeModal(true);
+        setShowCreate(false);
         setRaces((prevRaces) => [
           newRace,
-          ...(prevRaces || []).filter((race) => race.id !== pendingId && race.id !== raceId),
+          ...(prevRaces || []).filter((race) => race.id !== raceId),
         ]);
 
-        // Refresh races list in background to sync with server
         fetchRaces();
 
-        // Reset form
         setSelectedQuizId('');
         setCurrentStep(1);
         setLaunchSettings({
@@ -794,15 +776,10 @@ export default function HostSpaceRace() {
         'Failed to launch Space Race. Please try again.';
 
       console.error('❌ Failed to launch Space Race:', errorMessage);
-      setShowJoinCodeModal(false);
-      setRaces((prev) => (prev || []).filter((race) => !String(race.id || '').startsWith('pending-')));
-      const blocked = showHostLaunchErrorToast(hybridAlert.toast, error, {
+      showHostLaunchErrorToast(hybridAlert.toast, error, {
         fallback: 'Failed to launch Space Race. Please try again.',
         crashStyle: true,
       });
-      if (blocked) {
-        setShowCreate(true);
-      }
     } finally {
       setIsCreating(false);
     }
@@ -826,8 +803,6 @@ export default function HostSpaceRace() {
       console.error('Race not found:', raceId);
       return;
     }
-    const previousStatus = race.status;
-    const previousJoinCode = race.joinCode;
     const launchedAt = new Date().toISOString();
     const joinCode = String(sessionCheck.joinCode || race.joinCode || '').trim().toUpperCase();
 
@@ -835,26 +810,6 @@ export default function HostSpaceRace() {
       console.log('Starting space race:', raceId);
       
       console.log('Found race to start:', race);
-
-      if (joinCode) {
-        setCurrentJoinCode(joinCode);
-        setShowJoinCodeModal(true);
-      }
-      setRaces((prev) =>
-        (prev || []).map((r) =>
-          r.id === raceId
-            ? {
-                ...r,
-                status: 'active',
-                joinCode,
-                accessCode: joinCode || r.accessCode,
-                updatedAt: launchedAt,
-                startedAt: launchedAt,
-                isPaused: false,
-              }
-            : r
-        )
-      );
 
       const response = await spaceRacesAPI.updateStatus(raceId, 'active');
 
@@ -872,8 +827,9 @@ export default function HostSpaceRace() {
         console.log('Space race started successfully:', updatedRace);
 
         const confirmedCode = String(updatedRace.joinCode || joinCode || '').trim().toUpperCase();
-        if (confirmedCode && confirmedCode !== joinCode) {
+        if (confirmedCode) {
           setCurrentJoinCode(confirmedCode);
+          setShowJoinCodeModal(true);
         }
 
         setRaces((prev) =>
@@ -898,12 +854,6 @@ export default function HostSpaceRace() {
           fallback: 'Unknown error',
           prefix: 'Failed to start race: ',
         });
-        setShowJoinCodeModal(false);
-        setRaces((prev) =>
-          (prev || []).map((r) =>
-            r.id === raceId ? { ...r, status: previousStatus, joinCode: previousJoinCode } : r
-          )
-        );
         return;
       }
       
@@ -911,12 +861,6 @@ export default function HostSpaceRace() {
       fetchRaces();
       
     } catch (error) {
-      setShowJoinCodeModal(false);
-      setRaces((prev) =>
-        (prev || []).map((r) =>
-          r.id === raceId ? { ...r, status: previousStatus, joinCode: previousJoinCode } : r
-        )
-      );
       console.error('Error starting space race:', error);
       showHostLaunchErrorToast(hybridAlert.toast, error, {
         fallback: 'Failed to start race',
