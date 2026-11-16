@@ -8,6 +8,7 @@ import { isJoinWindowExpired } from '../../utils/spaceRaceJoinWindow';
 import {
   getQuizDeadlineMs,
   isSpaceRaceEndedByTeacher,
+  isSpaceRaceQuizPath,
   resolveSpaceRaceAudiencePhase,
   useAlignedNowMs,
 } from '../../utils/spaceRaceAudiencePhase';
@@ -164,12 +165,24 @@ const normalizeTeamScores = (raw) => {
   return out;
 };
 
+function WelcomeQuizClosedRow({ message }) {
+  return (
+    <div className="mt-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+      <p className="text-text text-sm">{message}</p>
+      <div className="px-5 py-2 bg-neutral-300 text-neutral-600 rounded-lg font-semibold whitespace-nowrap max-sm:w-full max-sm:flex max-sm:items-center max-sm:justify-center max-sm:text-center max-sm:whitespace-normal">
+        Quiz Closed
+      </div>
+    </div>
+  );
+}
+
 export default function SpaceRaceGamePanel({
   raceId,
   participant,
   quizId,
   onTimeUp,
   compact = false,
+  insideQuiz: insideQuizProp,
 }) {
   const navigate = useNavigate();
   const location = useLocation();
@@ -321,7 +334,7 @@ export default function SpaceRaceGamePanel({
   }, [effectiveParticipants, participant, raceData?.currentLaunchId, raceData?.startedAt]);
   const showAlreadyAttempted = hasAttemptedQuiz || guestBlockedOnDevice;
   const insideQuiz =
-    typeof window !== 'undefined' && window.location.pathname.includes('/quiz/');
+    insideQuizProp != null ? Boolean(insideQuizProp) : isSpaceRaceQuizPath(location.pathname);
   const audiencePhase = resolveSpaceRaceAudiencePhase({
     completed: showAlreadyAttempted,
     insideQuiz,
@@ -482,7 +495,7 @@ export default function SpaceRaceGamePanel({
 
   if (compact) {
     // Hide live standings during quiz
-    if (window.location.pathname.includes('/quiz/')) {
+    if (isSpaceRaceQuizPath(location.pathname)) {
       return null;
     }
     return (
@@ -520,13 +533,13 @@ export default function SpaceRaceGamePanel({
               </span>
             )}
           </p>
-          {!window.location.pathname.includes('/quiz/') && (
+          {!insideQuiz && (
             <div className="flex items-baseline gap-2 shrink-0">
               <span className="text-text/60 text-xs">Time left</span>
               <JoinDurationTimer raceData={raceData} serverTimeOffset={serverTimeOffset} className="text-lg font-semibold text-primary" />
             </div>
           )}
-          {window.location.pathname.includes('/quiz/') && teamTimer?.endTime && (
+          {insideQuiz && teamTimer?.endTime && (
             <div className="sm:text-right shrink-0">
               <p className="text-text/60 text-xs mb-1">Quiz time left</p>
               <TimerDisplay timerInfo={{ endTime: teamTimer.endTime }} onTimeUp={onTimeUp} />
@@ -549,13 +562,13 @@ export default function SpaceRaceGamePanel({
               </span>
             )}
           </div>
-          {!window.location.pathname.includes('/quiz/') && (
+          {!insideQuiz && (
             <div className="flex flex-col items-end shrink-0">
               <span className="text-text/60 text-xs">Time left</span>
               <JoinDurationTimer raceData={raceData} serverTimeOffset={serverTimeOffset} className="text-base font-semibold text-primary tabular-nums" />
             </div>
           )}
-          {window.location.pathname.includes('/quiz/') && teamTimer?.endTime && (
+          {insideQuiz && teamTimer?.endTime && (
             <div className="shrink-0 text-right">
               <p className="text-text/60 text-[10px] mb-0.5">Quiz time left</p>
               <TimerDisplay timerInfo={{ endTime: teamTimer.endTime }} onTimeUp={onTimeUp} />
@@ -564,7 +577,7 @@ export default function SpaceRaceGamePanel({
         </div>
 
         {hasQuiz &&
-          !window.location.pathname.includes('/quiz/') &&
+          !insideQuiz &&
           !showAlreadyAttempted &&
           !raceLoading &&
           audiencePhase === 'open' && (
@@ -583,21 +596,20 @@ export default function SpaceRaceGamePanel({
         )}
 
         {hasQuiz &&
-          !window.location.pathname.includes('/quiz/') &&
+          !insideQuiz &&
           !showAlreadyAttempted &&
           !raceLoading &&
           showWelcomeClosed && (
-          <div className="mt-6 flex flex-col items-center gap-3">
-            <div
-              className="px-5 py-2 min-h-11 bg-neutral-300 text-neutral-600 rounded-lg font-semibold whitespace-nowrap max-md:w-full max-md:flex max-md:items-center max-md:justify-center max-md:text-center max-md:whitespace-normal"
-              aria-disabled="true"
-            >
-              Closed
-            </div>
-          </div>
+          <WelcomeQuizClosedRow
+            message={
+              isSpaceRaceEndedByTeacher(raceData)
+                ? 'The race has ended — this quiz is closed and can no longer be opened or attempted.'
+                : "Time's up — this quiz is closed and can no longer be opened or attempted."
+            }
+          />
         )}
 
-        {showAlreadyAttempted && !window.location.pathname.includes('/quiz/') && (
+        {showAlreadyAttempted && !insideQuiz && (
           <div className="mt-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
             <p className="text-text text-sm">You have already attempted this quiz.</p>
             <div className="px-5 py-2 bg-neutral-300 text-neutral-600 rounded-lg font-semibold whitespace-nowrap max-sm:w-full max-sm:flex max-sm:items-center max-sm:justify-center max-sm:text-center max-sm:whitespace-normal">
@@ -606,7 +618,7 @@ export default function SpaceRaceGamePanel({
           </div>
         )}
       </div>
-      {showAlreadyAttempted && !window.location.pathname.includes('/quiz/') && (
+      {showAlreadyAttempted && !insideQuiz && (
         <div className="max-w-3xl mx-auto mt-4">
           <AudiencePostActivityHomeButton
             onClick={handleBackToHome}

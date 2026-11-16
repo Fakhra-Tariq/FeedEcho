@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useLocation, useNavigate, useParams } from 'react-router-dom';
+import { isSpaceRaceQuizPath } from '../utils/spaceRaceAudiencePhase';
 import { Clock, Rocket, MessageCircle } from 'lucide-react';
 import { AudienceActivityHeader, AUDIENCE_ACTIVITY_PAGE_WIDTH } from '../components/Audience/AudienceActivityLayout';
 import GuestProgressLoginBanner from '../components/Audience/GuestProgressLoginBanner';
@@ -69,6 +70,7 @@ const persistJoinSession = (trimmedName, trimmedCode, joinPayload) => {
 
 export default function AudienceSpaceRacePage() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { raceId: routeRaceId, quizId: routeQuizId } = useParams();
   const { alert } = useHybridAlert();
 
@@ -89,7 +91,7 @@ export default function AudienceSpaceRacePage() {
   const activeRaceId = routeRaceId || raceData?.id || raceData?.raceId;
   const activeQuizId =
     routeQuizId || raceData?.quizId || JSON.parse(localStorage.getItem('spaceRaceQuiz') || 'null')?.id;
-  const isQuizView = Boolean(routeQuizId);
+  const isQuizView = isSpaceRaceQuizPath(location.pathname);
 
   const loadStoredSession = useCallback(() => {
     try {
@@ -573,6 +575,7 @@ export default function AudienceSpaceRacePage() {
               participant={participant}
               quizId={activeQuizId}
               compact
+              insideQuiz
               onTimeUp={() => alert.toast.info('Race time is up!')}
             />
             <AudienceQuizAttempt
@@ -594,6 +597,7 @@ export default function AudienceSpaceRacePage() {
               raceId={activeRaceId}
               participant={participant}
               quizId={activeQuizId}
+              insideQuiz={false}
               onTimeUp={() => alert.toast.info('Race time is up!')}
             />
           </div>

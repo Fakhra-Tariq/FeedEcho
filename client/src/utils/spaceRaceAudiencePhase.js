@@ -1,6 +1,11 @@
 import { useEffect, useState } from 'react';
 import { isJoinWindowExpired } from './spaceRaceJoinWindow';
 
+/** True only on the quiz route, not leftover start/attempt flags. */
+export function isSpaceRaceQuizPath(pathname) {
+  return /\/quiz(?:\/|$)/.test(String(pathname || ''));
+}
+
 /** Host End Race writes status "completed" (also accept ended/finished). */
 export function isSpaceRaceEndedByTeacher(race) {
   const status = String(race?.status || '').toLowerCase();

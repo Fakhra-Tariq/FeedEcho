@@ -37,6 +37,7 @@ import {
 import { isJoinWindowExpired } from '../utils/spaceRaceJoinWindow';
 import {
   getQuizDeadlineMs,
+  isSpaceRaceQuizPath,
   resolveSpaceRaceAudiencePhase,
   SPACE_RACE_ENDED_BY_TEACHER_MESSAGE,
   useAlignedNowMs,
@@ -120,7 +121,7 @@ const AudienceQuizAttempt = ({
     getQuizDeadlineMs(teamQuizEndTime) ?? getQuizDeadlineMs(quiz?.launchSettings?.endTime);
   const audiencePhase = resolveSpaceRaceAudiencePhase({
     completed: Boolean(isSubmitted || guestBlockedOnDevice),
-    insideQuiz: true,
+    insideQuiz: isSpaceRaceQuizPath(location.pathname),
     race: raceData,
     nowMs: alignedNowMs,
     quizEndMs: quizDeadlineMs,

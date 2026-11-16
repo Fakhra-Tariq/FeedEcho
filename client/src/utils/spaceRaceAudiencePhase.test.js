@@ -1,5 +1,6 @@
 import {
   isSpaceRaceEndedByTeacher,
+  isSpaceRaceQuizPath,
   resolveSpaceRaceAudiencePhase,
 } from './spaceRaceAudiencePhase';
 
@@ -91,6 +92,14 @@ describe('resolveSpaceRaceAudiencePhase', () => {
         quizEndMs: quizEnd,
       })
     ).toBe('open');
+  });
+});
+
+describe('isSpaceRaceQuizPath', () => {
+  test('welcome vs quiz routes', () => {
+    expect(isSpaceRaceQuizPath('/audience/space-race/abc')).toBe(false);
+    expect(isSpaceRaceQuizPath('/audience/space-race/abc/quiz/xyz')).toBe(true);
+    expect(isSpaceRaceQuizPath('/space-race/abc/quiz/xyz')).toBe(true);
   });
 });
 
