@@ -14,6 +14,7 @@ import HeaderCardStats from '../components/Host/HeaderCardStats';
 import ListFilterBar from '../components/Host/ListFilterBar';
 import SessionLaunchBanner from '../components/Host/SessionLaunchBanner';
 import { persistLaunchedQuizInLocalStorage } from '../utils/quizLaunchSettings';
+import { showHostLaunchErrorToast } from '../utils/activeActivityLaunchError';
 import { openHostQuizLaunch } from '../utils/openHostQuizLaunch';
 import {
   getEditorRouteForQuizType,
@@ -262,8 +263,7 @@ const QuizLibrary = () => {
       persistLaunchedQuizInLocalStorage(quizId, launchedData);
       await refreshQuizzes();
     } catch (err) {
-      const msg = err.response?.data?.error || err.message || 'Failed to launch quiz';
-      alert.toast.error(msg);
+      showHostLaunchErrorToast(alert.toast, err, { fallback: 'Failed to launch quiz' });
       throw err;
     }
   };

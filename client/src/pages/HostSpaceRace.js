@@ -11,6 +11,7 @@ import {
   requireActiveHostSession,
   resolveActiveTeacherSession,
 } from '../utils/requireActiveHostSession';
+import { showHostLaunchErrorToast } from '../utils/activeActivityLaunchError';
 import NoActiveSessionLaunchModal, {
   LaunchRequiresSessionHint,
 } from '../components/Host/NoActiveSessionLaunchModal';
@@ -602,7 +603,10 @@ export default function HostSpaceRace() {
         'Failed to save Space Race. Please try again.';
 
       console.error('❌ Failed to save Space Race:', errorMessage);
-      hybridAlert.toast.error('Error: ' + errorMessage + '\n\nCheck browser console for more details.');
+      showHostLaunchErrorToast(hybridAlert.toast, error, {
+        fallback: 'Failed to save Space Race. Please try again.',
+        crashStyle: true,
+      });
     } finally {
       setIsCreating(false);
     }
@@ -792,7 +796,13 @@ export default function HostSpaceRace() {
       console.error('❌ Failed to launch Space Race:', errorMessage);
       setShowJoinCodeModal(false);
       setRaces((prev) => (prev || []).filter((race) => !String(race.id || '').startsWith('pending-')));
-      hybridAlert.toast.error('Error: ' + errorMessage + '\n\nCheck browser console for more details.');
+      const blocked = showHostLaunchErrorToast(hybridAlert.toast, error, {
+        fallback: 'Failed to launch Space Race. Please try again.',
+        crashStyle: true,
+      });
+      if (blocked) {
+        setShowCreate(true);
+      }
     } finally {
       setIsCreating(false);
     }
@@ -884,7 +894,10 @@ export default function HostSpaceRace() {
         );
       } else {
         console.error('Failed to start race:', response.data.error);
-        hybridAlert.toast.error('Failed to start race: ' + (response.data.error || 'Unknown error'));
+        showHostLaunchErrorToast(hybridAlert.toast, response.data.error, {
+          fallback: 'Unknown error',
+          prefix: 'Failed to start race: ',
+        });
         setShowJoinCodeModal(false);
         setRaces((prev) =>
           (prev || []).map((r) =>
@@ -905,7 +918,10 @@ export default function HostSpaceRace() {
         )
       );
       console.error('Error starting space race:', error);
-      hybridAlert.toast.error('Failed to start race: ' + error.message);
+      showHostLaunchErrorToast(hybridAlert.toast, error, {
+        fallback: 'Failed to start race',
+        prefix: 'Failed to start race: ',
+      });
     }
   };
 

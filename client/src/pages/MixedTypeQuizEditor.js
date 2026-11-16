@@ -18,6 +18,7 @@ import {
   getActiveTeacherSession,
 } from '../utils/requireActiveHostSession';
 import { persistLaunchedQuizInLocalStorage } from '../utils/quizLaunchSettings';
+import { showHostLaunchErrorToast } from '../utils/activeActivityLaunchError';
 import useQuizCreateBackToLibrary from '../hooks/useQuizCreateBackToLibrary';
 import useQuizEditorDirty from '../hooks/useQuizEditorDirty';
 import { openHostQuizLaunch } from '../utils/openHostQuizLaunch';
@@ -255,8 +256,7 @@ const MixedTypeQuizEditor = () => {
       persistLaunchedQuizInLocalStorage(quizId, launchedData);
       setIsQuizLaunched(true);
     } catch (err) {
-      const msg = err.response?.data?.error || err.message || 'Failed to launch quiz';
-      alert.toast.error(msg);
+      showHostLaunchErrorToast(alert.toast, err, { fallback: 'Failed to launch quiz' });
       throw err;
     }
   };

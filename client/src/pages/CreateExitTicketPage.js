@@ -9,6 +9,7 @@ import {
   NO_ACTIVE_SESSION_MESSAGE,
   resolveActiveTeacherSession,
 } from '../utils/requireActiveHostSession';
+import { showHostLaunchErrorToast } from '../utils/activeActivityLaunchError';
 import NoActiveSessionLaunchModal from '../components/Host/NoActiveSessionLaunchModal';
 
 const LIKERT_OPTIONS = [
@@ -363,11 +364,17 @@ export default function CreateExitTicketPage() {
         setShowJoinCodeModal(true);
         alert.toast.success('Exit ticket launched successfully!');
       } else {
-        alert.toast.error('Failed to launch exit ticket: ' + (launchResponse.data.error || 'Unknown error'));
+        showHostLaunchErrorToast(alert.toast, launchResponse.data.error, {
+          fallback: 'Unknown error',
+          prefix: 'Failed to launch exit ticket: ',
+        });
       }
     } catch (error) {
       console.error('Launch error:', error);
-      alert.toast.error('Error launching exit ticket: ' + (error.response?.data?.error || error.message));
+      showHostLaunchErrorToast(alert.toast, error, {
+        fallback: error.message || 'Unknown error',
+        prefix: 'Error launching exit ticket: ',
+      });
     } finally {
       setIsSaving(false);
     }

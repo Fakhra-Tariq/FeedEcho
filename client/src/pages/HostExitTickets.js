@@ -28,6 +28,7 @@ import {
   NO_ACTIVE_SESSION_MESSAGE,
   resolveActiveTeacherSession,
 } from '../utils/requireActiveHostSession';
+import { showHostLaunchErrorToast } from '../utils/activeActivityLaunchError';
 
 const LIKERT_OPTIONS = [
   "Strongly Agree",
@@ -341,11 +342,15 @@ const HostExitTickets = () => {
         alert.toast.success(`Exit ticket launched! Join code: ${response.data.data.joinCode}`);
         await fetchExitTickets();
       } else {
-        alert.toast.error(response.data.error || 'Failed to launch ticket. Please try again.');
+        showHostLaunchErrorToast(alert.toast, response.data.error, {
+          fallback: 'Failed to launch ticket. Please try again.',
+        });
       }
     } catch (error) {
       console.error('Launch error:', error);
-      alert.toast.error(error.response?.data?.error || error.message || 'Failed to launch ticket. Please try again.');
+      showHostLaunchErrorToast(alert.toast, error, {
+        fallback: 'Failed to launch ticket. Please try again.',
+      });
     }
   };
 

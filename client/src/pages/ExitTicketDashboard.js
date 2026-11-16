@@ -23,6 +23,7 @@ import {
   NO_ACTIVE_SESSION_MESSAGE,
   resolveActiveTeacherSession,
 } from '../utils/requireActiveHostSession';
+import { showHostLaunchErrorToast } from '../utils/activeActivityLaunchError';
 
 function questionsForTicket(questionsTree, ticketId, fallback = []) {
   const raw = questionsTree?.[ticketId];
@@ -448,7 +449,9 @@ export default function ExitTicketDashboard() {
       const response = await exitTicketsAPI.start(ticketId);
 
       if (!response.data?.success || !response.data?.data) {
-        alert.toast.error(response.data?.error || 'Failed to launch ticket.');
+        showHostLaunchErrorToast(alert.toast, response.data?.error, {
+          fallback: 'Failed to launch ticket.',
+        });
         return;
       }
       upsertTicket(response.data.data);
@@ -458,7 +461,9 @@ export default function ExitTicketDashboard() {
       setShowJoinCodeModal(true);
     } catch (error) {
       console.error('Launch error:', error);
-      alert.toast.error(error.response?.data?.error || error.message || 'Error launching ticket');
+      showHostLaunchErrorToast(alert.toast, error, {
+        fallback: 'Error launching ticket',
+      });
     }
   };
 

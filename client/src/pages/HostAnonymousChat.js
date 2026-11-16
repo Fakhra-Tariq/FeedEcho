@@ -25,6 +25,7 @@ import {
   NO_ACTIVE_SESSION_MESSAGE,
   requireActiveHostSession,
 } from '../utils/requireActiveHostSession';
+import { showHostLaunchErrorToast } from '../utils/activeActivityLaunchError';
 import InfoRecap from '../components/Host/InfoRecap';
 import SessionLaunchBanner from '../components/Host/SessionLaunchBanner';
 import PageHeaderCard from '../components/Host/PageHeaderCard';
@@ -460,8 +461,9 @@ export default function HostAnonymousChat() {
       loadChatsFromApi();
     } catch (error) {
       console.error('Error creating chat:', error);
-      const errorMessage = error?.response?.data?.error || 'Failed to create chat. Please try again.';
-      alert.toast.error(errorMessage);
+      showHostLaunchErrorToast(alert.toast, error, {
+        fallback: 'Failed to create chat. Please try again.',
+      });
     } finally {
       setIsCreating(false);
     }

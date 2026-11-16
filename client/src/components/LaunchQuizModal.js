@@ -5,6 +5,7 @@ import QuizLaunchedModal from './QuizLaunchedModal';
 import { useHybridAlert } from '../contexts/HybridAlertContext';
 import { QUIZ_LIBRARY_PATH } from '../hooks/useQuizCreateBackToLibrary';
 import { NO_ACTIVE_SESSION_MESSAGE } from '../utils/requireActiveHostSession';
+import { showHostLaunchErrorToast } from '../utils/activeActivityLaunchError';
 import {
   launchQuizWithSettings,
   parseOptionalMinutes,
@@ -97,8 +98,7 @@ const LaunchQuizModal = ({
       }
       setShowLaunchedModal(true);
     } catch (err) {
-      const msg = err.response?.data?.error || err.message || 'Failed to launch quiz';
-      alert.toast.error(msg);
+      showHostLaunchErrorToast(alert.toast, err, { fallback: 'Failed to launch quiz' });
     } finally {
       setLaunching(false);
     }
