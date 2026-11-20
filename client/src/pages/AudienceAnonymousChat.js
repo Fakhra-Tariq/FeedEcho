@@ -9,6 +9,8 @@ import { useAuth } from '../contexts/AuthContext';
 import { auth } from '../firebase';
 import { getStoredAudienceSession } from '../utils/audienceSession';
 import ChatMessageBubble, { audienceMessageLabel } from '../components/Chat/ChatMessageBubble';
+import { downloadLiveChatResource } from '../utils/downloadLiveChatResource';
+import { chatLoginPath } from '../utils/audienceNextPath';
 import GuestProgressLoginBanner, {
   GUEST_LOGIN_BANNER_BG_CLASS,
 } from '../components/Audience/GuestProgressLoginBanner';
@@ -315,6 +317,7 @@ const AudienceAnonymousChat = () => {
       <div className="h-16 shrink-0" aria-hidden="true" />
 
       <GuestProgressLoginBanner
+        loginTo={chatLoginPath(normalizedCode)}
         contentClassName={`${AUDIENCE_ACTIVITY_PAGE_WIDTH} py-2 flex items-center justify-between gap-2 min-w-0`}
       />
 
@@ -409,6 +412,25 @@ const AudienceAnonymousChat = () => {
                       label={isOwn ? 'You' : fromTeacher ? 'Host' : audienceMessageLabel(msg)}
                       namedSender={named}
                       showStudentDot={!isOwn && !fromTeacher}
+                      isGuest={!accountUid}
+                      onDownloadResource={async (resourceMessage) => {
+                        if (resourceMessage?.resourceKind === 'link') return;
+                        if (!accountUid) {
+                          alert.toast.error('Log in to download');
+                          navigate(chatLoginPath(normalizedCode));
+                          return;
+                        }
+                        if (!liveChatId || !resourceMessage?.resourceId) return;
+                        try {
+                          await downloadLiveChatResource(
+                            liveChatId,
+                            resourceMessage.resourceId,
+                            resourceMessage.fileName
+                          );
+                        } catch (error) {
+                          alert.toast.error(error.message || 'Download failed');
+                        }
+                      }}
                     />
                   );
                 })

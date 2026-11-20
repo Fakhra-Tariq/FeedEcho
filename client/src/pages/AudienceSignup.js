@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useLocation } from 'react-router-dom';
+import { safeAudienceNextPath } from '../utils/audienceNextPath';
 import { Eye, EyeOff } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import PasswordRulesChecklist from '../components/Auth/PasswordRulesChecklist';
@@ -12,6 +13,7 @@ import {
 
 const AudienceSignup = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const { audienceSignUp, audienceSignInWithGoogle } = useAuth();
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
@@ -78,6 +80,8 @@ const AudienceSignup = () => {
 
       if (!result?.success) {
         setErrors({ general: result?.error || 'Something went wrong. Please try again.' });
+      } else {
+        navigate(safeAudienceNextPath(location.search) || '/audience/home');
       }
     } catch (error) {
       setErrors({ general: 'Something went wrong. Please try again.' });
@@ -96,7 +100,7 @@ const AudienceSignup = () => {
     try {
       const result = await audienceSignInWithGoogle();
       if (result?.success) {
-        navigate('/audience/home');
+        navigate(safeAudienceNextPath(location.search) || '/audience/home');
       } else {
         setErrors({ general: result?.error || 'Google sign-in failed. Please try again.' });
       }

@@ -3,6 +3,7 @@ import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { handleAPIError } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
 import { joinSessionByCode } from '../utils/joinSessionFlow';
+import { safeAudienceNextPath } from '../utils/audienceNextPath';
 import { onValue, ref as dbRef } from 'firebase/database';
 import { db } from '../firebase';
 
@@ -132,7 +133,7 @@ const AudienceJoin = () => {
     try {
       const result = await audienceSignIn(loginData.email.trim(), loginData.password);
       if (result?.success) {
-        navigate('/audience/home');
+        navigate(safeAudienceNextPath(location.search) || '/audience/home');
       } else {
         setAuthErrors({ general: result?.error || 'Invalid email or password' });
       }
@@ -155,7 +156,7 @@ const AudienceJoin = () => {
     try {
       const result = await audienceSignInWithGoogle();
       if (result?.success) {
-        navigate('/audience/home');
+        navigate(safeAudienceNextPath(location.search) || '/audience/home');
       } else {
         setAuthErrors({ general: result?.error || 'Google sign-in failed. Please try again.' });
       }
@@ -376,7 +377,7 @@ const AudienceJoin = () => {
         )}
 
         <div className="mt-4 text-center text-sm">
-          <Link to="/audience/signup" className="inline-flex items-center min-h-11 text-primary hover:text-primary-dark font-medium">
+          <Link to={`/audience/signup${location.search || ''}`} className="inline-flex items-center min-h-11 text-primary hover:text-primary-dark font-medium">
             No account? Sign up
           </Link>
         </div>

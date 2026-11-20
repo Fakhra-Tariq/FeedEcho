@@ -727,7 +727,7 @@ const AudienceHome = () => {
 
           {/* Space Race Card */}
           <div 
-            onClick={() => navigate('/space-race')}
+            onClick={() => navigate('/audience/resources')}
             className="bg-white rounded-xl shadow-lg p-6 hover:shadow-xl transition-all duration-300 transform hover:scale-105 cursor-pointer border border-gray-200 hover:border-primary max-[480px]:p-3 max-[480px]:transform-none max-[480px]:hover:scale-100"
           >
             <div className="flex items-center space-x-4 mb-4 max-[480px]:flex-col max-[480px]:items-start max-[480px]:space-x-0 max-[480px]:gap-2 max-[480px]:mb-0">
@@ -735,8 +735,8 @@ const AudienceHome = () => {
                 <Rocket className="w-6 h-6 text-white max-[480px]:w-4 max-[480px]:h-4" />
               </div>
               <div className="min-w-0">
-                <h3 className="text-lg font-bold text-text mb-2 max-[480px]:text-[15px] max-[480px]:mb-0.5">Space Race</h3>
-                <p className="text-sm text-gray-600 max-[480px]:text-[12px] max-[480px]:leading-snug max-[480px]:line-clamp-2">View past races & shared resources</p>
+                <h3 className="text-lg font-bold text-text mb-2 max-[480px]:text-[15px] max-[480px]:mb-0.5">Resources</h3>
+                <p className="text-sm text-gray-600 max-[480px]:text-[12px] max-[480px]:leading-snug max-[480px]:line-clamp-2">View shared resources & files</p>
               </div>
             </div>
           </div>

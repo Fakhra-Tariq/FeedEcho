@@ -1,7 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-  ArrowLeft,
   Rocket,
   Calendar,
   Clock,
@@ -17,20 +16,29 @@ import {
   Eye,
   X,
 } from 'lucide-react';
-import { spaceRacesAPI } from '../services/api';
+import { spaceRacesAPI, anonymousChatAPI } from '../services/api';
+import { downloadLiveChatResource } from '../utils/downloadLiveChatResource';
 import { useAuth } from '../contexts/AuthContext';
 import AudienceDashboardNavbar from '../components/Audience/AudienceDashboardNavbar';
+import { AUDIENCE_ACTIVITY_PAGE_WIDTH } from '../components/Audience/AudienceActivityLayout';
 import { getStoredAudienceSession, getStudentQueryParams } from '../utils/audienceSession';
-import { formatSessionDate } from '../utils/formatLocalDateTime';
+import { formatSessionDate, parseUtcTimestamp } from '../utils/formatLocalDateTime';
 
-const mapResource = (resource, index) => ({
+const SOURCE_TABS = ['All', 'Space Race', 'Live Chat'];
+
+const mapResource = (resource, index, extras = {}) => ({
   id: resource.id || resource.resourceId || `res-${index}`,
   type: resource.type || 'file',
   fileName: resource.fileName || resource.name || resource.linkTitle || 'Resource',
-  url: resource.url || resource.downloadUrl || '#',
+  url: resource.url || resource.downloadUrl || '',
   senderName: resource.senderName || resource.sharedBy || '',
   sharedAt: resource.sharedAt || resource.createdAt || '',
   linkTitle: resource.linkTitle,
+  linkDomain: resource.linkDomain,
+  size: resource.size,
+  source: extras.source || resource.source || 'spaceRace',
+  chatId: extras.chatId || resource.chatId || null,
+  gated: extras.gated === true,
 });
 
 const fetchTeamResources = async (raceId, teamId, query) => {
@@ -61,6 +69,26 @@ const getResourceCategory = (resource) => {
 const filterResources = (resources, activeFilter) => {
   if (activeFilter === 'All') return resources;
   return resources.filter((r) => getResourceCategory(r) === activeFilter);
+};
+
+const timeMs = (value) => {
+  if (value instanceof Date) {
+    const ms = value.getTime();
+    return Number.isNaN(ms) ? 0 : ms;
+  }
+  const parsed = parseUtcTimestamp(value);
+  return parsed ? parsed.getTime() : 0;
+};
+
+const sortResourcesNewest = (resources) =>
+  [...(resources || [])].sort((a, b) => timeMs(b.sharedAt) - timeMs(a.sharedAt));
+
+const sessionSortMs = (session) => {
+  const newestShare = (session.resources || []).reduce(
+    (max, resource) => Math.max(max, timeMs(resource.sharedAt)),
+    0
+  );
+  return newestShare || timeMs(session.timestamp);
 };
 
 const getResourceLabel = (resource) => {
@@ -104,10 +132,11 @@ const ResourceIcon = ({ resource }) => {
 const actionButtonClass =
   'inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-primary border border-primary/30 rounded-lg hover:bg-primary/5 transition-colors max-[640px]:h-10 max-[640px]:flex-1 max-[640px]:justify-center max-[640px]:px-3 max-[640px]:whitespace-nowrap max-[640px]:min-w-0 max-[640px]:overflow-hidden';
 
-const ResourceActions = ({ resource, onPreview, onDeleteRequest }) => {
+const ResourceActions = ({ resource, onPreview, onDeleteRequest, onGatedDownload, hideDelete }) => {
   const isImage = resource.type === 'image';
   const isLink = resource.type === 'link';
-  const hasDownloadUrl = resource.url && resource.url !== '#';
+  const hasDownloadUrl = Boolean(resource.url && resource.url !== '#');
+  const gated = Boolean(resource.gated);
 
   return (
     <div className="flex items-center gap-2 max-[640px]:w-full">
@@ -123,7 +152,7 @@ const ResourceActions = ({ resource, onPreview, onDeleteRequest }) => {
         </a>
       )}
 
-      {isImage && (
+      {isImage && !gated && (
         <>
           <button type="button" onClick={() => onPreview(resource)} className={actionButtonClass}>
             <Eye className="w-4 h-4 shrink-0" />
@@ -144,8 +173,17 @@ const ResourceActions = ({ resource, onPreview, onDeleteRequest }) => {
         </>
       )}
 
-      {!isLink && !isImage && (
-        hasDownloadUrl ? (
+      {!isLink && (gated || (!isImage && hasDownloadUrl)) && (
+        gated ? (
+          <button
+            type="button"
+            onClick={() => onGatedDownload?.(resource)}
+            className={actionButtonClass}
+          >
+            <Download className="w-4 h-4 shrink-0" />
+            Download
+          </button>
+        ) : !isImage ? (
           <a
             href={resource.url}
             download={resource.fileName || undefined}
@@ -156,22 +194,26 @@ const ResourceActions = ({ resource, onPreview, onDeleteRequest }) => {
             <Download className="w-4 h-4 shrink-0" />
             Download
           </a>
-        ) : (
-          <button type="button" className={actionButtonClass} disabled>
-            <Download className="w-4 h-4 shrink-0" />
-            Download
-          </button>
-        )
+        ) : null
       )}
 
-      <button
-        type="button"
-        onClick={() => onDeleteRequest(resource)}
-        className="p-2 rounded-lg text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors shrink-0 max-[640px]:w-10 max-[640px]:h-10 max-[640px]:inline-flex max-[640px]:items-center max-[640px]:justify-center"
-        aria-label="Delete resource"
-      >
-        <Trash2 className="w-4 h-4" />
-      </button>
+      {!isLink && !isImage && !gated && !hasDownloadUrl && (
+        <button type="button" className={actionButtonClass} disabled>
+          <Download className="w-4 h-4 shrink-0" />
+          Download
+        </button>
+      )}
+
+      {!hideDelete && (
+        <button
+          type="button"
+          onClick={() => onDeleteRequest(resource)}
+          className="p-2 rounded-lg text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors shrink-0 max-[640px]:w-10 max-[640px]:h-10 max-[640px]:inline-flex max-[640px]:items-center max-[640px]:justify-center"
+          aria-label="Delete resource"
+        >
+          <Trash2 className="w-4 h-4" />
+        </button>
+      )}
     </div>
   );
 };
@@ -228,6 +270,7 @@ export default function SpaceRaceHistory() {
   const [loading, setLoading] = useState(true);
   const [previewImage, setPreviewImage] = useState(null);
   const [resourceToDelete, setResourceToDelete] = useState(null);
+  const [sourceTab, setSourceTab] = useState('All');
 
   useEffect(() => {
     const loggedInStudent = getStoredAudienceSession();
@@ -241,29 +284,73 @@ export default function SpaceRaceHistory() {
       setLoading(true);
       try {
         const query = getStudentQueryParams(loggedInStudent);
-        const historyResponse = await spaceRacesAPI.getStudentHistory(query);
+        const [historyResponse, liveResponse] = await Promise.all([
+          spaceRacesAPI.getStudentHistory(query).catch(() => ({ data: { data: [] } })),
+          anonymousChatAPI.listMyResources().catch(() => ({ data: { data: [] } })),
+        ]);
         const historyRows = historyResponse.data?.data || [];
+        const liveGroups = liveResponse.data?.data || [];
 
-        const sessionsWithResources = await Promise.all(
+        const raceSessions = await Promise.all(
           historyRows.map(async (row) => {
-            const { date, time, timestamp } = formatSessionDate(row.joinedAt || row.sessionDate);
-            const resources = await fetchTeamResources(row.raceId, row.teamId, query);
+            const joined = formatSessionDate(row.joinedAt || row.sessionDate);
+            const resources = sortResourcesNewest(
+              await fetchTeamResources(row.raceId, row.teamId, query)
+            );
+            const sortMs =
+              resources.reduce((max, resource) => Math.max(max, timeMs(resource.sharedAt)), 0) ||
+              timeMs(joined.timestamp);
+            const shown = formatSessionDate(sortMs || joined.timestamp);
 
             return {
               raceId: row.raceId,
               quizName: row.quizName || 'Space Race',
-              date,
-              time,
-              timestamp,
+              date: shown.date,
+              time: shown.time,
+              timestamp: shown.timestamp || joined.timestamp,
+              sortMs,
               teamId: row.teamId,
+              source: 'spaceRace',
               resources,
             };
           })
         );
 
-        setSessions(sessionsWithResources);
+        const liveSessions = liveGroups.map((row) => {
+          const joined = formatSessionDate(row.joinedAt);
+          const resources = sortResourcesNewest(
+            (row.resources || []).map((resource, index) =>
+              mapResource(resource, index, {
+                source: 'liveChat',
+                chatId: row.chatId,
+                gated: resource.type !== 'link',
+              })
+            )
+          );
+          const sortMs =
+            resources.reduce((max, resource) => Math.max(max, timeMs(resource.sharedAt)), 0) ||
+            timeMs(joined.timestamp);
+          const shown = formatSessionDate(sortMs || joined.timestamp);
+          return {
+            raceId: `liveChat:${row.chatId}`,
+            chatId: row.chatId,
+            quizName: row.chatName || 'Live Chat',
+            date: shown.date,
+            time: shown.time,
+            timestamp: shown.timestamp || joined.timestamp,
+            sortMs,
+            teamId: null,
+            source: 'liveChat',
+            resources,
+          };
+        });
+
+        const merged = [...raceSessions, ...liveSessions].sort(
+          (a, b) => (b.sortMs || 0) - (a.sortMs || 0)
+        );
+        setSessions(merged);
       } catch (error) {
-        console.error('Failed to load space race history:', error);
+        console.error('Failed to load resources:', error);
         setSessions([]);
       } finally {
         setLoading(false);
@@ -276,9 +363,25 @@ export default function SpaceRaceHistory() {
   const refreshSessionResources = async (raceId, teamId) => {
     if (!student || !raceId || teamId == null) return;
     const query = getStudentQueryParams(student);
-    const resources = await fetchTeamResources(raceId, teamId, query);
+    const resources = sortResourcesNewest(await fetchTeamResources(raceId, teamId, query));
     setSessions((prev) =>
-      prev.map((session) => (session.raceId === raceId ? { ...session, resources } : session))
+      prev
+        .map((session) => {
+          if (session.raceId !== raceId) return session;
+          const sortMs =
+            resources.reduce((max, resource) => Math.max(max, timeMs(resource.sharedAt)), 0) ||
+            timeMs(session.timestamp);
+          const shown = formatSessionDate(sortMs || session.timestamp);
+          return {
+            ...session,
+            resources,
+            sortMs,
+            date: shown.date,
+            time: shown.time,
+            timestamp: shown.timestamp || session.timestamp,
+          };
+        })
+        .sort((a, b) => (b.sortMs || 0) - (a.sortMs || 0))
     );
   };
 
@@ -336,10 +439,28 @@ export default function SpaceRaceHistory() {
     setResourceToDelete(null);
   };
 
+  const handleGatedDownload = async (resource) => {
+    if (!resource?.chatId || !resource?.id) return;
+    try {
+      await downloadLiveChatResource(resource.chatId, resource.id, resource.fileName);
+    } catch (error) {
+      console.error(error);
+    }
+  };
+
   const handleLogout = async () => {
     await audienceLogout();
     navigate('/');
   };
+
+  const sessionsWithResources = sessions.filter((session) => session.resources.length > 0);
+  const visibleSessions = sessionsWithResources
+    .filter((session) => {
+      if (sourceTab === 'Space Race') return session.source !== 'liveChat';
+      if (sourceTab === 'Live Chat') return session.source === 'liveChat';
+      return true;
+    })
+    .sort((a, b) => sessionSortMs(b) - sessionSortMs(a));
 
   return (
     <div className="min-h-screen bg-background">
@@ -348,26 +469,20 @@ export default function SpaceRaceHistory() {
         displayEmail={student?.email}
         onLogout={handleLogout}
       />
-      <div className="bg-white shadow-sm" style={{ borderBottom: '1px solid #E8E0F0' }}>
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
-          <div className="flex items-center justify-between max-md:flex-col max-md:items-start max-md:gap-3">
-            <button
-              type="button"
-              onClick={() => navigate('/audience/home')}
-              className="flex items-center space-x-2 hover:opacity-80 transition-opacity text-primary max-md:min-h-11 max-[480px]:hidden"
-            >
-              <ArrowLeft className="w-5 h-5 shrink-0" />
-              <span>Back to Dashboard</span>
-            </button>
-            <h1 className="text-2xl font-bold max-md:text-xl" style={{ color: '#1a1a1a' }}>
-              Space Race History
-            </h1>
-            <div className="w-32 max-md:hidden" />
+      <div className={`${AUDIENCE_ACTIVITY_PAGE_WIDTH} py-6 max-md:py-4`}>
+        <div className="relative bg-gradient-to-r from-primary to-primary/90 text-white rounded-xl shadow-lg p-5 sm:p-8 mb-6 overflow-hidden">
+          <div className="absolute top-0 right-0 w-full h-full bg-gradient-to-l from-black/20 to-transparent" />
+          <div className="relative flex items-center justify-between gap-4 min-w-0">
+            <div className="min-w-0">
+              <h1 className="text-3xl md:text-4xl font-bold mb-2 break-words">Resources</h1>
+              <p className="text-white/90 text-sm sm:text-base sm:text-lg">
+                Files and links shared in your space races and live chats.
+              </p>
+            </div>
+            <FolderOpen className="w-8 h-8 text-white/80 shrink-0" />
           </div>
         </div>
-      </div>
 
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 max-[480px]:pt-3 max-[480px]:pb-8">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8 max-[480px]:grid-cols-2 max-[480px]:gap-2 max-[480px]:mb-3">
           <div
             className="p-6 shadow-sm max-[480px]:p-3 max-[480px]:min-h-[56px] max-[480px]:flex max-[480px]:items-center"
@@ -380,7 +495,7 @@ export default function SpaceRaceHistory() {
               <div className="min-w-0">
                 <p className="text-sm leading-tight max-[480px]:text-[12px]" style={{ color: '#6B7280' }}>Total Sessions</p>
                 <p className="text-2xl font-bold leading-tight max-[480px]:text-[17px]" style={{ color: '#1a1a1a' }}>
-                  {sessions.length}
+                  {visibleSessions.length}
                 </p>
               </div>
             </div>
@@ -397,7 +512,7 @@ export default function SpaceRaceHistory() {
               <div className="min-w-0">
                 <p className="text-sm leading-tight max-[480px]:text-[12px]" style={{ color: '#6B7280' }}>Shared Resources</p>
                 <p className="text-2xl font-bold leading-tight max-[480px]:text-[17px]" style={{ color: '#1a1a1a' }}>
-                  {sessions.reduce((sum, s) => sum + s.resources.length, 0)}
+                  {visibleSessions.reduce((sum, s) => sum + s.resources.length, 0)}
                 </p>
               </div>
             </div>
@@ -413,17 +528,40 @@ export default function SpaceRaceHistory() {
               Past Resources
             </h2>
             <p className="text-sm mt-1" style={{ color: '#6B7280' }}>
-              Tap a session to view resources shared by your team
+              Tap a session to view resources shared with you
             </p>
+            <div className="flex gap-2 overflow-x-auto mt-4 pb-1 -mx-1 px-1">
+              {SOURCE_TABS.map((tab) => (
+                <button
+                  key={tab}
+                  type="button"
+                  onClick={() => setSourceTab(tab)}
+                  className="px-3 py-1.5 text-sm font-medium rounded-full whitespace-nowrap shrink-0"
+                  style={
+                    sourceTab === tab
+                      ? { backgroundColor: '#6B2D5C', color: '#FFFFFF' }
+                      : { backgroundColor: '#FFFFFF', color: '#6B7280', border: '1px solid #E8E0F0' }
+                  }
+                >
+                  {tab}
+                </button>
+              ))}
+            </div>
           </div>
 
           <div style={{ borderTop: '0.5px solid #F3EEF8' }}>
             {loading ? (
-              <div className="p-12 text-center text-gray-500">Loading space race history...</div>
-            ) : sessions.length === 0 ? (
-              <div className="p-12 text-center text-gray-500">No space race sessions yet.</div>
+              <div className="p-12 text-center text-gray-500">Loading resources...</div>
+            ) : visibleSessions.length === 0 ? (
+              <div className="p-12 text-center text-gray-500">
+                {sourceTab === 'Live Chat'
+                  ? 'No live chat resources yet.'
+                  : sourceTab === 'Space Race'
+                  ? 'No space race sessions yet.'
+                  : 'No resources yet.'}
+              </div>
             ) : (
-            sessions.map((session) => {
+            visibleSessions.map((session) => {
               const isExpanded = expandedRaceId === session.raceId;
               const activeFilter =
                 resourceFilters[session.raceId] === 'Files'
@@ -447,7 +585,7 @@ export default function SpaceRaceHistory() {
                           className="px-3 py-1 text-xs font-medium flex-shrink-0 whitespace-nowrap"
                           style={{ backgroundColor: '#F3EEF8', color: '#6B2D5C', borderRadius: '20px' }}
                         >
-                          Team {session.teamId}
+                          {session.source === 'liveChat' ? 'Live Chat' : 'Space Race'}
                         </span>
                       </div>
 
@@ -484,13 +622,13 @@ export default function SpaceRaceHistory() {
                         className="rounded-xl p-4 min-w-0 overflow-hidden max-[640px]:p-3"
                         style={{ backgroundColor: '#FAF8FC', border: '0.5px solid #E8E0F0' }}
                       >
-                        <div className="flex flex-wrap gap-2 mb-4">
+                        <div className="flex gap-2 overflow-x-auto mb-4 pb-1">
                           {RESOURCE_FILTERS.map((filter) => (
                             <button
                               key={filter}
                               type="button"
                               onClick={() => setFilterForSession(session.raceId, filter)}
-                              className="px-3 py-1.5 text-xs font-medium rounded-full transition-colors"
+                              className="px-3 py-1.5 text-xs font-medium rounded-full transition-colors whitespace-nowrap shrink-0"
                               style={
                                 activeFilter === filter
                                   ? { backgroundColor: '#6B2D5C', color: '#FFFFFF' }
@@ -543,6 +681,8 @@ export default function SpaceRaceHistory() {
                                   <ResourceActions
                                     resource={resource}
                                     onPreview={handlePreviewImage}
+                                    onGatedDownload={handleGatedDownload}
+                                    hideDelete={session.source === 'liveChat'}
                                     onDeleteRequest={(item) =>
                                       handleDeleteRequest(session.raceId, item)
                                     }

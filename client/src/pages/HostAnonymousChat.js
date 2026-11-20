@@ -15,6 +15,10 @@ import {
   AlertTriangle,
   Send,
   ArrowDown,
+  Paperclip,
+  FolderOpen,
+  FileText,
+  X,
 } from 'lucide-react';
 import clsx from 'clsx';
 import ChatCreatedModal from '../components/ChatCreatedModal';
@@ -30,10 +34,62 @@ import InfoRecap from '../components/Host/InfoRecap';
 import SessionLaunchBanner from '../components/Host/SessionLaunchBanner';
 import PageHeaderCard from '../components/Host/PageHeaderCard';
 import ChatMessageBubble, { audienceMessageLabel } from '../components/Chat/ChatMessageBubble';
+import HostChatResourcesPanel from '../components/Chat/HostChatResourcesPanel';
 import { toParticipantCount } from '../utils/toParticipantCount';
+import { downloadLiveChatResource } from '../utils/downloadLiveChatResource';
+import {
+  ACCEPT_FILE_TYPES,
+  ALLOWED_EXTENSIONS,
+  MAX_FILE_BYTES,
+  formatFileSize,
+} from '../constants/resourceAllowlist';
 
 const MOBILE_CHAT_QUERY = 'chat';
 const MOBILE_CHAT_LAYOUT_MQ = '(max-width: 767px)';
+
+const FILEISH_TLDS = new Set([
+  'pdf', 'doc', 'docx', 'ppt', 'pptx', 'xls', 'xlsx', 'txt',
+  'png', 'jpg', 'jpeg', 'webp', 'gif', 'svg', 'html', 'htm',
+  'js', 'zip', 'exe',
+]);
+
+const SCHEMELESS_LINK =
+  /^(?:www\.)?(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,24}(?:[/?#]\S*)?$/i;
+
+/** Host paste: the whole message is one link, or null (send as text). */
+function hostLoneLinkUrl(raw) {
+  const text = String(raw || '').trim();
+  if (!text || /\s/.test(text)) return null;
+
+  if (/^[a-z][a-z0-9+.-]*:/i.test(text)) {
+    if (!/^https?:\/\//i.test(text)) return null;
+    try {
+      const parsed = new URL(text);
+      if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return null;
+      if (!parsed.hostname) return null;
+      return parsed.href;
+    } catch {
+      return null;
+    }
+  }
+
+  if (!SCHEMELESS_LINK.test(text)) return null;
+  const host = text.split(/[/?#]/)[0];
+  const tld = String(host.split('.').pop() || '').toLowerCase();
+  const hasPath = /[/?#]/.test(text);
+  const isWww = /^www\./i.test(text);
+  if (!hasPath && !isWww && FILEISH_TLDS.has(tld)) return null;
+
+  try {
+    const parsed = new URL(`https://${text}`);
+    if (parsed.protocol !== 'https:' || !parsed.hostname || !parsed.hostname.includes('.')) {
+      return null;
+    }
+    return parsed.href;
+  } catch {
+    return null;
+  }
+}
 
 const isMobileChatLayout = () =>
   typeof window !== 'undefined' && window.matchMedia(MOBILE_CHAT_LAYOUT_MQ).matches;
@@ -119,7 +175,15 @@ export default function HostAnonymousChat() {
   const [apiChats, setApiChats] = useState([]);
   const [isCreating, setIsCreating] = useState(false);
   const [messageDraft, setMessageDraft] = useState('');
-  const [isSendingMessage, setIsSendingMessage] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(null);
+  const [uploadError, setUploadError] = useState('');
+  const [pendingFile, setPendingFile] = useState(null);
+  const [attachmentSending, setAttachmentSending] = useState(false);
+  const [resourcesOpen, setResourcesOpen] = useState(false);
+  const fileInputRef = useRef(null);
+  const sendChainRef = useRef(Promise.resolve());
+  const inflightSendRef = useRef('');
+  const uploadLockRef = useRef(false);
   const [hasUnseenIncoming, setHasUnseenIncoming] = useState(false);
   const [readCounts, setReadCounts] = useState({});
   const messagesContainerRef = useRef(null);
@@ -361,29 +425,179 @@ export default function HostAnonymousChat() {
     return chat.description || '';
   };
 
-  const handleSendMessage = async (event) => {
+  const hostFileError = (file) => {
+    const ext = String(file?.name || '').split('.').pop()?.toLowerCase();
+    if (!ALLOWED_EXTENSIONS.includes(ext)) {
+      return `That file type is not allowed. Allowed: ${ALLOWED_EXTENSIONS.join(', ')}.`;
+    }
+    if (file.size > MAX_FILE_BYTES) {
+      return 'File is too large. Maximum size is 5 MB.';
+    }
+    return '';
+  };
+
+  const stageHostFile = (file) => {
+    if (!file) return;
+    if (uploadLockRef.current) {
+      setUploadError('Wait for the current upload to finish.');
+      return;
+    }
+    const errorText = hostFileError(file);
+    if (errorText) {
+      setUploadError(errorText);
+      return;
+    }
+    setUploadError('');
+    const ext = String(file.name || '').split('.').pop()?.toLowerCase();
+    const isImage = ['png', 'jpg', 'jpeg', 'webp'].includes(ext);
+    setPendingFile((current) => {
+      if (current?.previewUrl) URL.revokeObjectURL(current.previewUrl);
+      return {
+        file,
+        previewUrl: isImage ? URL.createObjectURL(file) : '',
+      };
+    });
+  };
+
+  const clearPendingFile = () => {
+    if (uploadLockRef.current) return;
+    setPendingFile((current) => {
+      if (current?.previewUrl) URL.revokeObjectURL(current.previewUrl);
+      return null;
+    });
+  };
+
+  const performUpload = async (chatId, file) => {
+    setUploadError('');
+    setUploadProgress(0);
+    const formData = new FormData();
+    formData.append('file', file);
+    await anonymousChatAPI.uploadResource(chatId, formData, (progressEvent) => {
+      const total = progressEvent.total || file.size;
+      if (!total) return;
+      setUploadProgress(Math.min(99, Math.round((progressEvent.loaded / total) * 100)));
+    });
+    setUploadProgress(100);
+    shouldAutoScrollRef.current = true;
+    setTimeout(() => setUploadProgress(null), 600);
+  };
+
+  const handleSendMessage = (event) => {
     event?.preventDefault?.();
     const trimmed = messageDraft.trim();
-    if (!trimmed || !selectedChat?.id || isSendingMessage) return;
+    const chatId = selectedChat?.id;
+    const file = pendingFile?.file || null;
+    if ((!trimmed && !file) || !chatId) return;
+    if (uploadLockRef.current) return;
+    const signature = `${trimmed}\n${file ? `${file.name}:${file.size}:${file.lastModified}` : ''}`;
+    if (inflightSendRef.current === signature) return;
 
-    try {
-      setIsSendingMessage(true);
-      const response = await anonymousChatAPI.addTeacherMessage(selectedChat.id, {
-        message: trimmed,
+    inflightSendRef.current = signature;
+    if (file) {
+      uploadLockRef.current = true;
+      setAttachmentSending(true);
+    }
+    if (trimmed) setMessageDraft('');
+    shouldAutoScrollRef.current = true;
+    setHasUnseenIncoming(false);
+
+    sendChainRef.current = sendChainRef.current
+      .catch(() => undefined)
+      .then(async () => {
+        let fileSent = false;
+        try {
+          if (file) {
+            await performUpload(chatId, file);
+            fileSent = true;
+            setPendingFile((current) => {
+              if (current?.file !== file) return current;
+              if (current.previewUrl) URL.revokeObjectURL(current.previewUrl);
+              return null;
+            });
+          }
+          if (trimmed) {
+            const loneLink = hostLoneLinkUrl(trimmed);
+            if (loneLink) {
+              await anonymousChatAPI.shareResourceLink(chatId, { url: loneLink });
+            } else {
+              const response = await anonymousChatAPI.addTeacherMessage(chatId, {
+                message: trimmed,
+              });
+              if (!response.data?.success) {
+                throw new Error(response.data?.error || 'Failed to send message');
+              }
+            }
+          }
+        } catch (error) {
+          console.error('Error sending message:', error);
+          if (trimmed) {
+            setMessageDraft((current) => (String(current || '').trim() ? current : trimmed));
+          }
+          setUploadProgress(null);
+          const message = error?.response?.data?.error || error.message || 'Failed to send message';
+          if (file && !fileSent) setUploadError(message);
+          else alert.toast.error(message);
+        } finally {
+          uploadLockRef.current = false;
+          setAttachmentSending(false);
+          if (inflightSendRef.current === signature) inflightSendRef.current = '';
+        }
       });
-      if (!response.data?.success) {
-        alert.toast.error(response.data?.error || 'Failed to send message');
-        return;
+  };
+
+  const handleFilePicked = (event) => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    stageHostFile(file);
+  };
+
+  const handleHostPaste = (event) => {
+    const clipboard = event.clipboardData;
+    if (!clipboard) return;
+    const pastedText = String(clipboard.getData('text/plain') || '').trim();
+    if (pastedText) return;
+
+    const allowed = { 'image/png': 'png', 'image/jpeg': 'jpg', 'image/webp': 'webp' };
+    let image = null;
+    const items = clipboard.items ? Array.from(clipboard.items) : [];
+    for (const item of items) {
+      if (item.kind === 'file' && allowed[item.type]) {
+        image = item.getAsFile();
+        break;
       }
-      // RTDB listeners append the message; just keep the view pinned to the bottom.
-      setMessageDraft('');
-      shouldAutoScrollRef.current = true;
-      setHasUnseenIncoming(false);
+    }
+    if (!image && clipboard.files?.length) {
+      image = Array.from(clipboard.files).find((file) => allowed[file.type]) || null;
+    }
+    if (!image) return;
+
+    event.preventDefault();
+    const ext = allowed[image.type] || 'png';
+    const now = new Date();
+    const pad = (value) => String(value).padStart(2, '0');
+    const stamp = `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}-${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`;
+    const named = new File([image], `screenshot-${stamp}.${ext}`, { type: image.type || `image/${ext}` });
+    stageHostFile(named);
+  };
+
+  useEffect(() => {
+    setResourcesOpen(false);
+    setUploadError('');
+    setUploadProgress(null);
+    setPendingFile((current) => {
+      if (current?.previewUrl) URL.revokeObjectURL(current.previewUrl);
+      return null;
+    });
+    setAttachmentSending(false);
+  }, [selectedChatId]);
+
+  const handleHostDownloadResource = async (message) => {
+    if (!selectedChat?.id || !message?.resourceId) return;
+    if (message.resourceKind === 'link') return;
+    try {
+      await downloadLiveChatResource(selectedChat.id, message.resourceId, message.fileName);
     } catch (error) {
-      console.error('Error sending message:', error);
-      alert.toast.error(error?.response?.data?.error || 'Failed to send message');
-    } finally {
-      setIsSendingMessage(false);
+      alert.toast.error(error.message || 'Download failed');
     }
   };
 
@@ -850,7 +1064,7 @@ export default function HostAnonymousChat() {
 
         <section
           className={clsx(
-            'host-anon-chat-room flex-1 min-w-0 min-h-0 flex flex-col overflow-hidden bg-white rounded-2xl border border-primary/15 shadow-sm h-full',
+            'host-anon-chat-room relative flex-1 min-w-0 min-h-0 flex flex-col overflow-hidden bg-white rounded-2xl border border-primary/15 shadow-sm h-full',
             !mobileShowConversation && 'max-md:hidden'
           )}
         >
@@ -913,6 +1127,14 @@ export default function HostAnonymousChat() {
                           className="flex-1 min-w-0 max-[320px]:px-2 max-[320px]:text-xs"
                         />
                       </div>
+                      <button
+                        type="button"
+                        onClick={() => setResourcesOpen(true)}
+                        className="inline-flex w-full items-center justify-center min-h-11 px-3 py-2 bg-white border border-[#6D415F]/40 text-[#6D415F] text-sm rounded-lg hover:bg-primary/5 transition-colors"
+                      >
+                        <FolderOpen className="w-4 h-4 mr-2 shrink-0" />
+                        Resources
+                      </button>
                       {selectedChat.status === 'active' && (
                         <button
                           type="button"
@@ -957,6 +1179,14 @@ export default function HostAnonymousChat() {
                   </div>
 
                   <div className="flex flex-wrap items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setResourcesOpen(true)}
+                        className="min-h-11 px-3 py-2 bg-white border border-primary/20 text-primary text-sm rounded-lg hover:bg-primary/5 transition-colors inline-flex items-center"
+                      >
+                        <FolderOpen className="w-4 h-4 mr-2 shrink-0" />
+                        Resources
+                      </button>
                       {selectedChat.status === 'active' && (
                         <>
                       <div className="flex items-center gap-2 min-w-0 bg-background border border-primary/15 rounded-xl pl-3 pr-1.5 py-1.5">
@@ -1015,6 +1245,7 @@ export default function HostAnonymousChat() {
                           label={fromTeacher ? 'You' : audienceMessageLabel(msg)}
                           namedSender={named}
                           showStudentDot={!fromTeacher}
+                          onDownloadResource={handleHostDownloadResource}
                         />
                       );
                     })
@@ -1034,25 +1265,95 @@ export default function HostAnonymousChat() {
 
               {isChatActive(selectedChat) && (
                 <form onSubmit={handleSendMessage} className="px-3 sm:px-5 py-3 border-t border-primary/10 shrink-0 md:min-h-[56px] md:box-border">
-                  <div className="flex items-center gap-2 min-h-11 bg-background border border-primary/15 rounded-full pl-4 pr-1.5 py-1.5 transition-colors focus-within:border-primary/40">
+                  {pendingFile ? (
+                    <div className="mb-2 flex items-center gap-2 min-w-0 rounded-xl border border-primary/15 bg-white p-2">
+                      {pendingFile.previewUrl ? (
+                        <img
+                          src={pendingFile.previewUrl}
+                          alt=""
+                          className="h-12 w-12 rounded-lg object-cover shrink-0"
+                        />
+                      ) : (
+                        <div className="h-12 w-12 rounded-lg bg-primary/10 inline-flex items-center justify-center shrink-0">
+                          <FileText className="w-5 h-5 text-primary" />
+                        </div>
+                      )}
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm text-text truncate">{pendingFile.file.name}</p>
+                        <p className="text-[11px] text-text-light">{formatFileSize(pendingFile.file.size)}</p>
+                        {uploadProgress != null ? (
+                          <div className="mt-1 h-1.5 rounded-full bg-primary/15 overflow-hidden">
+                            <div
+                              className="h-full bg-primary transition-[width]"
+                              style={{ width: `${uploadProgress}%` }}
+                            />
+                          </div>
+                        ) : null}
+                      </div>
+                      <button
+                        type="button"
+                        onClick={clearPendingFile}
+                        disabled={attachmentSending}
+                        className="min-h-11 min-w-11 inline-flex items-center justify-center rounded-lg text-text-light hover:bg-primary/10 disabled:opacity-40 shrink-0"
+                        aria-label="Remove attachment"
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
+                    </div>
+                  ) : null}
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept={ACCEPT_FILE_TYPES}
+                    className="hidden"
+                    onChange={handleFilePicked}
+                  />
+                  <div className="flex items-center gap-2 min-h-11 bg-background border border-primary/15 rounded-full pl-1.5 pr-1.5 py-1.5 transition-colors focus-within:border-primary/40">
+                    <button
+                      type="button"
+                      onClick={() => fileInputRef.current?.click()}
+                      disabled={attachmentSending}
+                      className="min-h-11 min-w-11 inline-flex items-center justify-center p-2 rounded-full text-text-light hover:text-primary hover:bg-primary/10 disabled:opacity-40 transition-colors shrink-0"
+                      title="Upload file"
+                      aria-label="Upload file"
+                    >
+                      <Paperclip className="w-4 h-4" />
+                    </button>
                     <input
                       type="text"
                       value={messageDraft}
                       onChange={(e) => setMessageDraft(e.target.value)}
+                      onPaste={handleHostPaste}
                       placeholder="Message audience…"
                       className="flex-1 min-w-0 min-h-11 bg-transparent text-sm text-text placeholder-text-light focus:outline-none"
                     />
                     <button
                       type="submit"
-                      disabled={!messageDraft.trim() || isSendingMessage}
+                      disabled={(!messageDraft.trim() && !pendingFile) || attachmentSending}
                       className="min-h-11 min-w-11 inline-flex items-center justify-center p-2 rounded-full bg-primary text-white hover:bg-primary/90 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
                       title="Send message"
                     >
                       <Send className="w-4 h-4" />
                     </button>
                   </div>
+                  {uploadProgress != null && !pendingFile && (
+                    <div className="mt-2 h-1.5 rounded-full bg-primary/15 overflow-hidden">
+                      <div
+                        className="h-full bg-primary transition-[width]"
+                        style={{ width: `${uploadProgress}%` }}
+                      />
+                    </div>
+                  )}
+                  {uploadError ? (
+                    <p className="mt-2 text-xs text-red-600 break-words">{uploadError}</p>
+                  ) : null}
                 </form>
               )}
+              <HostChatResourcesPanel
+                chat={selectedChat}
+                open={resourcesOpen}
+                onClose={() => setResourcesOpen(false)}
+              />
             </>
           ) : (
             <div className="flex-1 flex items-center justify-center p-8 min-h-0">

@@ -10,7 +10,7 @@ const DISMISS_KEY = 'feedecho_guest_progress_login_banner_dismissed';
 export const GUEST_LOGIN_BANNER_BG_CLASS = 'bg-[#F1E5EB]';
 
 /** Guest-only prompt to log in so activity can be saved to progress history. */
-export default function GuestProgressLoginBanner({ contentClassName } = {}) {
+export default function GuestProgressLoginBanner({ contentClassName, loginTo = '/join' } = {}) {
   const isLoggedIn = Boolean(getStoredAudienceSession());
   const [dismissed, setDismissed] = useState(() => {
     try {
@@ -45,7 +45,7 @@ export default function GuestProgressLoginBanner({ contentClassName } = {}) {
             Log in to save this to your progress history.{' '}
           </span>
           <Link
-            to="/join"
+            to={loginTo}
             className="font-semibold text-[#6D415F] hover:text-[#5A344D] underline underline-offset-2 whitespace-nowrap max-md:shrink-0"
           >
             Log in

@@ -122,7 +122,8 @@ function AppContent() {
             <Route path="/" element={<RedirectIfHostTeacher redirectStudent><Home /></RedirectIfHostTeacher>} />
             <Route path="/join" element={<RedirectIfHostTeacher redirectStudent><AudienceJoin /></RedirectIfHostTeacher>} />
             <Route path="/join/space-race" element={<RedirectIfHostTeacher><AudienceSpaceRaceJoin /></RedirectIfHostTeacher>} />
-            <Route path="/space-race" element={<RedirectIfHostTeacher><SpaceRaceHistory /></RedirectIfHostTeacher>} />
+            <Route path="/space-race" element={<Navigate to="/audience/resources" replace />} />
+            <Route path="/audience/resources" element={<RedirectIfHostTeacher><SpaceRaceHistory /></RedirectIfHostTeacher>} />
             <Route path="/space-race/:raceId/quiz/:quizId" element={<RedirectIfHostTeacher><AudienceSpaceRacePage /></RedirectIfHostTeacher>} />
             <Route path="/space-race/:raceId" element={<RedirectIfHostTeacher><AudienceSpaceRacePage /></RedirectIfHostTeacher>} />
             <Route path="/space-race/play/:raceId" element={<RedirectIfHostTeacher><SpaceRaceGame /></RedirectIfHostTeacher>} />

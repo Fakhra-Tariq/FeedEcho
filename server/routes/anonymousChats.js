@@ -1,8 +1,22 @@
 const express = require('express');
+const multer = require('multer');
 const { db } = require('../config/firebase');
 const { auth } = require('../config/firebase');
 const { verifyFirebaseToken } = require('../middleware/auth');
 const { generateSessionCode } = require('../utils/sessionCodeGenerator');
+const { MAX_FILE_BYTES, MAX_FILE_LABEL } = require('../utils/resourceAllowlist');
+const {
+  saveStudentChatJoin,
+  listStudentJoins,
+  listChatResourceRecords,
+  getChatResourceRecord,
+  isChatHost,
+  assertDownloadAccess,
+  shareFile,
+  shareLink,
+  streamStoredFile,
+  deleteChatResourceData,
+} = require('../utils/liveChatResources');
 const {
   prepareActivityLaunch,
   setSessionCurrentActivity,
@@ -98,6 +112,51 @@ const optionalAuth = async (req, res, next) => {
   }
   next();
 };
+
+const resourceUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: MAX_FILE_BYTES, files: 1 },
+});
+
+const handleResourceUpload = (req, res, next) => {
+  resourceUpload.single('file')(req, res, (err) => {
+    if (err && err.code === 'LIMIT_FILE_SIZE') {
+      return res.status(400).json({
+        success: false,
+        error: `File is too large. Maximum size is ${MAX_FILE_LABEL}.`,
+      });
+    }
+    if (err) {
+      return res.status(400).json({ success: false, error: err.message || 'Upload failed' });
+    }
+    return next();
+  });
+};
+
+async function loadChatOr404(id, res) {
+  const snap = await chatSessionRef(id).get();
+  if (!snap.exists()) {
+    res.status(404).json({ success: false, error: 'Chat session not found' });
+    return null;
+  }
+  return { id, ...(snap.val() || {}) };
+}
+
+function requireChatOwner(chat, uid, res) {
+  if (!isChatHost(chat, uid)) {
+    res.status(403).json({ success: false, error: 'Only the host of this chat can share resources' });
+    return false;
+  }
+  return true;
+}
+
+function sendResourceError(res, error, fallback) {
+  const status = error.status || 500;
+  return res.status(status).json({
+    success: false,
+    error: status === 500 ? fallback : error.message,
+  });
+}
 
 // Create anonymous chat (auth optional; if present, store createdBy)
 router.post('/create', optionalAuth, async (req, res) => {
@@ -246,8 +305,33 @@ router.get('/', optionalAuth, async (req, res) => {
   }
 });
 
-// Get by join code (NO AUTH - for students)
-router.get('/code/:joinCode', async (req, res) => {
+// Logged-in student: Live Chat resources from chats they joined with this account
+router.get('/my-resources', verifyFirebaseToken, async (req, res) => {
+  try {
+    const uid = req.user.uid;
+    const joins = await listStudentJoins(uid);
+    const groups = await Promise.all(
+      joins.map(async (join) => {
+        const chatId = join.chatId;
+        const resources = chatId ? await listChatResourceRecords(chatId) : [];
+        return {
+          chatId,
+          chatName: join.chatName || 'Live Chat',
+          joinCode: join.joinCode || '',
+          joinedAt: join.joinedAt || join.lastJoinedAt || null,
+          resources,
+        };
+      })
+    );
+    return res.status(200).json({ success: true, data: groups });
+  } catch (error) {
+    console.error('Error listing student live chat resources:', error);
+    return res.status(500).json({ success: false, error: 'Failed to load live chat resources' });
+  }
+});
+
+// Get by join code (NO AUTH - for students; optional token stamps account join)
+router.get('/code/:joinCode', optionalAuth, async (req, res) => {
   try {
     const joinCode = req.params.joinCode.toUpperCase();
     const participantId = req.query.participantId;
@@ -275,6 +359,9 @@ router.get('/code/:joinCode', async (req, res) => {
         Object.assign(chat, refreshedSnap.val() || {});
       }
     }
+    if (req.user?.uid) {
+      await saveStudentChatJoin(req.user.uid, chat);
+    }
     // Include messages
     const msgsSnap = await chatMessagesRef(id).get();
     const msgs = msgsSnap.exists() ? Object.values(msgsSnap.val() || {}) : [];
@@ -283,6 +370,98 @@ router.get('/code/:joinCode', async (req, res) => {
   } catch (error) {
     console.error('Error fetching chat by code:', error);
     return res.status(500).json({ success: false, error: 'Failed to fetch chat session' });
+  }
+});
+
+router.get('/:id/resources', verifyFirebaseToken, async (req, res) => {
+  try {
+    const chat = await loadChatOr404(req.params.id, res);
+    if (!chat) return undefined;
+    if (!requireChatOwner(chat, req.user.uid, res)) return undefined;
+    const resources = await listChatResourceRecords(chat.id);
+    return res.status(200).json({ success: true, data: resources });
+  } catch (error) {
+    console.error('Error listing chat resources:', error);
+    return res.status(500).json({ success: false, error: 'Failed to load resources' });
+  }
+});
+
+router.post('/:id/resources', verifyFirebaseToken, handleResourceUpload, async (req, res) => {
+  try {
+    const chat = await loadChatOr404(req.params.id, res);
+    if (!chat) return undefined;
+    if (!requireChatOwner(chat, req.user.uid, res)) return undefined;
+    if (!chat.isActive || chat.status === 'ended') {
+      return res.status(403).json({ success: false, error: 'This chat has ended' });
+    }
+    if (!req.file) {
+      return res.status(400).json({ success: false, error: 'Choose a file to upload.' });
+    }
+    const result = await shareFile({
+      chat,
+      hostUid: req.user.uid,
+      originalName: req.file.originalname,
+      mimeType: req.file.mimetype,
+      size: req.file.size,
+      buffer: req.file.buffer,
+    });
+    const now = new Date().toISOString();
+    await chatSessionRef(chat.id).update({ lastActivity: now, updatedAt: now });
+    await syncChatMessageCount(chat.id);
+    return res.status(201).json({ success: true, data: result });
+  } catch (error) {
+    console.error('Error sharing chat file:', error);
+    return sendResourceError(res, error, 'Failed to upload file');
+  }
+});
+
+router.post('/:id/resources/link', verifyFirebaseToken, async (req, res) => {
+  try {
+    const chat = await loadChatOr404(req.params.id, res);
+    if (!chat) return undefined;
+    if (!requireChatOwner(chat, req.user.uid, res)) return undefined;
+    if (!chat.isActive || chat.status === 'ended') {
+      return res.status(403).json({ success: false, error: 'This chat has ended' });
+    }
+    const result = await shareLink({
+      chat,
+      hostUid: req.user.uid,
+      url: req.body.url || req.body.link,
+      title: req.body.title,
+    });
+    const now = new Date().toISOString();
+    await chatSessionRef(chat.id).update({ lastActivity: now, updatedAt: now });
+    await syncChatMessageCount(chat.id);
+    return res.status(201).json({ success: true, data: result });
+  } catch (error) {
+    console.error('Error sharing chat link:', error);
+    return sendResourceError(res, error, 'Failed to share link');
+  }
+});
+
+router.get('/:id/resources/:resourceId/download', verifyFirebaseToken, async (req, res) => {
+  try {
+    const chat = await loadChatOr404(req.params.id, res);
+    if (!chat) return undefined;
+    const record = await getChatResourceRecord(chat.id, req.params.resourceId);
+    if (!record) {
+      return res.status(404).json({ success: false, error: 'Resource not found' });
+    }
+    if (record.type === 'link') {
+      return res.status(400).json({ success: false, error: 'Links are opened in the browser, not downloaded' });
+    }
+    const access = await assertDownloadAccess(req.user.uid, chat, record);
+    if (!access.ok) {
+      return res.status(access.status).json({ success: false, error: access.error });
+    }
+    await streamStoredFile(res, record);
+    return undefined;
+  } catch (error) {
+    console.error('Error downloading chat resource:', error);
+    if (!res.headersSent) {
+      return sendResourceError(res, error, 'Failed to download file');
+    }
+    return undefined;
   }
 });
 
@@ -394,6 +573,12 @@ router.post('/:id/messages', optionalAuth, async (req, res) => {
       });
     }
     const participantId = isTeacherMessage ? null : req.body.participantId || req.body.sender;
+    if (String(req.body.type || '') === 'resource') {
+      return res.status(400).json({
+        success: false,
+        error: 'Resources can only be shared by the host from the attach menu',
+      });
+    }
     if (participantId) {
       await registerChatParticipant(id, participantId);
     }
@@ -404,7 +589,7 @@ router.post('/:id/messages', optionalAuth, async (req, res) => {
     const newMessage = {
       id: msgId,
       sender: isTeacherMessage ? 'Teacher' : req.body.sender || 'Anonymous Student',
-      message: (req.body.message || '').trim(),
+      message: String(req.body.message || '').trim(),
       timestamp: new Date().toISOString(),
       isTeacher: isTeacherMessage,
       isAnswered: false,
@@ -466,8 +651,8 @@ router.post('/:id/sync-stats', verifyFirebaseToken, async (req, res) => {
   }
 });
 
-// Student presence heartbeat (NO AUTH)
-router.post('/:id/presence', async (req, res) => {
+// Student presence heartbeat (optional token stamps account join for Resources)
+router.post('/:id/presence', optionalAuth, async (req, res) => {
   try {
     const id = req.params.id;
     const participantId = req.body.participantId;
@@ -488,6 +673,9 @@ router.post('/:id/presence', async (req, res) => {
     await registerChatParticipant(id, participantId);
     await pruneStaleChatParticipants(id);
     const participants = await syncChatParticipantCount(id);
+    if (req.user?.uid) {
+      await saveStudentChatJoin(req.user.uid, { id, ...chat });
+    }
 
     return res.status(200).json({
       success: true,
@@ -663,6 +851,7 @@ router.delete('/:id', verifyFirebaseToken, async (req, res) => {
     };
     if (joinCode) updates[`chat_join_codes/${joinCode}`] = null;
     await db.ref().update(updates);
+    await deleteChatResourceData(id);
     await clearActivityFromActiveSession('anonymousChat', id, req.user.uid);
     return res.status(200).json({ success: true, message: 'Chat session deleted successfully' });
   } catch (error) {

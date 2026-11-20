@@ -22,6 +22,14 @@ const api = axios.create(axiosDefaults);
 // Create axios instance for anonymous chat (NO AUTH)
 const anonymousApi = axios.create(axiosDefaults);
 
+anonymousApi.interceptors.request.use((config) => {
+  const token = localStorage.getItem('token');
+  if (token && !config.headers.Authorization) {
+    config.headers.Authorization = `Bearer ${token}`;
+  }
+  return config;
+});
+
 // Request interceptor to add auth token and user ID
 api.interceptors.request.use(
   (config) => {
@@ -82,7 +90,7 @@ api.interceptors.response.use(
     }
     
     // Handle 401 unauthorized — respect active portal / student context
-    if (error.response?.status === 401 && !originalRequest._retry) {
+    if (error.response?.status === 401 && !originalRequest._retry && !originalRequest.skipAuthRedirect) {
       originalRequest._retry = true;
       localStorage.removeItem('token');
       localStorage.removeItem('authUser');
@@ -269,6 +277,19 @@ export const anonymousChatAPI = {
   // Same endpoint, authenticated instance — the server only honours asTeacher for the chat owner
   addTeacherMessage: (id, messageData) =>
     api.post(`/anonymous-chats/${id}/messages`, { ...messageData, asTeacher: true }),
+  uploadResource: (id, formData, onUploadProgress) =>
+    api.post(`/anonymous-chats/${id}/resources`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+      onUploadProgress,
+    }),
+  shareResourceLink: (id, data) => api.post(`/anonymous-chats/${id}/resources/link`, data),
+  listChatResources: (id) => api.get(`/anonymous-chats/${id}/resources`),
+  listMyResources: () => api.get('/anonymous-chats/my-resources'),
+  downloadResource: (id, resourceId) =>
+    api.get(`/anonymous-chats/${id}/resources/${resourceId}/download`, {
+      responseType: 'blob',
+      skipAuthRedirect: true,
+    }),
   presence: (id, payload) => anonymousApi.post(`/anonymous-chats/${id}/presence`, payload),
   leave: (id, payload) => anonymousApi.post(`/anonymous-chats/${id}/leave`, payload),
   syncStats: (id) => api.post(`/anonymous-chats/${id}/sync-stats`),

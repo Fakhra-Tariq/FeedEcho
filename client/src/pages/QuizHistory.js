@@ -2,7 +2,8 @@ import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import AudienceDashboardNavbar from '../components/Audience/AudienceDashboardNavbar';
-import { ArrowLeft, Award, TrendingUp, CheckCircle, Calendar, Clock, X, Search, Trash2, ChevronDown, SlidersHorizontal } from 'lucide-react';
+import { AUDIENCE_ACTIVITY_PAGE_WIDTH } from '../components/Audience/AudienceActivityLayout';
+import { Award, TrendingUp, CheckCircle, Calendar, Clock, X, Search, Trash2, ChevronDown, SlidersHorizontal } from 'lucide-react';
 import { useRtdbValue } from '../hooks/useRtdb';
 import { studentsAPI } from '../services/api';
 import { getStoredAudienceSession, getStudentQueryParams } from '../utils/audienceSession';
@@ -279,25 +280,20 @@ const QuizHistory = () => {
         displayEmail={student?.email}
         onLogout={handleLogout}
       />
-      <div className="bg-white shadow-sm" style={{ borderBottom: '1px solid #E8E0F0' }}>
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
-          <div className="flex items-center justify-between max-md:flex-col max-md:items-start max-md:gap-3">
-            <button
-              onClick={() => navigate('/audience/home')}
-              className="flex items-center space-x-2 hover:opacity-80 transition-opacity text-primary max-md:min-h-11 max-[480px]:hidden"
-            >
-              <ArrowLeft className="w-5 h-5 shrink-0" />
-              <span>Back to Dashboard</span>
-            </button>
-            <h1 className="text-2xl font-bold max-md:text-xl" style={{ color: '#1a1a1a' }}>
-              Quiz History
-            </h1>
-            <div className="w-32 max-md:hidden" />
+      <div className={`${AUDIENCE_ACTIVITY_PAGE_WIDTH} py-6 max-md:py-4`}>
+        <div className="relative bg-gradient-to-r from-primary to-primary/90 text-white rounded-xl shadow-lg p-5 sm:p-8 mb-6 overflow-hidden">
+          <div className="absolute top-0 right-0 w-full h-full bg-gradient-to-l from-black/20 to-transparent" />
+          <div className="relative flex items-center justify-between gap-4 min-w-0">
+            <div className="min-w-0">
+              <h1 className="text-3xl md:text-4xl font-bold mb-2 break-words">Quiz History</h1>
+              <p className="text-white/90 text-sm sm:text-base sm:text-lg">
+                Review your quiz attempts, scores and results.
+              </p>
+            </div>
+            <Award className="w-8 h-8 text-white/80 shrink-0" />
           </div>
         </div>
-      </div>
 
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 max-[480px]:pt-3 max-[480px]:pb-8">
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8 max-[480px]:grid-cols-2 max-[480px]:gap-2 max-[480px]:mb-3">
           <div className="p-6 shadow-sm max-[480px]:p-3 max-[480px]:min-h-[56px] max-[480px]:flex max-[480px]:items-center" style={{ backgroundColor: '#FFFFFF', border: '0.5px solid #E8E0F0', borderRadius: '12px' }}>
             <div className="flex items-center space-x-3 max-[480px]:space-x-2 min-w-0 w-full">

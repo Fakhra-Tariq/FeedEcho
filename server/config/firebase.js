@@ -162,7 +162,7 @@ if (hasServiceAccountFile || hasValidCredentials) {
         throw new Error('Missing FIREBASE_DATABASE_URL (Realtime Database URL) in environment');
       }
       config.databaseURL = databaseURL;
-      
+
       admin.initializeApp(config);
       if (!hasServiceAccountFile) {
         void verifyFirebaseCredential(credential);

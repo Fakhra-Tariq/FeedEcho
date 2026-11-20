@@ -1,5 +1,6 @@
 import React from 'react';
 import clsx from 'clsx';
+import ChatResourceCard from './ChatResourceCard';
 
 export function formatChatMessageTime(timestamp) {
   if (!timestamp) return '';
@@ -26,10 +27,13 @@ export default function ChatMessageBubble({
   label,
   showStudentDot = false,
   namedSender = false,
+  onDownloadResource,
+  isGuest = false,
 }) {
   const text = message?.content || message?.message || '';
   const isHidden = Boolean(message?.isHidden);
   const isAnswered = Boolean(message?.isAnswered);
+  const isResource = message?.type === 'resource';
 
   return (
     <div className={clsx('flex', isOwn ? 'justify-end' : 'justify-start')}>
@@ -55,6 +59,14 @@ export default function ChatMessageBubble({
           </span>
         </div>
 
+        {isResource ? (
+          <ChatResourceCard
+            message={message}
+            onDownload={onDownloadResource}
+            isGuest={isGuest}
+            variant="default"
+          />
+        ) : (
         <div
           className={clsx(
             'px-4 py-2.5 text-sm shadow-sm rounded-2xl',
@@ -71,6 +83,7 @@ export default function ChatMessageBubble({
         >
           <p className="whitespace-pre-wrap break-words">{text}</p>
         </div>
+        )}
 
         <div
           className={clsx(
